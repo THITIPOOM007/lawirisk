@@ -1,8 +1,9 @@
 'use client';
 
-import React, { useState, useEffect } from 'react';
-import { Eye, ShieldAlert, FileText, CheckCircle2, XCircle, ChevronRight, HelpCircle, Save, Database, AlertCircle } from 'lucide-react';
-import { getCases, getEvidence, getEntities, saveEntity, saveMention, Case, EvidenceFile, ExtractedEntity, addAuditLog } from '@/lib/demo-data';
+import React, { useState } from 'react';
+import { Eye, ShieldAlert, FileText, CheckCircle2, XCircle, Save, Database } from 'lucide-react';
+import { getCases, getEvidence, getEntities, saveEntity, saveMention, Case, addAuditLog } from '@/lib/demo-data';
+import { readBrowserCookie, useDemoRole } from '@/lib/browser-cookies';
 
 interface ProposedEntity {
   id: string;
@@ -13,57 +14,34 @@ interface ProposedEntity {
   status: 'PENDING' | 'CONFIRMED' | 'REJECTED';
 }
 
+const demoProposals: ProposedEntity[] = [
+  { id: 'prop-1', type: 'PERSON', value: 'นายสมเจตน์ รวยจริง', snippet: 'พยานซัดทอดว่า นายสมเจตน์ รวยจริง เป็นผู้อยู่เบื้องหลังการทำธุรกรรม', page: 1, status: 'PENDING' },
+  { id: 'prop-2', type: 'PHONE', value: '081-234-5678', snippet: 'โปรไฟล์ Line: เบอร์ติดต่อ 081-234-5678', page: 1, status: 'PENDING' },
+  { id: 'prop-3', type: 'BANK_ACCOUNT', value: '123-4-56789-0 (KBANK)', snippet: 'เลขบัญชีธนาคาร 123-4-56789-0 ธนาคารกสิกรไทย', page: 3, status: 'PENDING' },
+  { id: 'prop-4', type: 'CITIZEN_ID', value: '1-1002-00345-67-8', snippet: 'เลขประจำตัวประชาชน 1-1002-00345-67-8', page: 2, status: 'PENDING' },
+];
+
 export default function ReviewPage() {
-  const [casesList, setCasesList] = useState<Case[]>([]);
+  const [casesList] = useState<Case[]>(() => getCases());
   const [selectedCaseId, setSelectedCaseId] = useState('');
-  const [evidenceList, setEvidenceList] = useState<EvidenceFile[]>([]);
+  const evidenceList = selectedCaseId ? getEvidence().filter((item) => item.case_id === selectedCaseId) : [];
   const [selectedEvidenceId, setSelectedEvidenceId] = useState('');
-  const [userRole, setUserRole] = useState('VIEWER');
+  const userRole = useDemoRole();
 
   // Proposed AI Extractions State
   const [proposedEntities, setProposedEntities] = useState<ProposedEntity[]>([]);
   const [verificationSuccess, setVerificationSuccess] = useState('');
 
-  // Loaded cases and files
-  useEffect(() => {
-    setCasesList(getCases());
-    
-    const getCookie = (name: string) => {
-      const value = `; ${document.cookie}`;
-      const parts = value.split(`; ${name}=`);
-      if (parts.length === 2) return parts.pop()?.split(';').shift();
-      return null;
-    };
-    setUserRole(getCookie('mock-auth-role') || 'VIEWER');
-  }, []);
+  const handleCaseChange = (caseId: string) => {
+    setSelectedCaseId(caseId);
+    setSelectedEvidenceId('');
+    setProposedEntities([]);
+  };
 
-  // Update files dropdown when case changes
-  useEffect(() => {
-    if (selectedCaseId) {
-      setEvidenceList(getEvidence().filter(e => e.case_id === selectedCaseId));
-      setSelectedEvidenceId('');
-      setProposedEntities([]);
-    } else {
-      setEvidenceList([]);
-      setSelectedEvidenceId('');
-      setProposedEntities([]);
-    }
-  }, [selectedCaseId]);
-
-  // Load proposed AI entities when file changes
-  useEffect(() => {
-    if (selectedEvidenceId) {
-      // Simulate AI extraction proposal
-      setProposedEntities([
-        { id: 'prop-1', type: 'PERSON', value: 'นายสมเจตน์ รวยจริง', snippet: 'พยานซัดทอดว่า นายสมเจตน์ รวยจริง เป็นผู้อยู่เบื้องหลังการทำธุรกรรม', page: 1, status: 'PENDING' },
-        { id: 'prop-2', type: 'PHONE', value: '081-234-5678', snippet: 'โปรไฟล์ Line: เบอร์ติดต่อ 081-234-5678', page: 1, status: 'PENDING' },
-        { id: 'prop-3', type: 'BANK_ACCOUNT', value: '123-4-56789-0 (KBANK)', snippet: 'เลขบัญชีธนาคาร 123-4-56789-0 ธนาคารกสิกรไทย', page: 3, status: 'PENDING' },
-        { id: 'prop-4', type: 'CITIZEN_ID', value: '1-1002-00345-67-8', snippet: 'เลขประจำตัวประชาชน 1-1002-00345-67-8', page: 2, status: 'PENDING' },
-      ]);
-    } else {
-      setProposedEntities([]);
-    }
-  }, [selectedEvidenceId]);
+  const handleEvidenceChange = (evidenceId: string) => {
+    setSelectedEvidenceId(evidenceId);
+    setProposedEntities(evidenceId ? demoProposals.map((item) => ({ ...item })) : []);
+  };
 
   const handleUpdateStatus = (id: string, status: 'CONFIRMED' | 'REJECTED' | 'PENDING') => {
     setProposedEntities(prev =>
@@ -109,14 +87,9 @@ export default function ReviewPage() {
       }
     });
 
-    const getCookie = (name: string) => {
-      const value = `; ${document.cookie}`;
-      const parts = value.split(`; ${name}=`);
-      if (parts.length === 2) return parts.pop()?.split(';').shift();
-      return null;
-    };
-    const reviewer = getCookie('mock-auth-name') 
-      ? decodeURIComponent(getCookie('mock-auth-name')!) 
+    const encodedName = readBrowserCookie('mock-auth-name');
+    const reviewer = encodedName
+      ? decodeURIComponent(encodedName)
       : 'เจ้าหน้าที่';
 
     addAuditLog(reviewer, 'EVIDENCE_REVIEW', `บันทึกผลตรวจทานไฟล์หลักฐานรหัส ${selectedEvidenceId}`);
@@ -168,7 +141,7 @@ export default function ReviewPage() {
           <label className="block text-xs font-semibold text-slate-400 uppercase tracking-wider">เลือกคดีสืบสวน</label>
           <select
             value={selectedCaseId}
-            onChange={(e) => setSelectedCaseId(e.target.value)}
+            onChange={(e) => handleCaseChange(e.target.value)}
             className="mt-2 block w-full rounded-2xl border-0 bg-slate-950 py-3 px-4 text-white shadow-sm ring-1 ring-inset ring-slate-800 focus:ring-2 focus:ring-inset focus:ring-indigo-500 text-sm"
           >
             <option value="">-- กรุณาเลือกคดี --</option>
@@ -185,7 +158,7 @@ export default function ReviewPage() {
           <select
             disabled={!selectedCaseId}
             value={selectedEvidenceId}
-            onChange={(e) => setSelectedEvidenceId(e.target.value)}
+            onChange={(e) => handleEvidenceChange(e.target.value)}
             className="mt-2 block w-full rounded-2xl border-0 bg-slate-950 py-3 px-4 text-white shadow-sm ring-1 ring-inset ring-slate-800 focus:ring-2 focus:ring-inset focus:ring-indigo-500 text-sm disabled:opacity-50"
           >
             <option value="">-- กรุณาเลือกไฟล์ --</option>

@@ -1,215 +1,144 @@
 'use client';
 
-import React, { useState, useEffect } from 'react';
+import React, { useState } from 'react';
 import { useRouter } from 'next/navigation';
-import { Shield, Key, Database, AlertCircle, Loader2 } from 'lucide-react';
+import {
+  AlertCircle,
+  ArrowRight,
+  BadgeCheck,
+  Database,
+  Fingerprint,
+  Loader2,
+  LockKeyhole,
+  ScanLine,
+  ShieldCheck,
+  Sparkles,
+} from 'lucide-react';
 import { createClient, isSupabaseConfigured } from '@/lib/supabase';
+import { writeDemoAuthCookies } from '@/lib/browser-cookies';
+import type { StaffRole } from '@/lib/roles';
+
+type DemoRole = StaffRole;
+
+const demoRoles: { role: DemoRole; label: string; description: string; name: string }[] = [
+  { role: 'INVESTIGATOR', label: 'พนักงานสืบสวน', description: 'รับเรื่อง คดี และหลักฐาน', name: 'ร.ต.อ. สมชาย (Investigator)' },
+  { role: 'REVIEWER', label: 'ผู้ตรวจทาน', description: 'ตรวจข้อเสนอและการเชื่อมโยง', name: 'นางสาวจิราภรณ์ (Reviewer)' },
+  { role: 'VIEWER', label: 'ผู้สังเกตการณ์', description: 'อ่านข้อมูลที่ได้รับสิทธิ์', name: 'เจ้าหน้าที่สังเกตการณ์' },
+  { role: 'ADMIN', label: 'ผู้ดูแลระบบ', description: 'จัดการนโยบายและผู้ใช้', name: 'พล.ต.ต. สุรศักดิ์ (Admin)' },
+];
+
+function toErrorMessage(error: unknown) {
+  return error instanceof Error ? error.message : 'เกิดข้อผิดพลาดในการเชื่อมต่อ';
+}
 
 export default function LoginPage() {
   const router = useRouter();
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [isLoading, setIsLoading] = useState(false);
-  const [isDemoMode, setIsDemoMode] = useState(true);
+  const [activeDemoRole, setActiveDemoRole] = useState<DemoRole | null>(null);
+  const [isDemoMode] = useState(() => !isSupabaseConfigured());
   const [errorMessage, setErrorMessage] = useState('');
 
-  useEffect(() => {
-    // Check if Supabase env credentials are set
-    setIsDemoMode(!isSupabaseConfigured());
-  }, []);
+  const finishDemoLogin = (role: DemoRole, name: string) => {
+    writeDemoAuthCookies(role, name);
+    router.replace('/');
+    router.refresh();
+  };
 
-  const handleLogin = async (e: React.FormEvent) => {
-    e.preventDefault();
+  const handleLogin = async (event: React.FormEvent) => {
+    event.preventDefault();
     setIsLoading(true);
     setErrorMessage('');
 
     if (isDemoMode) {
-      // In demo mode, simulate login as LEAD_INVESTIGATOR
-      document.cookie = 'mock-auth-logged-in=true; path=/';
-      document.cookie = 'mock-auth-role=LEAD_INVESTIGATOR; path=/';
-      document.cookie = 'mock-auth-name=ร.ต.อ. สมชาย (Lead Investigator); path=/';
-      
-      setTimeout(() => {
-        setIsLoading(false);
-        router.push('/');
-        router.refresh();
-      }, 800);
+      setActiveDemoRole('INVESTIGATOR');
+      window.setTimeout(() => finishDemoLogin('INVESTIGATOR', 'ร.ต.อ. สมชาย (Investigator)'), 420);
       return;
     }
 
     try {
-      const supabase = createClient();
-      const { error } = await supabase.auth.signInWithPassword({ email, password });
+      const { error } = await createClient().auth.signInWithPassword({ email, password });
       if (error) {
-        setErrorMessage(error.message);
-      } else {
-        router.push('/');
-        router.refresh();
+        setErrorMessage('อีเมลหรือรหัสผ่านไม่ถูกต้อง กรุณาตรวจสอบแล้วลองอีกครั้ง');
+        return;
       }
-    } catch (err: any) {
-      setErrorMessage(err.message || 'เกิดข้อผิดพลาดในการเชื่อมต่อ');
+      router.replace('/');
+      router.refresh();
+    } catch (error: unknown) {
+      setErrorMessage(toErrorMessage(error));
     } finally {
       setIsLoading(false);
     }
   };
 
-  const handleDemoLogin = (role: 'PLATFORM_ADMIN' | 'ORG_ADMIN' | 'LEAD_INVESTIGATOR' | 'FIELD_OFFICER' | 'AUDITOR', name: string) => {
+  const handleDemoLogin = (role: DemoRole, name: string) => {
+    if (isLoading) return;
+    setErrorMessage('');
+    setActiveDemoRole(role);
     setIsLoading(true);
-    // Write cookies for middleware route guarding
-    document.cookie = `mock-auth-logged-in=true; path=/`;
-    document.cookie = `mock-auth-role=${role}; path=/`;
-    document.cookie = `mock-auth-name=${encodeURIComponent(name)}; path=/`;
-
-    setTimeout(() => {
-      setIsLoading(false);
-      router.push('/');
-      router.refresh();
-    }, 500);
+    window.setTimeout(() => finishDemoLogin(role, name), 360);
   };
 
   return (
-    <main className="flex-1 min-h-screen bg-slate-950 flex flex-col justify-center py-12 sm:px-6 lg:px-8 relative overflow-hidden">
-      {/* Background Gradients */}
-      <div className="absolute top-[-10%] left-[-10%] w-[50%] h-[50%] bg-indigo-900/20 rounded-full blur-[120px]" />
-      <div className="absolute bottom-[-10%] right-[-10%] w-[50%] h-[50%] bg-violet-900/20 rounded-full blur-[120px]" />
-
-      <div className="sm:mx-auto sm:w-full sm:max-w-md z-10">
-        <div className="flex justify-center items-center space-x-3">
-          <div className="bg-indigo-600 p-2.5 rounded-2xl shadow-lg shadow-indigo-500/30">
-            <Shield className="h-8 w-8 text-white animate-pulse" />
-          </div>
-          <span className="text-3xl font-extrabold text-white tracking-wide">
-            Evidence<span className="text-indigo-400">Verse</span> <span className="text-xs uppercase px-2 py-1 bg-slate-800 text-indigo-300 rounded border border-indigo-500/20 font-mono tracking-normal">Lite</span>
-          </span>
+    <main className="app-backdrop relative grid min-h-dvh overflow-hidden lg:grid-cols-[minmax(420px,0.9fr)_minmax(520px,1.1fr)]">
+      <section className="relative hidden overflow-hidden border-r border-white/[0.07] p-10 lg:flex lg:flex-col lg:justify-between xl:p-14">
+        <div className="absolute -left-28 top-[18%] h-80 w-80 rounded-full bg-teal-300/[0.08] blur-[100px]" />
+        <div className="relative z-10 flex items-center gap-3">
+          <span className="grid h-11 w-11 place-items-center rounded-xl border border-teal-300/20 bg-teal-300/10 text-teal-300"><Fingerprint className="h-5 w-5" /></span>
+          <span><span className="block text-lg font-bold text-white">EvidenceVerse</span><span className="block text-[9px] font-semibold uppercase tracking-[0.2em] text-teal-300/70">National Intelligence</span></span>
         </div>
-        <h2 className="mt-6 text-center text-xl font-medium text-slate-300">
-          ระบบวิเคราะห์พยานหลักฐานดิจิทัลข้ามคดี
-        </h2>
-      </div>
 
-      <div className="mt-8 sm:mx-auto sm:w-full sm:max-w-md z-10 px-4 sm:px-0">
-        <div className="bg-slate-900/60 backdrop-blur-xl border border-slate-800/80 py-8 px-4 shadow-2xl sm:rounded-3xl sm:px-10">
-          {/* Connection Status Indicator */}
-          <div className="mb-6 flex items-center justify-between px-3.5 py-2.5 bg-slate-950/80 border border-slate-800/60 rounded-2xl text-xs">
-            <div className="flex items-center space-x-2">
-              <Database className={`h-4 w-4 ${isDemoMode ? 'text-amber-400' : 'text-emerald-400'}`} />
-              <span className="text-slate-400">สถานะฐานข้อมูล:</span>
-            </div>
-            <span className={`font-semibold ${isDemoMode ? 'text-amber-400' : 'text-emerald-400'}`}>
-              {isDemoMode ? 'โหมดสาธิต (Demo Mode)' : 'เชื่อมต่อ Supabase แล้ว'}
-            </span>
+        <div className="relative z-10 max-w-xl">
+          <div className="mb-6 inline-flex items-center gap-2 rounded-full border border-white/[0.08] bg-white/[0.035] px-3 py-1.5 text-[10px] font-semibold uppercase tracking-[0.16em] text-slate-400"><ScanLine className="h-3.5 w-3.5 text-teal-300" /> Evidence integrity first</div>
+          <h1 className="text-balance text-4xl font-bold leading-[1.25] tracking-[-0.04em] text-white xl:text-5xl">ทุกข้อสรุป<br /><span className="text-teal-200">ต้องย้อนกลับถึงต้นฉบับได้</span></h1>
+          <p className="mt-6 max-w-lg text-sm leading-7 text-slate-400">พื้นที่ทำงานสำหรับจัดระเบียบหลักฐาน ตรวจข้อเสนอจากระบบ และบันทึกการตัดสินใจของมนุษย์อย่างตรวจสอบย้อนกลับได้</p>
+          <div className="mt-9 grid gap-4 sm:grid-cols-3">
+            {[
+              { icon: LockKeyhole, title: 'สิทธิ์รายคดี', text: 'ปิดการเข้าถึงโดยค่าเริ่มต้น' },
+              { icon: BadgeCheck, title: 'ต้นฉบับคงเดิม', text: 'ยืนยันด้วย SHA-256' },
+              { icon: Sparkles, title: 'มนุษย์ยืนยัน', text: 'AI ให้ข้อเสนอเท่านั้น' },
+            ].map(({ icon: Icon, title, text }) => <div key={title} className="rounded-2xl border border-white/[0.07] bg-white/[0.025] p-4"><Icon className="h-4 w-4 text-teal-300" /><p className="mt-3 text-xs font-semibold text-slate-200">{title}</p><p className="mt-1 text-[10px] leading-5 text-slate-600">{text}</p></div>)}
+          </div>
+        </div>
+
+        <p className="relative z-10 text-[10px] leading-5 text-slate-600">ระบบช่วยงานหลักฐาน ไม่ใช้ตัดสินความผิด ตัวตน เจตนา ความเป็นเจ้าของ หรือความรับผิดโดยอัตโนมัติ</p>
+      </section>
+
+      <section className="relative z-10 flex min-h-dvh items-center justify-center px-4 py-8 sm:px-8 lg:px-12">
+        <div className="w-full max-w-[520px]">
+          <div className="mb-8 flex items-center gap-3 lg:hidden">
+            <span className="grid h-10 w-10 place-items-center rounded-xl border border-teal-300/20 bg-teal-300/10 text-teal-300"><Fingerprint className="h-5 w-5" /></span>
+            <span><span className="block font-bold text-white">EvidenceVerse</span><span className="block text-[8px] uppercase tracking-[0.18em] text-teal-300/70">National Intelligence</span></span>
           </div>
 
-          {errorMessage && (
-            <div className="mb-6 bg-red-950/40 border border-red-900/50 p-4 rounded-2xl flex items-start space-x-3 text-red-300 text-sm">
-              <AlertCircle className="h-5 w-5 text-red-400 shrink-0 mt-0.5" />
-              <span>{errorMessage}</span>
-            </div>
-          )}
-
-          <form onSubmit={handleLogin} className="space-y-6">
-            <div>
-              <label htmlFor="email" className="block text-sm font-medium text-slate-300">
-                อีเมลผู้ใช้
-              </label>
-              <div className="mt-2">
-                <input
-                  id="email"
-                  name="email"
-                  type="email"
-                  required
-                  disabled={isLoading}
-                  value={email}
-                  onChange={(e) => setEmail(e.target.value)}
-                  placeholder="e.g. user@evidenceverse.go.th"
-                  className="block w-full rounded-2xl border-0 bg-slate-950 py-3 px-4 text-white shadow-sm ring-1 ring-inset ring-slate-800 focus:ring-2 focus:ring-inset focus:ring-indigo-500 text-sm placeholder:text-slate-600 disabled:opacity-50 transition-all duration-250"
-                />
-              </div>
+          <div className="glass-panel rounded-[28px] p-6 sm:p-8">
+            <div className="flex items-start justify-between gap-4">
+              <div><p className="text-[10px] font-semibold uppercase tracking-[0.18em] text-teal-300/70">Secure workspace</p><h2 className="mt-2 text-2xl font-bold tracking-[-0.025em] text-white">เข้าสู่พื้นที่ทำงาน</h2><p className="mt-2 text-sm text-slate-500">ยืนยันตัวตนเพื่อเข้าถึงข้อมูลตามสิทธิ์ของคุณ</p></div>
+              <span className={`grid h-10 w-10 shrink-0 place-items-center rounded-xl ${isDemoMode ? 'bg-amber-300/[0.08] text-amber-200' : 'bg-emerald-300/[0.08] text-emerald-300'}`}><Database className="h-[18px] w-[18px]" /></span>
             </div>
 
-            <div>
-              <label htmlFor="password" className="block text-sm font-medium text-slate-300">
-                รหัสผ่าน
-              </label>
-              <div className="mt-2">
-                <input
-                  id="password"
-                  name="password"
-                  type="password"
-                  required
-                  disabled={isLoading}
-                  value={password}
-                  onChange={(e) => setPassword(e.target.value)}
-                  placeholder="••••••••"
-                  className="block w-full rounded-2xl border-0 bg-slate-950 py-3 px-4 text-white shadow-sm ring-1 ring-inset ring-slate-800 focus:ring-2 focus:ring-inset focus:ring-indigo-500 text-sm placeholder:text-slate-600 disabled:opacity-50 transition-all duration-250"
-                />
-              </div>
+            <div className={`mt-6 flex items-center gap-3 rounded-xl border p-3 text-xs ${isDemoMode ? 'border-amber-300/15 bg-amber-300/[0.045] text-amber-100' : 'border-emerald-300/15 bg-emerald-300/[0.045] text-emerald-100'}`}>
+              <span className={`h-2 w-2 rounded-full ${isDemoMode ? 'bg-amber-300' : 'status-pulse bg-emerald-300 text-emerald-300'}`} />
+              <span className="font-medium">{isDemoMode ? 'โหมดสาธิต · ข้อมูลอยู่ในอุปกรณ์นี้' : 'เชื่อมต่อ Supabase Auth แล้ว'}</span>
             </div>
 
-            <div>
-              <button
-                type="submit"
-                disabled={isLoading}
-                className="w-full flex justify-center py-3 px-4 border border-transparent rounded-2xl shadow-lg text-sm font-semibold text-white bg-indigo-600 hover:bg-indigo-500 hover:shadow-indigo-500/20 active:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500 disabled:opacity-50 disabled:cursor-not-allowed transition-all duration-250 cursor-pointer"
-              >
-                {isLoading ? (
-                  <Loader2 className="h-5 w-5 animate-spin" />
-                ) : isDemoMode ? (
-                  'เข้าสู่ระบบด้วยบัญชีชั่วคราว'
-                ) : (
-                  'ลงชื่อเข้าใช้งาน'
-                )}
+            {errorMessage && <div role="alert" className="mt-5 flex items-start gap-3 rounded-xl border border-rose-400/20 bg-rose-400/[0.06] p-4 text-sm text-rose-200"><AlertCircle className="mt-0.5 h-4 w-4 shrink-0" /><span>{errorMessage}</span></div>}
+
+            <form onSubmit={handleLogin} className="mt-6 space-y-5">
+              <div><label htmlFor="email" className="text-xs font-medium text-slate-300">อีเมลผู้ใช้</label><input id="email" name="email" type="email" autoComplete="username" required={!isDemoMode} disabled={isLoading || isDemoMode} value={email} onChange={(event) => setEmail(event.target.value)} placeholder={isDemoMode ? 'ไม่จำเป็นสำหรับโหมดสาธิต' : 'name@agency.go.th'} className="mt-2 block min-h-12 w-full rounded-xl border border-white/[0.09] bg-[#07121f]/80 px-4 text-sm text-white placeholder:text-slate-700 focus:border-teal-300/40 focus:outline-none disabled:cursor-not-allowed disabled:opacity-45" /></div>
+              <div><div className="flex items-center justify-between"><label htmlFor="password" className="text-xs font-medium text-slate-300">รหัสผ่าน</label>{!isDemoMode && <span className="text-[10px] text-slate-600">ติดต่อผู้ดูแลเมื่อเข้าไม่ได้</span>}</div><input id="password" name="password" type="password" autoComplete="current-password" required={!isDemoMode} disabled={isLoading || isDemoMode} value={password} onChange={(event) => setPassword(event.target.value)} placeholder="••••••••••••" className="mt-2 block min-h-12 w-full rounded-xl border border-white/[0.09] bg-[#07121f]/80 px-4 text-sm text-white placeholder:text-slate-700 focus:border-teal-300/40 focus:outline-none disabled:cursor-not-allowed disabled:opacity-45" /></div>
+              <button type="submit" disabled={isLoading} className="flex min-h-12 w-full items-center justify-center gap-2 rounded-xl bg-teal-300 px-5 text-sm font-bold text-[#05201d] shadow-[0_12px_34px_rgba(45,212,191,0.14)] transition hover:-translate-y-0.5 hover:bg-teal-200 disabled:cursor-wait disabled:opacity-60">
+                {isLoading && activeDemoRole === 'INVESTIGATOR' ? <Loader2 className="h-4 w-4 animate-spin" /> : <ShieldCheck className="h-4 w-4" />}
+                {isDemoMode ? 'เข้าใช้งานในฐานะพนักงานสืบสวน' : 'ลงชื่อเข้าใช้งาน'}
+                {!isLoading && <ArrowRight className="h-4 w-4" />}
               </button>
-            </div>
-          </form>
+            </form>
 
-          {/* Quick Demo Logins */}
-          {isDemoMode && (
-            <div className="mt-8 border-t border-slate-800/80 pt-6">
-              <span className="block text-xs font-semibold text-slate-500 uppercase tracking-wider text-center">
-                เลือกบทบาทจำลองเพื่อเข้าทดสอบ
-              </span>
-              <div className="mt-4 grid grid-cols-2 gap-3">
-                <button
-                  onClick={() => handleDemoLogin('PLATFORM_ADMIN', 'พล.ต.ต. สุรศักดิ์ (Platform Admin)')}
-                  disabled={isLoading}
-                  className="flex items-center justify-center py-2.5 px-3 border border-slate-800 hover:border-indigo-500/40 hover:bg-indigo-950/20 rounded-2xl text-xs font-medium text-slate-300 transition-all duration-200 cursor-pointer text-center"
-                >
-                  Platform Admin
-                </button>
-                <button
-                  onClick={() => handleDemoLogin('ORG_ADMIN', 'พ.ต.อ. ประสิทธิ์ (Org Admin)')}
-                  disabled={isLoading}
-                  className="flex items-center justify-center py-2.5 px-3 border border-slate-800 hover:border-indigo-500/40 hover:bg-indigo-950/20 rounded-2xl text-xs font-medium text-slate-300 transition-all duration-200 cursor-pointer text-center"
-                >
-                  Org Admin
-                </button>
-                <button
-                  onClick={() => handleDemoLogin('LEAD_INVESTIGATOR', 'ร.ต.อ. สมชาย (Lead Investigator)')}
-                  disabled={isLoading}
-                  className="flex items-center justify-center py-2.5 px-3 border border-slate-800 hover:border-indigo-500/40 hover:bg-indigo-950/20 rounded-2xl text-xs font-medium text-slate-300 transition-all duration-200 cursor-pointer text-center"
-                >
-                  Lead Investigator
-                </button>
-                <button
-                  onClick={() => handleDemoLogin('FIELD_OFFICER', 'ร.ต.ท. เกรียงไกร (Field Officer)')}
-                  disabled={isLoading}
-                  className="flex items-center justify-center py-2.5 px-3 border border-slate-800 hover:border-indigo-500/40 hover:bg-indigo-950/20 rounded-2xl text-xs font-medium text-slate-300 transition-all duration-200 cursor-pointer text-center"
-                >
-                  Field Officer
-                </button>
-                <button
-                  onClick={() => handleDemoLogin('AUDITOR', 'นางสาวจิราภรณ์ (Auditor)')}
-                  disabled={isLoading}
-                  className="col-span-2 flex items-center justify-center py-2.5 px-3 border border-slate-800 hover:border-indigo-500/40 hover:bg-indigo-950/20 rounded-2xl text-xs font-medium text-slate-300 transition-all duration-200 cursor-pointer text-center"
-                >
-                  Auditor (ตรวจสอบระบบ)
-                </button>
-              </div>
-            </div>
-          )}
+            {isDemoMode && <div className="mt-7 border-t border-white/[0.07] pt-6"><div className="flex items-center justify-between gap-3"><p className="text-xs font-semibold text-slate-300">หรือเลือกบทบาทสาธิต</p><p className="text-[9px] text-slate-600">ไม่มีข้อมูลจริง</p></div><div className="mt-3 grid gap-2 sm:grid-cols-2">{demoRoles.map((item) => <button key={item.role} type="button" onClick={() => handleDemoLogin(item.role, item.name)} disabled={isLoading} className={`group flex min-h-[58px] items-center justify-between rounded-xl border px-3.5 text-left transition ${activeDemoRole === item.role ? 'border-teal-300/30 bg-teal-300/[0.07]' : 'border-white/[0.07] bg-white/[0.02] hover:border-white/[0.15] hover:bg-white/[0.04]'} disabled:cursor-wait disabled:opacity-60`}><span><span className="block text-xs font-medium text-slate-200">{item.label}</span><span className="mt-0.5 block text-[9px] text-slate-600">{item.description}</span></span>{isLoading && activeDemoRole === item.role ? <Loader2 className="h-3.5 w-3.5 animate-spin text-teal-300" /> : <ArrowRight className="h-3.5 w-3.5 text-slate-700 transition group-hover:translate-x-0.5 group-hover:text-slate-400" />}</button>)}</div></div>}
+          </div>
         </div>
-      </div>
+      </section>
     </main>
   );
 }

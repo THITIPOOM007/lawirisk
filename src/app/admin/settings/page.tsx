@@ -1,47 +1,37 @@
 'use client';
 
-import React, { useState, useEffect } from 'react';
-import { Settings, Save, ShieldAlert, Key, ToggleLeft, ToggleRight, Users, Database, Smartphone, Mail, Landmark, ShieldCheck } from 'lucide-react';
+import React, { useState } from 'react';
+import { Settings, Save, ShieldAlert, ToggleLeft, ToggleRight, Users, Database, Smartphone, Landmark, ShieldCheck } from 'lucide-react';
 import { getSettings, saveSettings, INITIAL_USERS, UserProfile, UserSettings, addAuditLog, INITIAL_INTAKE_CHANNELS, IntakeChannel } from '@/lib/demo-data';
+import { roleLabel } from '@/lib/roles';
 
 export default function AdminSettingsPage() {
-  const [settings, setSettings] = useState<UserSettings | null>(null);
-  const [users, setUsers] = useState<UserProfile[]>([]);
-  const [channels, setChannels] = useState<IntakeChannel[]>([]);
+  const [settings] = useState<UserSettings>(() => getSettings());
+  const users: UserProfile[] = INITIAL_USERS;
+  const channels: IntakeChannel[] = INITIAL_INTAKE_CHANNELS;
   const [saveSuccess, setSaveSuccess] = useState(false);
 
   // Form parameters
-  const [threshold, setThreshold] = useState(0.85);
-  const [autoExtract, setAutoExtract] = useState(true);
+  const [threshold, setThreshold] = useState(() => getSettings().confidenceThreshold);
+  const [autoExtract, setAutoExtract] = useState(() => getSettings().autoExtraction);
   const [webhookUrl, setWebhookUrl] = useState('https://n8n.evidenceverse.go.th/webhook/search');
 
   // Agencies state mock
-  const [agencies, setAgencies] = useState([
+  const agencies = [
     { id: 'a-1', name: 'กองบริหารสาธารณสุขส่วนกลาง', level: 'CENTRAL' },
     { id: 'a-2', name: 'สำนักงานสาธารณสุขจังหวัดศรีสะเกษ', level: 'PROVINCE' },
     { id: 'a-3', name: 'โรงพยาบาลขุขันธ์', level: 'FACILITY' }
-  ]);
+  ];
 
   // Laws state mock
-  const [laws, setLaws] = useState([
+  const laws = [
     { id: 'l-1', name: 'พระราชบัญญัติวิชาชีพทันตกรรม พ.ศ. 2537', code: 'มาตรา 28' },
     { id: 'l-2', name: 'พระราชบัญญัติสถานพยาบาล พ.ศ. 2541', code: 'มาตรา 16' },
     { id: 'l-3', name: 'พระราชบัญญัติเครื่องมือแพทย์ พ.ศ. 2551', code: 'มาตรา 46' }
-  ]);
-
-  useEffect(() => {
-    const s = getSettings();
-    setSettings(s);
-    setThreshold(s.confidenceThreshold);
-    setAutoExtract(s.autoExtraction);
-    setUsers(INITIAL_USERS);
-    setChannels(INITIAL_INTAKE_CHANNELS);
-  }, []);
+  ];
 
   const handleSave = (e: React.FormEvent) => {
     e.preventDefault();
-    if (!settings) return;
-
     const newSettings: UserSettings = {
       ...settings,
       confidenceThreshold: threshold,
@@ -66,19 +56,7 @@ export default function AdminSettingsPage() {
     setTimeout(() => setSaveSuccess(false), 3000);
   };
 
-  const getRoleLabel = (role: string) => {
-    switch (role) {
-      case 'PLATFORM_ADMIN': return 'Platform Admin';
-      case 'ORG_ADMIN': return 'Org Admin';
-      case 'AUDITOR': return 'Auditor';
-      case 'LEAD_INVESTIGATOR': return 'Lead Investigator';
-      default: return 'Field Officer';
-    }
-  };
-
-  if (!settings) {
-    return <div className="text-slate-400">กำลังโหลดค่าการตั้งค่า...</div>;
-  }
+  const getRoleLabel = roleLabel;
 
   return (
     <div className="space-y-8">

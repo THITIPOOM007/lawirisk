@@ -1,11 +1,12 @@
 import type { Metadata } from "next";
-import { Geist, Geist_Mono } from "next/font/google";
+import { Geist_Mono, Noto_Sans_Thai } from "next/font/google";
 import "./globals.css";
 import Navigation from "@/components/Navigation";
 
-const geistSans = Geist({
-  variable: "--font-geist-sans",
-  subsets: ["latin"],
+const notoSansThai = Noto_Sans_Thai({
+  variable: "--font-noto-sans-thai",
+  subsets: ["thai", "latin"],
+  display: "swap",
 });
 
 const geistMono = Geist_Mono({
@@ -14,8 +15,11 @@ const geistMono = Geist_Mono({
 });
 
 export const metadata: Metadata = {
-  title: "EvidenceVerse Lite - ระบบวิเคราะห์และเชื่อมโยงหลักฐานคดี",
-  description: "ระบบสืบสวนและเชื่อมโยงข้อมูลข้ามคดีสืบสวนเชิงลึก",
+  title: {
+    default: "EvidenceVerse | ศูนย์บัญชาการหลักฐานดิจิทัล",
+    template: "%s | EvidenceVerse",
+  },
+  description: "ระบบช่วยจัดระเบียบ ตรวจทาน และเชื่อมโยงหลักฐานดิจิทัลที่ตรวจสอบย้อนกลับถึงต้นฉบับได้",
 };
 
 export default function RootLayout({
@@ -26,9 +30,10 @@ export default function RootLayout({
   return (
     <html
       lang="th"
-      className={`${geistSans.variable} ${geistMono.variable} h-full antialiased dark`}
+      data-scroll-behavior="smooth"
+      className={`${notoSansThai.variable} ${geistMono.variable} h-full antialiased dark`}
     >
-      <body className="min-h-full flex flex-col bg-slate-950 text-slate-100">
+      <body className="min-h-full bg-slate-950 text-slate-100">
         <Navigation>{children}</Navigation>
       </body>
     </html>

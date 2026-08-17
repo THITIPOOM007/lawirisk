@@ -1,20 +1,16 @@
 'use client';
 
-import React, { useState, useEffect } from 'react';
+import React, { useState } from 'react';
 import { FileBarChart, Loader2, Download, Copy, FileText, Check } from 'lucide-react';
 import { getCases, getEvidence, getEntities, getRelationships, Case, addAuditLog } from '@/lib/demo-data';
 
 export default function ReportsPage() {
-  const [casesList, setCasesList] = useState<Case[]>([]);
+  const [casesList] = useState<Case[]>(() => getCases());
   const [selectedCaseId, setSelectedCaseId] = useState('');
   const [reportType, setReportType] = useState('SUMMARY');
   const [isGenerating, setIsGenerating] = useState(false);
   const [generatedReport, setGeneratedReport] = useState('');
   const [copied, setCopied] = useState(false);
-
-  useEffect(() => {
-    setCasesList(getCases());
-  }, []);
 
   const handleGenerateReport = () => {
     if (!selectedCaseId) return;

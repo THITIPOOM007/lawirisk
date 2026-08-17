@@ -1,20 +1,15 @@
 'use client';
 
-import React, { useState, useEffect } from 'react';
+import React, { useState } from 'react';
 import Link from 'next/link';
-import { Database, Search, Filter, ShieldAlert } from 'lucide-react';
-import { getEntities, getCases, ExtractedEntity } from '@/lib/demo-data';
+import { Database, Search } from 'lucide-react';
+import { getEntities, getCases, ExtractedEntity, Case } from '@/lib/demo-data';
 
 export default function EntitiesPage() {
-  const [entities, setEntities] = useState<ExtractedEntity[]>([]);
-  const [casesList, setCasesList] = useState<any[]>([]);
+  const [entities] = useState<ExtractedEntity[]>(() => getEntities());
+  const [casesList] = useState<Case[]>(() => getCases());
   const [searchQuery, setSearchQuery] = useState('');
   const [typeFilter, setTypeFilter] = useState<string>('ALL');
-
-  useEffect(() => {
-    setEntities(getEntities());
-    setCasesList(getCases());
-  }, []);
 
   const getEntityTypeLabel = (type: string) => {
     switch (type) {
