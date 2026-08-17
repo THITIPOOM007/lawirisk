@@ -1,5 +1,7 @@
 // Stateful Mock Database for EvidenceVerse National Case Intelligence (Omnichannel & Demo Mode)
 
+import type { StaffRole } from '@/lib/roles';
+
 export interface Case {
   id: string;
   number: string;
@@ -96,7 +98,7 @@ export interface UserProfile {
   id: string;
   email: string;
   name: string;
-  role: 'PLATFORM_ADMIN' | 'ORG_ADMIN' | 'AUDITOR' | 'USER' | 'LEAD_INVESTIGATOR' | 'INVESTIGATOR' | 'LEGAL_REVIEWER' | 'FIELD_OFFICER' | 'VIEWER';
+  role: StaffRole;
   agency?: string;
 }
 
@@ -105,7 +107,7 @@ export interface IntakeChannel {
   id: string;
   name: string;
   type: 'KOUPREY_PLUS' | 'PARTNER_API' | 'MAIL' | 'MANUAL_PHONE' | 'MANUAL_WALKIN' | 'MANUAL_POST' | 'FILE_IMPORT';
-  credentials?: any;
+  credentials?: Record<string, unknown>;
 }
 
 export interface IntakeEnvelope {
@@ -117,8 +119,8 @@ export interface IntakeEnvelope {
   urgency_reason?: string;
   jurisdiction_region?: string;
   jurisdiction_agency?: string;
-  malware_scan_status: 'CLEAN' | 'PENDING' | 'INFECTED';
-  privacy_risk_status: 'LOW' | 'MEDIUM' | 'HIGH';
+  malware_scan_status: 'CLEAN' | 'PENDING' | 'INFECTED' | 'UNAVAILABLE' | 'ERROR';
+  privacy_risk_status: 'PENDING' | 'LOW' | 'MEDIUM' | 'HIGH';
   idempotency_key?: string;
   created_at: string;
   updated_at: string;
@@ -127,7 +129,7 @@ export interface IntakeEnvelope {
 export interface IntakeMessage {
   id: string;
   envelope_id: string;
-  headers?: any;
+  headers?: Record<string, string>;
   raw_payload: string;
   message_id?: string;
 }
@@ -153,7 +155,7 @@ export interface IntakeParticipant {
   phone?: string;
   citizen_id?: string;
   address?: string;
-  metadata?: any;
+  metadata?: Record<string, unknown>;
 }
 
 export interface IntakeDuplicateCandidate {
@@ -184,11 +186,10 @@ export interface TriageDecision {
 
 // Initial Mock Data Setup
 export const INITIAL_USERS: UserProfile[] = [
-  { id: 'user-1', email: 'platform_admin@evidenceverse.go.th', name: 'พล.ต.ต. สุรศักดิ์ (Platform Admin)', role: 'PLATFORM_ADMIN', agency: 'CENTRAL' },
-  { id: 'user-2', email: 'org_admin@evidenceverse.go.th', name: 'พ.ต.อ. ประสิทธิ์ (Org Admin)', role: 'ORG_ADMIN', agency: 'HEALTH_REGION_1' },
-  { id: 'user-3', email: 'investigator@evidenceverse.go.th', name: 'ร.ต.อ. สมชาย (Lead Investigator)', role: 'LEAD_INVESTIGATOR', agency: 'HEALTH_REGION_1' },
-  { id: 'user-4', email: 'field@evidenceverse.go.th', name: 'ร.ต.ท. เกรียงไกร (Field Officer)', role: 'FIELD_OFFICER', agency: 'PROVINCE_SISAKET' },
-  { id: 'user-5', email: 'auditor@evidenceverse.go.th', name: 'นางสาวจิราภรณ์ (Auditor)', role: 'AUDITOR', agency: 'CENTRAL' }
+  { id: 'user-1', email: 'admin@evidenceverse.go.th', name: 'พล.ต.ต. สุรศักดิ์ (Admin)', role: 'ADMIN', agency: 'CENTRAL' },
+  { id: 'user-2', email: 'investigator@evidenceverse.go.th', name: 'ร.ต.อ. สมชาย (Investigator)', role: 'INVESTIGATOR', agency: 'HEALTH_REGION_1' },
+  { id: 'user-3', email: 'reviewer@evidenceverse.go.th', name: 'นางสาวจิราภรณ์ (Reviewer)', role: 'REVIEWER', agency: 'CENTRAL' },
+  { id: 'user-4', email: 'viewer@evidenceverse.go.th', name: 'เจ้าหน้าที่สังเกตการณ์', role: 'VIEWER', agency: 'PROVINCE_SISAKET' },
 ];
 
 export const INITIAL_INTAKE_CHANNELS: IntakeChannel[] = [
@@ -436,6 +437,7 @@ function getStored<T>(key: string, fallback: T): T {
 function setStored<T>(key: string, value: T): void {
   if (isClient) {
     localStorage.setItem(`ev_${key}`, JSON.stringify(value));
+    window.dispatchEvent(new CustomEvent('ev-data-change', { detail: { key } }));
   }
 }
 
@@ -445,7 +447,6 @@ let inMemoryEvidence = [...INITIAL_EVIDENCE];
 let inMemoryEntities = [...INITIAL_ENTITIES];
 let inMemoryMentions = [...INITIAL_MENTIONS];
 let inMemoryRelationships = [...INITIAL_RELATIONSHIPS];
-let inMemoryReferences = [...INITIAL_RELATIONSHIP_REFERENCES];
 let inMemoryMatches = [...INITIAL_MATCHES];
 let inMemoryAuditLogs = [...INITIAL_AUDIT_LOGS];
 
