@@ -10,8 +10,8 @@ export interface FileValidationResult {
 export async function validateFileInBrowser(file: File): Promise<FileValidationResult> {
   // 1. Check size (limit: 20MB)
   const MAX_SIZE = 20 * 1024 * 1024; // 20 MB
-  if (file.size > MAX_SIZE) {
-    return { isValid: false, error: 'ขนาดไฟล์เกินกำหนด (สูงสุด 20 MB)' };
+  if (file.size === 0 || file.size > MAX_SIZE) {
+    return { isValid: false, error: 'ไฟล์ต้องมีขนาดมากกว่า 0 และไม่เกิน 20 MB' };
   }
 
   // 2. Check extension
@@ -20,12 +20,16 @@ export async function validateFileInBrowser(file: File): Promise<FileValidationR
   if (!extension || !allowedExtensions.includes(extension)) {
     return { isValid: false, error: 'รูปแบบไฟล์ไม่รองรับ (รองรับเฉพาะ PDF, PNG, JPG, JPEG เท่านั้น)' };
   }
+  const expectedMime = extension === 'pdf' ? 'application/pdf' : extension === 'png' ? 'image/png' : 'image/jpeg';
+  if (file.type !== expectedMime) {
+    return { isValid: false, error: 'ชนิด MIME ของไฟล์ไม่ตรงกับนามสกุล' };
+  }
 
   // Read array buffer for magic bytes and hash
   let arrayBuffer: ArrayBuffer;
   try {
     arrayBuffer = await file.arrayBuffer();
-  } catch (err) {
+  } catch {
     return { isValid: false, error: 'ไม่สามารถอ่านเนื้อหาไฟล์ได้' };
   }
 
@@ -35,7 +39,7 @@ export async function validateFileInBrowser(file: File): Promise<FileValidationR
     const hashBuffer = await crypto.subtle.digest('SHA-256', arrayBuffer);
     const hashArray = Array.from(new Uint8Array(hashBuffer));
     sha256 = hashArray.map(b => b.toString(16).padStart(2, '0')).join('');
-  } catch (err) {
+  } catch {
     return { isValid: false, error: 'ไม่สามารถคำนวณรหัส Hash (SHA-256) ได้' };
   }
 

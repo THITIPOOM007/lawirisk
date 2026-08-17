@@ -1,19 +1,33 @@
 'use client';
 
-import React, { useState, useEffect } from 'react';
+import React, { useEffect, useState } from 'react';
 import Link from 'next/link';
-import { Briefcase, Plus, Search, Calendar, FolderOpen, Shield } from 'lucide-react';
+import { Briefcase, Plus, Search, Calendar, FolderOpen, Shield, Loader2, RefreshCw } from 'lucide-react';
 import { getCases, Case } from '@/lib/demo-data';
 
 export default function CasesPage() {
-  const [casesList, setCasesList] = useState<Case[]>([]);
+  const [casesList, setCasesList] = useState<Case[]>(() => getCases());
+  const [isLoading, setIsLoading] = useState(true);
+  const [loadError, setLoadError] = useState('');
+  const [reloadToken, setReloadToken] = useState(0);
   const [searchQuery, setSearchQuery] = useState('');
   const [statusFilter, setStatusFilter] = useState<'ALL' | 'ACTIVE' | 'ARCHIVED' | 'CLOSED'>('ALL');
 
   useEffect(() => {
-    // Load cases from stateful database helper
-    setCasesList(getCases());
-  }, []);
+    const controller = new AbortController();
+    fetch('/api/v1/cases', { signal: controller.signal, credentials: 'same-origin' })
+      .then(async (response) => {
+        const body = await response.json();
+        if (!response.ok) throw new Error(body.error?.message || 'โหลดรายการคดีไม่สำเร็จ');
+        setCasesList(body.data as Case[]);
+      })
+      .catch((error: unknown) => {
+        if (error instanceof DOMException && error.name === 'AbortError') return;
+        setLoadError(error instanceof Error ? error.message : 'โหลดรายการคดีไม่สำเร็จ');
+      })
+      .finally(() => setIsLoading(false));
+    return () => controller.abort();
+  }, [reloadToken]);
 
   const filteredCases = casesList.filter((c) => {
     const matchesSearch = 
@@ -88,7 +102,11 @@ export default function CasesPage() {
       </div>
 
       {/* Cases List */}
-      {filteredCases.length > 0 ? (
+      {isLoading ? (
+        <div className="flex min-h-56 items-center justify-center rounded-3xl border border-slate-900 bg-slate-900/20 text-sm text-slate-400" role="status"><Loader2 className="mr-2 h-5 w-5 animate-spin" />กำลังโหลดสำนวนคดี...</div>
+      ) : loadError ? (
+        <div className="rounded-3xl border border-rose-500/20 bg-rose-500/5 p-8 text-center" role="alert"><p className="text-sm text-rose-300">{loadError}</p><button type="button" onClick={() => { setIsLoading(true); setLoadError(''); setReloadToken((value) => value + 1); }} className="mt-4 inline-flex items-center rounded-xl border border-rose-400/20 px-4 py-2 text-xs font-semibold text-rose-200"><RefreshCw className="mr-2 h-4 w-4" />ลองใหม่</button></div>
+      ) : filteredCases.length > 0 ? (
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
           {filteredCases.map((c) => (
             <div

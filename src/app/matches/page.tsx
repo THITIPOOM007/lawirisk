@@ -1,33 +1,21 @@
 'use client';
 
-import React, { useState, useEffect } from 'react';
-import { Link2, AlertTriangle, Check, X, ShieldAlert, AlertCircle, FileCheck, HelpCircle } from 'lucide-react';
-import { getMatches, getCases, updateMatchStatus, MatchCandidate } from '@/lib/demo-data';
+import React, { useState } from 'react';
+import { Link2, Check, X, ShieldAlert } from 'lucide-react';
+import { getMatches, getCases, updateMatchStatus, MatchCandidate, Case } from '@/lib/demo-data';
+import { readBrowserCookie, useDemoRole } from '@/lib/browser-cookies';
 
 export default function MatchesPage() {
-  const [matches, setMatches] = useState<MatchCandidate[]>([]);
-  const [casesList, setCasesList] = useState<any[]>([]);
-  const [userRole, setUserRole] = useState('VIEWER');
+  const [matches, setMatches] = useState<MatchCandidate[]>(() => getMatches());
+  const [casesList] = useState<Case[]>(() => getCases());
+  const userRole = useDemoRole();
   
   // Enforcing strict matching warning states
   const [bypassNameCheck, setBypassNameCheck] = useState<{ [key: string]: boolean }>({});
   const [successMsg, setSuccessMsg] = useState('');
 
-  useEffect(() => {
-    setMatches(getMatches());
-    setCasesList(getCases());
-
-    const getCookie = (name: string) => {
-      const value = `; ${document.cookie}`;
-      const parts = value.split(`; ${name}=`);
-      if (parts.length === 2) return parts.pop()?.split(';').shift();
-      return null;
-    };
-    setUserRole(getCookie('mock-auth-role') || 'VIEWER');
-  }, []);
-
   const handleUpdateStatus = (id: string, status: 'VERIFIED' | 'DISMISSED') => {
-    if (userRole !== 'ADMIN' && userRole !== 'REVIEWER') {
+    if (!['ADMIN', 'REVIEWER'].includes(userRole)) {
       alert('คุณไม่มีสิทธิ์ผู้ตรวจทาน (REVIEWER/ADMIN) ในการจัดการความเชื่อมโยงคดี');
       return;
     }
@@ -41,14 +29,9 @@ export default function MatchesPage() {
       return;
     }
 
-    const getCookie = (name: string) => {
-      const value = `; ${document.cookie}`;
-      const parts = value.split(`; ${name}=`);
-      if (parts.length === 2) return parts.pop()?.split(';').shift();
-      return null;
-    };
-    const reviewer = getCookie('mock-auth-name') 
-      ? decodeURIComponent(getCookie('mock-auth-name')!) 
+    const encodedName = readBrowserCookie('mock-auth-name');
+    const reviewer = encodedName
+      ? decodeURIComponent(encodedName)
       : 'ผู้ตรวจทาน';
 
     updateMatchStatus(id, status, reviewer);
@@ -175,7 +158,7 @@ export default function MatchesPage() {
                     </div>
 
                     {/* Verification Actions */}
-                    {item.status === 'PENDING' && (userRole === 'ADMIN' || userRole === 'REVIEWER') && (
+                    {item.status === 'PENDING' && ['ADMIN', 'REVIEWER'].includes(userRole) && (
                       <div className="flex sm:flex-col lg:flex-row items-center gap-3 shrink-0 self-end lg:self-center">
                         <button
                           onClick={() => handleUpdateStatus(item.id, 'DISMISSED')}

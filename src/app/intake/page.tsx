@@ -1,20 +1,37 @@
 'use client';
 
-import React, { useState, useEffect } from 'react';
+import React, { useEffect, useState } from 'react';
 import Link from 'next/link';
-import { Inbox, Filter, ShieldAlert, CheckCircle, RefreshCw, AlertCircle, FileText, Smartphone, Mail, FileUp, ShieldX } from 'lucide-react';
-import { getIntakeEnvelopes, getIntakeMessages, INITIAL_INTAKE_CHANNELS, IntakeEnvelope, IntakeMessage } from '@/lib/demo-data';
+import { Inbox, Filter, ShieldAlert, CheckCircle, FileText, Smartphone, Mail, FileUp, ShieldX, Loader2, RefreshCw, Clock3 } from 'lucide-react';
+import { getIntakeEnvelopes, getIntakeMessages, INITIAL_INTAKE_CHANNELS, IntakeChannel, IntakeEnvelope, IntakeMessage } from '@/lib/demo-data';
 
 export default function IntakeQueuePage() {
-  const [envelopes, setEnvelopes] = useState<IntakeEnvelope[]>([]);
-  const [messages, setMessages] = useState<IntakeMessage[]>([]);
+  const [envelopes, setEnvelopes] = useState<IntakeEnvelope[]>(() => getIntakeEnvelopes());
+  const [messages, setMessages] = useState<IntakeMessage[]>(() => getIntakeMessages());
+  const [channels, setChannels] = useState<IntakeChannel[]>(INITIAL_INTAKE_CHANNELS);
+  const [isLoading, setIsLoading] = useState(true);
+  const [loadError, setLoadError] = useState('');
+  const [reloadToken, setReloadToken] = useState(0);
   const [statusFilter, setStatusFilter] = useState('TRIAGE_PENDING');
   const [channelFilter, setChannelFilter] = useState('ALL');
 
   useEffect(() => {
-    setEnvelopes(getIntakeEnvelopes());
-    setMessages(getIntakeMessages());
-  }, []);
+    const controller = new AbortController();
+    fetch('/api/v1/intake', { signal: controller.signal, credentials: 'same-origin' })
+      .then(async (response) => {
+        const body = await response.json();
+        if (!response.ok) throw new Error(body.error?.message || 'โหลดคิวรับเรื่องไม่สำเร็จ');
+        setEnvelopes(body.data.envelopes as IntakeEnvelope[]);
+        setMessages(body.data.messages as IntakeMessage[]);
+        setChannels(body.data.channels as IntakeChannel[]);
+      })
+      .catch((error: unknown) => {
+        if (error instanceof DOMException && error.name === 'AbortError') return;
+        setLoadError(error instanceof Error ? error.message : 'โหลดคิวรับเรื่องไม่สำเร็จ');
+      })
+      .finally(() => setIsLoading(false));
+    return () => controller.abort();
+  }, [reloadToken]);
 
   const getChannelIcon = (type: string) => {
     switch (type) {
@@ -26,7 +43,7 @@ export default function IntakeQueuePage() {
   };
 
   const getChannelLabel = (channelId: string) => {
-    const channel = INITIAL_INTAKE_CHANNELS.find(c => c.id === channelId);
+    const channel = channels.find(c => c.id === channelId);
     return channel ? channel.name : 'ไม่ระบุช่องทาง';
   };
 
@@ -127,7 +144,7 @@ export default function IntakeQueuePage() {
             className="block rounded-xl border-0 bg-slate-950 py-2 px-3 text-white ring-1 ring-slate-800 focus:ring-2 focus:ring-indigo-500 text-xs"
           >
             <option value="ALL">ทุกช่องทาง</option>
-            {INITIAL_INTAKE_CHANNELS.map(ch => (
+            {channels.map(ch => (
               <option key={ch.id} value={ch.id}>{ch.name}</option>
             ))}
           </select>
@@ -136,7 +153,11 @@ export default function IntakeQueuePage() {
 
       {/* Table queue */}
       <div className="bg-slate-900/40 border border-slate-900 rounded-3xl p-6">
-        {filteredEnvelopes.length > 0 ? (
+        {isLoading ? (
+          <div className="flex min-h-56 items-center justify-center text-sm text-slate-400" role="status"><Loader2 className="mr-2 h-5 w-5 animate-spin" />กำลังโหลดคิวรับเรื่อง...</div>
+        ) : loadError ? (
+          <div className="py-16 text-center" role="alert"><p className="text-sm text-rose-300">{loadError}</p><button type="button" onClick={() => { setIsLoading(true); setLoadError(''); setReloadToken((value) => value + 1); }} className="mt-4 inline-flex items-center rounded-xl border border-rose-400/20 px-4 py-2 text-xs font-semibold text-rose-200"><RefreshCw className="mr-2 h-4 w-4" />ลองใหม่</button></div>
+        ) : filteredEnvelopes.length > 0 ? (
           <div className="overflow-x-auto">
             <table className="min-w-full divide-y divide-slate-950 text-xs md:text-sm">
               <thead>
@@ -166,7 +187,7 @@ export default function IntakeQueuePage() {
                     <tr key={env.id} className="hover:bg-slate-900/20">
                       <td className="py-4">
                         <div className="flex items-center space-x-2.5">
-                          {getChannelIcon(INITIAL_INTAKE_CHANNELS.find(c => c.id === env.channel_id)?.type || '')}
+                          {getChannelIcon(channels.find(c => c.id === env.channel_id)?.type || '')}
                           <div>
                             <span className="font-semibold block text-white">{getChannelLabel(env.channel_id)}</span>
                             <span className="text-[10px] text-slate-500">{new Date(env.created_at).toLocaleString('th-TH')}</span>
@@ -184,10 +205,15 @@ export default function IntakeQueuePage() {
                             <ShieldAlert className="h-3.5 w-3.5 mr-1" />
                             ติดมัลแวร์
                           </span>
-                        ) : (
+                        ) : env.malware_scan_status === 'CLEAN' ? (
                           <span className="inline-flex items-center px-2 py-0.5 border border-emerald-500/20 bg-emerald-500/5 text-emerald-400 rounded text-[10px] font-semibold">
                             <CheckCircle className="h-3.5 w-3.5 mr-1" />
                             ปลอดภัย
+                          </span>
+                        ) : (
+                          <span className="inline-flex items-center px-2 py-0.5 border border-amber-500/25 bg-amber-500/10 text-amber-300 rounded text-[10px] font-semibold">
+                            <Clock3 className="h-3.5 w-3.5 mr-1" />
+                            {env.malware_scan_status === 'PENDING' ? 'รอตรวจ' : 'ตรวจไม่สำเร็จ'}
                           </span>
                         )}
                       </td>

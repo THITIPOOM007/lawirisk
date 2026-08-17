@@ -1,13 +1,13 @@
 'use client';
 
-import React, { useState, useEffect } from 'react';
-import { FileText, Upload, Check, AlertCircle, FileCheck, Loader2, Database, Shield } from 'lucide-react';
+import React, { useState } from 'react';
+import { FileText, Upload, Check, AlertCircle, FileCheck, Loader2, Database } from 'lucide-react';
 import { getCases, getEvidence, saveEvidence, Case, EvidenceFile } from '@/lib/demo-data';
 import { validateFileInBrowser } from '@/lib/file-validator';
 
 export default function EvidencePage() {
-  const [casesList, setCasesList] = useState<Case[]>([]);
-  const [evidenceList, setEvidenceList] = useState<EvidenceFile[]>([]);
+  const [casesList] = useState<Case[]>(() => getCases());
+  const [evidenceList, setEvidenceList] = useState<EvidenceFile[]>(() => getEvidence());
   
   // Form State
   const [selectedCaseId, setSelectedCaseId] = useState('');
@@ -31,11 +31,6 @@ export default function EvidencePage() {
   const [computedHash, setComputedHash] = useState('');
   const [computedMagicBytes, setComputedMagicBytes] = useState('');
 
-  useEffect(() => {
-    setCasesList(getCases());
-    setEvidenceList(getEvidence());
-  }, []);
-
   const handleFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0] || null;
     setSelectedFile(file);
@@ -50,7 +45,7 @@ export default function EvidencePage() {
     }
 
     // Reset checklist to scanning state
-    setValidationSteps({ size: 'pending', extension: 'pending', magic: 'pending', hash: 'pending' } as any);
+    setValidationSteps({ size: 'pending', extension: 'pending', magic: 'pending', hash: 'pending' });
 
     // Step 1: Size
     const isSizeOk = file.size <= 20 * 1024 * 1024;
@@ -107,45 +102,33 @@ export default function EvidencePage() {
       return;
     }
 
-    // Save metadata
     try {
-      const getCookie = (name: string) => {
-        const value = `; ${document.cookie}`;
-        const parts = value.split(`; ${name}=`);
-        if (parts.length === 2) return parts.pop()?.split(';').shift();
-        return null;
+      const body = new FormData();
+      body.append('file', selectedFile);
+      body.append('case_id', selectedCaseId);
+      const response = await fetch('/api/evidence/upload', { method: 'POST', body });
+      const payload = await response.json() as {
+        success?: boolean;
+        message?: string;
+        data?: EvidenceFile;
+        error?: { message?: string };
       };
+      if (!response.ok || !payload.success || !payload.data) {
+        throw new Error(payload.error?.message || 'ไม่สามารถจัดเก็บหลักฐานได้');
+      }
 
-      const creator = getCookie('mock-auth-name') 
-        ? decodeURIComponent(getCookie('mock-auth-name')!) 
-        : 'เจ้าหน้าที่สืบสวน';
+      saveEvidence(payload.data);
 
-      const newEvidence: EvidenceFile = {
-        id: `ev-${Date.now()}`,
-        case_id: selectedCaseId,
-        filename: selectedFile.name,
-        file_path: `/vault/${selectedCaseId}/${selectedFile.name}`,
-        file_size: selectedFile.size,
-        mime_type: selectedFile.type,
-        sha256: validation.sha256 || 'unknown',
-        status: 'PROCESSED', // Automate success for demo
-        created_by: creator,
-        created_at: new Date().toISOString(),
-      };
-
-      // Save using stateful demoDB
-      saveEvidence(newEvidence);
-
-      // Refresh listings
       setEvidenceList(getEvidence());
-      setSuccessMessage('อัปโหลดและตรวจสอบหลักฐานเรียบร้อยแล้ว (ข้อมูลบันทึกสำเร็จ)');
+      setSuccessMessage(payload.message || 'รับหลักฐานแล้วและกำลังรอการสแกนความปลอดภัย');
+      window.dispatchEvent(new Event('ev-data-change'));
       
       // Reset form
       setSelectedFile(null);
       setSelectedCaseId('');
       setValidationSteps({ size: 'pending', extension: 'pending', magic: 'pending', hash: 'pending' });
-    } catch (err: any) {
-      setErrorMessage(err.message || 'ไม่สามารถบันทึกข้อมูลหลักฐานได้');
+    } catch (error: unknown) {
+      setErrorMessage(error instanceof Error ? error.message : 'ไม่สามารถบันทึกข้อมูลหลักฐานได้');
     } finally {
       setIsUploading(false);
     }

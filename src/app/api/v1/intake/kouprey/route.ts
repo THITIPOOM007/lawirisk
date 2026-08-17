@@ -1,6 +1,8 @@
 import { NextRequest, NextResponse } from 'next/server';
-import crypto from 'crypto';
 import { getIntakeEnvelopes, saveIntakeEnvelope, saveIntakeMessage, saveIntakeParticipant, addAuditLog } from '@/lib/demo-data';
+import { verifySignedWebhook } from '@/lib/webhook-security';
+import { externalIntakeSchema } from '@/lib/intake-contracts';
+import { createServiceClient } from '@/lib/supabase-server';
 
 export async function POST(request: NextRequest) {
   try {
@@ -11,6 +13,10 @@ export async function POST(request: NextRequest) {
 
     const bodyText = await request.text();
 
+    if (Buffer.byteLength(bodyText, 'utf8') > 1024 * 1024) {
+      return NextResponse.json({ error: 'ขนาดข้อมูล webhook เกินกำหนด' }, { status: 413 });
+    }
+
     if (!signature || !timestamp || !nonce) {
       return NextResponse.json(
         { error: 'ข้อมูลยืนยันตัวตน webhook ไม่ครบถ้วน (X-Kouprey headers missing)' },
@@ -18,26 +24,28 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    // Enforce Webhook signature validation (HMAC SHA256)
-    const secret = process.env.KOUPREY_SECRET_KEY || 'mock-secret-kouprey-key-12345';
-    const message = `${timestamp}.${nonce}.${bodyText}`;
-    const expectedSignature = crypto
-      .createHmac('sha256', secret)
-      .update(message)
-      .digest('hex');
+    const secret = process.env.KOUPREY_SECRET_KEY;
+    if (!secret) {
+      return NextResponse.json(
+        { error: 'ช่องทาง Kouprey ยังไม่ได้ตั้งค่าคีย์ความปลอดภัย' },
+        { status: 503 }
+      );
+    }
+    if (!idempotencyKey || idempotencyKey.length > 200) {
+      return NextResponse.json(
+        { error: 'ต้องระบุ Idempotency-Key ที่ถูกต้อง' },
+        { status: 400 }
+      );
+    }
 
-    // Check time drift (e.g., must be within 5 minutes / 300 seconds)
-    const currentTime = Math.floor(Date.now() / 1000);
-    const sentTime = parseInt(timestamp, 10);
-    if (isNaN(sentTime) || Math.abs(currentTime - sentTime) > 300) {
+    const verification = verifySignedWebhook({ secret, timestamp, nonce, payload: bodyText, signature });
+    if (!verification.ok && ['INVALID_TIMESTAMP', 'EXPIRED'].includes(verification.reason)) {
       return NextResponse.json(
         { error: 'คำขอหมดอายุ (Timestamp expired or drifted too far)' },
         { status: 400 }
       );
     }
-
-    // Verify HMAC signature
-    if (signature !== expectedSignature) {
+    if (!verification.ok) {
       return NextResponse.json(
         { error: 'ข้อมูลความปลอดภัย webhook ล้มเหลว (HMAC Signature Mismatch)' },
         { status: 403 }
@@ -45,18 +53,45 @@ export async function POST(request: NextRequest) {
     }
 
     // Enforce Idempotency Key check
-    if (idempotencyKey) {
-      const existing = getIntakeEnvelopes().find(e => e.idempotency_key === idempotencyKey);
-      if (existing) {
-        return NextResponse.json(
-          { error: 'คำขอซ้ำซ้อน (Duplicate Idempotency-Key detected)', envelopeId: existing.id },
-          { status: 409 }
-        );
-      }
+    const existing = getIntakeEnvelopes().find(e => e.idempotency_key === idempotencyKey);
+    if (existing) {
+      return NextResponse.json(
+        { error: 'คำขอซ้ำซ้อน (Duplicate Idempotency-Key detected)', envelopeId: existing.id },
+        { status: 409 }
+      );
     }
 
     // Parse payload
-    const payload = JSON.parse(bodyText);
+    let rawPayload: unknown;
+    try {
+      rawPayload = JSON.parse(bodyText);
+    } catch {
+      return NextResponse.json({ error: 'ข้อมูลต้องเป็น JSON ที่ถูกต้อง' }, { status: 400 });
+    }
+    const parsedPayload = externalIntakeSchema.safeParse(rawPayload);
+    if (!parsedPayload.success) {
+      return NextResponse.json({ error: 'รูปแบบข้อมูลคำร้องไม่ถูกต้อง' }, { status: 400 });
+    }
+    const payload = parsedPayload.data;
+
+    if (process.env.NEXT_PUBLIC_SUPABASE_URL && process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY) {
+      try {
+        const supabase = createServiceClient();
+        const { data: envelopeId, error } = await supabase.rpc('create_external_intake', {
+          p_channel_code: 'KOUPREY_PLUS',
+          p_payload: payload,
+          p_idempotency_key: idempotencyKey,
+          p_source_label: 'Kouprey Plus',
+        });
+        if (error || !envelopeId) {
+          const duplicate = error?.code === '23505';
+          return NextResponse.json({ error: duplicate ? 'คำขอซ้ำซ้อน' : 'บันทึกคำร้องไม่สำเร็จ' }, { status: duplicate ? 409 : 503 });
+        }
+        return NextResponse.json({ success: true, message: 'รับเรื่องนำเข้าระบบเรียบร้อยแล้ว', envelopeId }, { status: 201 });
+      } catch {
+        return NextResponse.json({ error: 'ระบบจัดเก็บคำร้องภายนอกยังตั้งค่าไม่ครบ' }, { status: 503 });
+      }
+    }
 
     // Save Intake Envelope in Mock DB (Demo Mode fallback)
     const envelopeId = `env-kp-${Date.now()}`;
@@ -69,9 +104,9 @@ export async function POST(request: NextRequest) {
       urgency_reason: payload.urgency_reason || 'นำเข้าจากระบบ Kouprey Plus',
       jurisdiction_region: payload.region || 'เขตสุขภาพที่ 10',
       jurisdiction_agency: payload.agency || 'สสจ.ศรีสะเกษ',
-      malware_scan_status: 'CLEAN',
-      privacy_risk_status: 'LOW',
-      idempotency_key: idempotencyKey || undefined,
+      malware_scan_status: 'PENDING',
+      privacy_risk_status: 'PENDING',
+      idempotency_key: idempotencyKey,
       created_at: new Date().toISOString(),
       updated_at: new Date().toISOString()
     });
@@ -82,8 +117,7 @@ export async function POST(request: NextRequest) {
       envelope_id: envelopeId,
       headers: {
         timestamp,
-        nonce,
-        signature
+        nonce
       },
       raw_payload: bodyText,
       message_id: payload.ref_no || `KP-${Date.now()}`
@@ -120,9 +154,10 @@ export async function POST(request: NextRequest) {
       message: 'รับเรื่องนำเข้าระบบเรียบร้อยแล้ว',
       envelopeId
     });
-  } catch (err: any) {
+  } catch (error: unknown) {
+    console.error('Kouprey intake failed', { error: error instanceof Error ? error.name : 'UnknownError' });
     return NextResponse.json(
-      { error: err.message || 'เกิดข้อผิดพลาดในการประมวลผลคำร้อง' },
+      { error: 'เกิดข้อผิดพลาดในการประมวลผลคำร้อง' },
       { status: 500 }
     );
   }

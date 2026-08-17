@@ -1,17 +1,13 @@
 'use client';
 
-import React, { useState, useEffect } from 'react';
+import React, { useState } from 'react';
 import { History, Download, Search, RefreshCw, Calendar, Shield } from 'lucide-react';
 import { getAuditLogs, AuditLog } from '@/lib/demo-data';
 
 export default function AuditPage() {
-  const [logs, setLogs] = useState<AuditLog[]>([]);
+  const [logs, setLogs] = useState<AuditLog[]>(() => getAuditLogs());
   const [searchQuery, setSearchQuery] = useState('');
   const [actionFilter, setActionFilter] = useState('ALL');
-
-  useEffect(() => {
-    setLogs(getAuditLogs());
-  }, []);
 
   const handleRefresh = () => {
     setLogs(getAuditLogs());

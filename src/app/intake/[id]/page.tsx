@@ -1,9 +1,9 @@
 'use client';
 
-import React, { useState, useEffect } from 'react';
+import React, { useEffect, useState } from 'react';
 import { useParams, useRouter } from 'next/navigation';
 import Link from 'next/link';
-import { ArrowLeft, ShieldCheck, ShieldAlert, AlertTriangle, CheckCircle, Database, Settings, HelpCircle, Save, FileText, Loader2, Link2 } from 'lucide-react';
+import { ArrowLeft, ShieldCheck, ShieldAlert, AlertTriangle, Settings, Save, FileText, Loader2 } from 'lucide-react';
 import {
   getIntakeEnvelopes,
   getIntakeMessages,
@@ -11,17 +11,12 @@ import {
   getIntakeAttachments,
   getDuplicateCandidates,
   getCases,
-  saveCase,
-  saveTriageDecision,
-  updateIntakeEnvelopeStatus,
-  saveEvidence,
-  IntakeEnvelope,
-  IntakeMessage,
-  IntakeParticipant,
-  IntakeAttachment,
-  IntakeDuplicateCandidate,
-  Case,
-  addAuditLog
+  type Case,
+  type IntakeAttachment,
+  type IntakeDuplicateCandidate,
+  type IntakeEnvelope,
+  type IntakeMessage,
+  type IntakeParticipant,
 } from '@/lib/demo-data';
 
 export default function IntakeDetailPage() {
@@ -29,12 +24,14 @@ export default function IntakeDetailPage() {
   const router = useRouter();
   const intakeId = params.id as string;
 
-  const [envelope, setEnvelope] = useState<IntakeEnvelope | null>(null);
-  const [message, setMessage] = useState<IntakeMessage | null>(null);
-  const [participants, setParticipants] = useState<IntakeParticipant[]>([]);
-  const [attachments, setAttachments] = useState<IntakeAttachment[]>([]);
-  const [duplicates, setDuplicates] = useState<IntakeDuplicateCandidate[]>([]);
-  const [casesList, setCasesList] = useState<Case[]>([]);
+  const [envelope, setEnvelope] = useState<IntakeEnvelope | null>(() => getIntakeEnvelopes().find((item) => item.id === intakeId) || null);
+  const [message, setMessage] = useState<IntakeMessage | null>(() => getIntakeMessages().find((item) => item.envelope_id === intakeId) || null);
+  const [participants, setParticipants] = useState<IntakeParticipant[]>(() => getIntakeParticipants().filter((item) => item.envelope_id === intakeId));
+  const [attachments, setAttachments] = useState<IntakeAttachment[]>(() => getIntakeAttachments().filter((item) => item.envelope_id === intakeId));
+  const [duplicates, setDuplicates] = useState<IntakeDuplicateCandidate[]>(() => getDuplicateCandidates().filter((item) => item.source_envelope_id === intakeId));
+  const [casesList, setCasesList] = useState<Case[]>(() => getCases());
+  const [isLoading, setIsLoading] = useState(true);
+  const [loadError, setLoadError] = useState('');
 
   // Triage form states
   const [triageAction, setTriageAction] = useState<'CREATE_CASE' | 'MERGE_INTAKE' | 'REQUEST_MORE_INFO' | 'REJECT_SPAM'>('CREATE_CASE');
@@ -42,26 +39,33 @@ export default function IntakeDetailPage() {
   const [mergeCaseId, setMergeCaseId] = useState('');
   
   // New Case form states
-  const [newCaseNumber, setNewCaseNumber] = useState('');
+  const caseSequence = 100 + [...intakeId].reduce((sum, character) => sum + character.charCodeAt(0), 0) % 900;
+  const [newCaseNumber, setNewCaseNumber] = useState(`ค.${caseSequence}/2569`);
   const [newCaseTitle, setNewCaseTitle] = useState('');
 
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [successMessage, setSuccessMessage] = useState('');
+  const [submitError, setSubmitError] = useState('');
 
   useEffect(() => {
-    const envs = getIntakeEnvelopes();
-    const env = envs.find(e => e.id === intakeId);
-    if (!env) return;
-
-    setEnvelope(env);
-    setMessage(getIntakeMessages().find(m => m.envelope_id === intakeId) || null);
-    setParticipants(getIntakeParticipants().filter(p => p.envelope_id === intakeId));
-    setAttachments(getIntakeAttachments().filter(a => a.envelope_id === intakeId));
-    setDuplicates(getDuplicateCandidates().filter(d => d.source_envelope_id === intakeId));
-    setCasesList(getCases());
-
-    // Auto fill form placeholders
-    setNewCaseNumber(`ค.${Math.floor(Math.random() * 900) + 100}/2569`);
+    const controller = new AbortController();
+    fetch(`/api/v1/intake/${encodeURIComponent(intakeId)}`, { signal: controller.signal, credentials: 'same-origin' })
+      .then(async (response) => {
+        const body = await response.json();
+        if (!response.ok) throw new Error(body.error?.message || 'โหลดรายละเอียดคำร้องไม่สำเร็จ');
+        setEnvelope(body.data.envelope as IntakeEnvelope);
+        setMessage(body.data.message as IntakeMessage | null);
+        setParticipants(body.data.participants as IntakeParticipant[]);
+        setAttachments(body.data.attachments as IntakeAttachment[]);
+        setDuplicates(body.data.duplicates as IntakeDuplicateCandidate[]);
+        setCasesList(body.data.cases as Case[]);
+      })
+      .catch((error: unknown) => {
+        if (error instanceof DOMException && error.name === 'AbortError') return;
+        setLoadError(error instanceof Error ? error.message : 'โหลดรายละเอียดคำร้องไม่สำเร็จ');
+      })
+      .finally(() => setIsLoading(false));
+    return () => controller.abort();
   }, [intakeId]);
 
   const handleTriageSubmit = async (e: React.FormEvent) => {
@@ -70,96 +74,36 @@ export default function IntakeDetailPage() {
 
     setIsSubmitting(true);
     setSuccessMessage('');
-
-    // Simulate saving decision
-    setTimeout(() => {
-      const getCookie = (name: string) => {
-        const value = `; ${document.cookie}`;
-        const parts = value.split(`; ${name}=`);
-        if (parts.length === 2) return parts.pop()?.split(';').shift();
-        return null;
-      };
-      const user = getCookie('mock-auth-name') 
-        ? decodeURIComponent(getCookie('mock-auth-name')!) 
-        : 'ผู้คัดแยกคดี';
-
-      if (triageAction === 'CREATE_CASE') {
-        const newCaseId = `case-${Date.now()}`;
-        saveCase({
-          id: newCaseId,
-          number: newCaseNumber,
-          title: newCaseTitle || 'คดีสืบสวนใหม่จากการร้องเรียน',
-          description: `สร้างคดีโดยการอนุมัติใบรับเรื่องร้องเรียน ${envelope.id}. เหตุผล: ${triageReason}`,
-          status: 'ACTIVE',
-          jurisdiction_region: envelope.jurisdiction_region,
-          jurisdiction_agency: envelope.jurisdiction_agency,
-          created_by: user,
-          created_at: new Date().toISOString(),
-          updated_at: new Date().toISOString()
-        });
-
-        // Promote attachments to this case as official evidence files
-        attachments.forEach(att => {
-          saveEvidence({
-            id: `ev-prom-${Date.now()}`,
-            case_id: newCaseId,
-            filename: att.filename,
-            file_path: att.storage_path,
-            file_size: att.file_size,
-            mime_type: att.mime_type,
-            sha256: att.sha256,
-            status: 'PROCESSED',
-            created_by: user,
-            created_at: new Date().toISOString()
-          });
-        });
-
-        updateIntakeEnvelopeStatus(envelope.id, 'PROMOTED');
-      } else if (triageAction === 'MERGE_INTAKE') {
-        // Promote attachments to merged case
-        attachments.forEach(att => {
-          saveEvidence({
-            id: `ev-prom-${Date.now()}`,
-            case_id: mergeCaseId,
-            filename: att.filename,
-            file_path: att.storage_path,
-            file_size: att.file_size,
-            mime_type: att.mime_type,
-            sha256: att.sha256,
-            status: 'PROCESSED',
-            created_by: user,
-            created_at: new Date().toISOString()
-          });
-        });
-
-        updateIntakeEnvelopeStatus(envelope.id, 'MERGED');
-      } else if (triageAction === 'REQUEST_MORE_INFO') {
-        updateIntakeEnvelopeStatus(envelope.id, 'NEEDS_INFO');
-      } else {
-        updateIntakeEnvelopeStatus(envelope.id, 'REJECTED');
-      }
-
-      saveTriageDecision({
-        id: `tri-${Date.now()}`,
-        envelope_id: envelope.id,
-        action: triageAction,
-        reason: triageReason,
-        destination_case_id: triageAction === 'MERGE_INTAKE' ? mergeCaseId : undefined,
-        created_by: user,
-        created_at: new Date().toISOString()
+    setSubmitError('');
+    try {
+      const response = await fetch(`/api/v1/intake/${encodeURIComponent(envelope.id)}`, {
+        method: 'PATCH',
+        credentials: 'same-origin',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          action: triageAction,
+          reason: triageReason,
+          destination_case_id: triageAction === 'MERGE_INTAKE' ? mergeCaseId : undefined,
+          new_case_number: triageAction === 'CREATE_CASE' ? newCaseNumber : undefined,
+          new_case_title: triageAction === 'CREATE_CASE' ? newCaseTitle : undefined,
+        }),
       });
-
-      setSuccessMessage('ดำเนินการคัดกรองคำร้องเรียนและเขียนบันทึกความเห็นสำเร็จ!');
+      const body = await response.json();
+      if (!response.ok) throw new Error(body.error?.message || 'บันทึกผลคัดกรองไม่สำเร็จ');
+      setSuccessMessage('บันทึกผลคัดกรองและ Audit log เรียบร้อยแล้ว');
+      window.setTimeout(() => router.push('/intake'), 900);
+    } catch (error: unknown) {
+      setSubmitError(error instanceof Error ? error.message : 'บันทึกผลคัดกรองไม่สำเร็จ');
+    } finally {
       setIsSubmitting(false);
-
-      setTimeout(() => {
-        router.push('/intake');
-      }, 1500);
-    }, 1200);
+    }
   };
 
-  if (!envelope) {
-    return <div className="text-slate-400 p-8">กำลังดึงข้อมูลสารบบคำร้อง...</div>;
+  if (isLoading && !envelope) {
+    return <div className="flex items-center p-8 text-slate-400" role="status"><Loader2 className="mr-2 h-5 w-5 animate-spin" />กำลังดึงข้อมูลสารบบคำร้อง...</div>;
+  }
+  if (loadError || !envelope) {
+    return <div className="rounded-2xl border border-rose-500/20 bg-rose-500/5 p-8 text-rose-300" role="alert">{loadError || 'ไม่พบคำร้อง'}</div>;
   }
 
   const complainant = participants.find(p => p.role === 'COMPLAINANT');
@@ -182,6 +126,7 @@ export default function IntakeDetailPage() {
           {successMessage}
         </div>
       )}
+      {submitError && <div className="rounded-2xl border border-rose-500/20 bg-rose-500/5 p-4 text-sm text-rose-300" role="alert">{submitError}</div>}
 
       <div className="grid grid-cols-1 lg:grid-cols-5 gap-8">
         
@@ -271,10 +216,15 @@ export default function IntakeDetailPage() {
                             <ShieldAlert className="h-3.5 w-3.5 mr-1" />
                             ไฟล์อันตราย
                           </span>
-                        ) : (
+                        ) : att.malware_scan_status === 'CLEAN' ? (
                           <span className="inline-flex items-center px-2 py-0.5 border border-emerald-500/20 bg-emerald-500/5 text-emerald-400 rounded text-[10px] font-semibold">
                             <ShieldCheck className="h-3.5 w-3.5 mr-1" />
                             ตรวจแล้ว
+                          </span>
+                        ) : (
+                          <span className="inline-flex items-center px-2 py-0.5 border border-amber-500/25 bg-amber-500/10 text-amber-300 rounded text-[10px] font-semibold">
+                            <Loader2 className="h-3.5 w-3.5 mr-1 animate-spin" />
+                            รอผลสแกน
                           </span>
                         )}
                       </div>

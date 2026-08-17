@@ -1,38 +1,34 @@
 'use client';
 
-import React, { useState, useEffect } from 'react';
-import { useRouter, useParams } from 'next/navigation';
+import React, { useEffect, useState } from 'react';
+import { useParams } from 'next/navigation';
 import Link from 'next/link';
 import {
-  Briefcase, ArrowLeft, FileText, Database, Link2, AlertTriangle, Calendar, Shield, Plus, Eye,
-  CheckCircle2, XCircle, Search, ShieldAlert, Users, MapPin, Landmark, FileCheck, ClipboardList,
-  Layers, Printer, Download, Network
+  ArrowLeft, FileText, Database, Link2, AlertTriangle, Shield, Plus,
+  CheckCircle2, Users, MapPin, Landmark, ClipboardList,
+  Layers, Printer, Network, Loader2
 } from 'lucide-react';
-import {
-  getCases, getEvidence, getEntities, getRelationships, getMatches, Case, EvidenceFile,
-  ExtractedEntity, EntityRelationship, MatchCandidate, verifyRelationship, addAuditLog
-} from '@/lib/demo-data';
+import { getCases, getEvidence, addAuditLog, type Case, type EvidenceFile } from '@/lib/demo-data';
+
+type CaseTab = 'research' | 'evidence' | 'graph' | 'timeline' | 'legal' | 'field' | 'reports';
+type FdaResult = { license: string; name: string; status: string; updated_at: string };
+type OsscResult = { id: string; name: string; type: string; status: string; owner: string };
 
 export default function CaseDetailsPage() {
-  const router = useRouter();
   const params = useParams();
   const caseId = params.id as string;
 
-  const [activeTab, setActiveTab] = useState<'research' | 'evidence' | 'graph' | 'timeline' | 'legal' | 'field' | 'reports'>('research');
-  const [currentCase, setCurrentCase] = useState<Case | null>(null);
-  const [evidenceList, setEvidenceList] = useState<EvidenceFile[]>([]);
-  const [entitiesList, setEntitiesList] = useState<ExtractedEntity[]>([]);
-  const [relationshipsList, setRelationshipsList] = useState<EntityRelationship[]>([]);
-  const [matchesList, setMatchesList] = useState<MatchCandidate[]>([]);
-  
-  // Custom states
-  const [userRole, setUserRole] = useState('VIEWER');
+  const [activeTab, setActiveTab] = useState<CaseTab>('research');
+  const [currentCase, setCurrentCase] = useState<Case | null>(() => getCases().find((item) => item.id === caseId) || null);
+  const [evidenceList, setEvidenceList] = useState<EvidenceFile[]>(() => getEvidence().filter((item) => item.case_id === caseId));
+  const [isLoading, setIsLoading] = useState(true);
+  const [loadError, setLoadError] = useState('');
   
   // Research Tab states
   const [fdaQuery, setFdaQuery] = useState('');
   const [osscQuery, setOsscQuery] = useState('');
-  const [researchResults, setResearchResults] = useState<any[]>([]);
-  const [osscResults, setOsscResults] = useState<any[]>([]);
+  const [researchResults, setResearchResults] = useState<FdaResult[]>([]);
+  const [osscResults, setOsscResults] = useState<OsscResult[]>([]);
 
   // Field mission state
   const [checklists, setChecklists] = useState([
@@ -46,30 +42,27 @@ export default function CaseDetailsPage() {
   const [selectedNode, setSelectedNode] = useState<string | null>(null);
 
   useEffect(() => {
-    const getCookie = (name: string) => {
-      const value = `; ${document.cookie}`;
-      const parts = value.split(`; ${name}=`);
-      if (parts.length === 2) return parts.pop()?.split(';').shift();
-      return null;
-    };
-    setUserRole(getCookie('mock-auth-role') || 'VIEWER');
+    const controller = new AbortController();
+    fetch(`/api/v1/cases/${encodeURIComponent(caseId)}`, { signal: controller.signal, credentials: 'same-origin' })
+      .then(async (response) => {
+        const body = await response.json();
+        if (!response.ok) throw new Error(body.error?.message || 'โหลดรายละเอียดสำนวนคดีไม่สำเร็จ');
+        setCurrentCase(body.data.case as Case);
+        setEvidenceList(body.data.evidence as EvidenceFile[]);
+      })
+      .catch((error: unknown) => {
+        if (error instanceof DOMException && error.name === 'AbortError') return;
+        setLoadError(error instanceof Error ? error.message : 'โหลดรายละเอียดสำนวนคดีไม่สำเร็จ');
+      })
+      .finally(() => setIsLoading(false));
+    return () => controller.abort();
+  }, [caseId]);
 
-    const allCases = getCases();
-    const foundCase = allCases.find((c) => c.id === caseId);
-    if (foundCase) {
-      setCurrentCase(foundCase);
-    } else {
-      router.push('/cases');
-    }
-
-    setEvidenceList(getEvidence().filter((e) => e.case_id === caseId));
-    setEntitiesList(getEntities().filter((ent) => ent.case_id === caseId));
-    setRelationshipsList(getRelationships().filter((r) => r.case_id === caseId));
-    setMatchesList(getMatches().filter((m) => m.source_case_id === caseId || m.target_case_id === caseId));
-  }, [caseId, router]);
-
-  if (!currentCase) {
-    return <div className="text-slate-400 p-8">กำลังดึงข้อมูลรายละเอียดสำนวนคดี...</div>;
+  if (isLoading && !currentCase) {
+    return <div className="flex items-center p-8 text-slate-400" role="status"><Loader2 className="mr-2 h-5 w-5 animate-spin" />กำลังดึงข้อมูลรายละเอียดสำนวนคดี...</div>;
+  }
+  if (loadError || !currentCase) {
+    return <div className="rounded-2xl border border-rose-500/20 bg-rose-500/5 p-8 text-rose-300" role="alert">{loadError || 'ไม่พบสำนวนคดี'}</div>;
   }
 
   const handleToggleChecklist = (id: number) => {
@@ -152,7 +145,7 @@ export default function CaseDetailsPage() {
           ].map(tab => (
             <button
               key={tab.id}
-              onClick={() => setActiveTab(tab.id as any)}
+              onClick={() => setActiveTab(tab.id as CaseTab)}
               className={`pb-4 px-4 text-xs font-bold border-b-2 transition-all cursor-pointer ${
                 activeTab === tab.id
                   ? 'border-indigo-500 text-indigo-400'

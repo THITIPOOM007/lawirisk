@@ -3,7 +3,6 @@
 import React, { useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { Briefcase, ArrowLeft, Loader2, Save } from 'lucide-react';
-import { saveCase } from '@/lib/demo-data';
 
 export default function NewCasePage() {
   const router = useRouter();
@@ -26,33 +25,23 @@ export default function NewCasePage() {
     }
 
     try {
-      const getCookie = (name: string) => {
-        const value = `; ${document.cookie}`;
-        const parts = value.split(`; ${name}=`);
-        if (parts.length === 2) return parts.pop()?.split(';').shift();
-        return null;
-      };
-
-      const creator = getCookie('mock-auth-name') 
-        ? decodeURIComponent(getCookie('mock-auth-name')!) 
-        : 'เจ้าหน้าที่สืบสวน';
-
-      // Save using stateful helper
-      saveCase({
-        id: `case-${Date.now()}`,
-        number: number.trim(),
-        title: title.trim(),
-        description: description.trim(),
-        status: 'ACTIVE',
-        created_by: creator,
-        created_at: new Date().toISOString(),
-        updated_at: new Date().toISOString(),
+      const response = await fetch('/api/v1/cases', {
+        method: 'POST',
+        credentials: 'same-origin',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          number: number.trim(),
+          title: title.trim(),
+          description: description.trim() || undefined,
+        }),
       });
+      const body = await response.json();
+      if (!response.ok) throw new Error(body.error?.message || 'เกิดข้อผิดพลาดในการบันทึกข้อมูล');
 
       router.push('/cases');
       router.refresh();
-    } catch (err: any) {
-      setError(err.message || 'เกิดข้อผิดพลาดในการบันทึกข้อมูล');
+    } catch (error: unknown) {
+      setError(error instanceof Error ? error.message : 'เกิดข้อผิดพลาดในการบันทึกข้อมูล');
     } finally {
       setIsLoading(false);
     }
