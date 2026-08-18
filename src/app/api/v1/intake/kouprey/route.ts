@@ -3,6 +3,8 @@ import { getIntakeEnvelopes, saveIntakeEnvelope, saveIntakeMessage, saveIntakePa
 import { verifySignedWebhook } from '@/lib/webhook-security';
 import { externalIntakeSchema } from '@/lib/intake-contracts';
 import { createServiceClient } from '@/lib/supabase-server';
+import { consumeRateLimit } from '@/lib/rate-limit';
+import { isDemoServerEnabled, isSupabaseServerConfigured } from '@/lib/runtime-config';
 
 export async function POST(request: NextRequest) {
   try {
@@ -52,15 +54,6 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    // Enforce Idempotency Key check
-    const existing = getIntakeEnvelopes().find(e => e.idempotency_key === idempotencyKey);
-    if (existing) {
-      return NextResponse.json(
-        { error: 'คำขอซ้ำซ้อน (Duplicate Idempotency-Key detected)', envelopeId: existing.id },
-        { status: 409 }
-      );
-    }
-
     // Parse payload
     let rawPayload: unknown;
     try {
@@ -74,9 +67,11 @@ export async function POST(request: NextRequest) {
     }
     const payload = parsedPayload.data;
 
-    if (process.env.NEXT_PUBLIC_SUPABASE_URL && process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY) {
+    if (isSupabaseServerConfigured()) {
       try {
         const supabase = createServiceClient();
+        const limit = await consumeRateLimit({ client: supabase, key: 'external:kouprey', limit: 120, windowSeconds: 60 });
+        if (!limit.allowed) return NextResponse.json({ error: 'ส่งคำขอถี่เกินไป' }, { status: 429, headers: { 'Retry-After': String(limit.retryAfterSeconds) } });
         const { data: envelopeId, error } = await supabase.rpc('create_external_intake', {
           p_channel_code: 'KOUPREY_PLUS',
           p_payload: payload,
@@ -92,6 +87,14 @@ export async function POST(request: NextRequest) {
         return NextResponse.json({ error: 'ระบบจัดเก็บคำร้องภายนอกยังตั้งค่าไม่ครบ' }, { status: 503 });
       }
     }
+
+    if (!isDemoServerEnabled()) {
+      return NextResponse.json({ error: 'ระบบจัดเก็บคำร้องภายนอกยังตั้งค่าไม่ครบ' }, { status: 503 });
+    }
+    const demoLimit = await consumeRateLimit({ key: 'external:kouprey', limit: 120, windowSeconds: 60 });
+    if (!demoLimit.allowed) return NextResponse.json({ error: 'ส่งคำขอถี่เกินไป' }, { status: 429, headers: { 'Retry-After': String(demoLimit.retryAfterSeconds) } });
+    const existing = getIntakeEnvelopes().find(e => e.idempotency_key === idempotencyKey);
+    if (existing) return NextResponse.json({ error: 'คำขอซ้ำซ้อน', envelopeId: existing.id }, { status: 409 });
 
     // Save Intake Envelope in Mock DB (Demo Mode fallback)
     const envelopeId = `env-kp-${Date.now()}`;

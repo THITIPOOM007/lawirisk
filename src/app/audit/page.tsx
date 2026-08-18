@@ -1,26 +1,48 @@
 'use client';
 
-import React, { useState } from 'react';
-import { History, Download, Search, RefreshCw, Calendar, Shield } from 'lucide-react';
+import React, { useEffect, useState } from 'react';
+import { History, Download, Search, RefreshCw, Calendar, Shield, Loader2 } from 'lucide-react';
 import { getAuditLogs, AuditLog } from '@/lib/demo-data';
 
 export default function AuditPage() {
   const [logs, setLogs] = useState<AuditLog[]>(() => getAuditLogs());
   const [searchQuery, setSearchQuery] = useState('');
   const [actionFilter, setActionFilter] = useState('ALL');
+  const [isLoading, setIsLoading] = useState(true);
+  const [loadError, setLoadError] = useState('');
+  const [reloadToken, setReloadToken] = useState(0);
+
+  useEffect(() => {
+    const controller = new AbortController();
+    fetch('/api/v1/audit', { signal: controller.signal, credentials: 'same-origin' })
+      .then(async (response) => {
+        const body = await response.json();
+        if (!response.ok) throw new Error(body.error?.message || 'โหลดบันทึกกิจกรรมไม่สำเร็จ');
+        setLogs(body.data as AuditLog[]);
+      })
+      .catch((error: unknown) => {
+        if (error instanceof DOMException && error.name === 'AbortError') return;
+        setLoadError(error instanceof Error ? error.message : 'โหลดบันทึกกิจกรรมไม่สำเร็จ');
+      })
+      .finally(() => setIsLoading(false));
+    return () => controller.abort();
+  }, [reloadToken]);
 
   const handleRefresh = () => {
-    setLogs(getAuditLogs());
+    setIsLoading(true);
+    setLoadError('');
+    setReloadToken((value) => value + 1);
   };
 
   const handleExportCSV = () => {
     // Generate CSV string
     const headers = ['ID', 'User', 'Action', 'Details', 'IP Address', 'Timestamp'];
+    const safeCell = (value: string) => /^[=+\-@]/.test(value) ? `'${value}` : value;
     const rows = logs.map(log => [
       log.id,
       log.profile_name,
       log.action,
-      log.details.replace(/"/g, '""'), // escape quotes
+      safeCell(log.details).replace(/"/g, '""'),
       log.ip_address,
       log.created_at,
     ]);
@@ -121,7 +143,11 @@ export default function AuditPage() {
 
       {/* Audit Log Ledger Table */}
       <div className="bg-slate-900/40 border border-slate-900 rounded-3xl p-6">
-        {filteredLogs.length > 0 ? (
+        {isLoading ? (
+          <div className="flex min-h-52 items-center justify-center text-sm text-slate-400" role="status"><Loader2 className="mr-2 h-5 w-5 animate-spin" />กำลังโหลด audit trail...</div>
+        ) : loadError ? (
+          <div className="py-14 text-center" role="alert"><p className="text-sm text-rose-300">{loadError}</p><button type="button" onClick={handleRefresh} className="mt-4 inline-flex items-center rounded-xl border border-rose-400/20 px-4 py-2 text-xs font-semibold text-rose-200"><RefreshCw className="mr-2 h-4 w-4" />ลองใหม่</button></div>
+        ) : filteredLogs.length > 0 ? (
           <div className="overflow-x-auto">
             <table className="min-w-full divide-y divide-slate-950 text-xs md:text-sm">
               <thead>

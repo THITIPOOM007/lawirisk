@@ -1,13 +1,17 @@
 'use client';
 
-import React, { useState } from 'react';
-import { FileText, Upload, Check, AlertCircle, FileCheck, Loader2, Database } from 'lucide-react';
+import React, { useEffect, useState } from 'react';
+import { FileText, Upload, Check, AlertCircle, FileCheck, Loader2, Database, RefreshCw } from 'lucide-react';
 import { getCases, getEvidence, saveEvidence, Case, EvidenceFile } from '@/lib/demo-data';
 import { validateFileInBrowser } from '@/lib/file-validator';
+import { isDemoModeEnabled } from '@/lib/supabase';
 
 export default function EvidencePage() {
-  const [casesList] = useState<Case[]>(() => getCases());
+  const [casesList, setCasesList] = useState<Case[]>(() => getCases());
   const [evidenceList, setEvidenceList] = useState<EvidenceFile[]>(() => getEvidence());
+  const [isLoadingRegistry, setIsLoadingRegistry] = useState(true);
+  const [registryError, setRegistryError] = useState('');
+  const [reloadToken, setReloadToken] = useState(0);
   
   // Form State
   const [selectedCaseId, setSelectedCaseId] = useState('');
@@ -30,6 +34,24 @@ export default function EvidencePage() {
   });
   const [computedHash, setComputedHash] = useState('');
   const [computedMagicBytes, setComputedMagicBytes] = useState('');
+
+  useEffect(() => {
+    const controller = new AbortController();
+    Promise.all([
+      fetch('/api/v1/cases', { signal: controller.signal, credentials: 'same-origin' }),
+      fetch('/api/v1/evidence', { signal: controller.signal, credentials: 'same-origin' }),
+    ]).then(async ([casesResponse, evidenceResponse]) => {
+      const [casesBody, evidenceBody] = await Promise.all([casesResponse.json(), evidenceResponse.json()]);
+      if (!casesResponse.ok) throw new Error(casesBody.error?.message || 'โหลดรายการคดีไม่สำเร็จ');
+      if (!evidenceResponse.ok) throw new Error(evidenceBody.error?.message || 'โหลดทะเบียนหลักฐานไม่สำเร็จ');
+      setCasesList(casesBody.data as Case[]);
+      setEvidenceList(evidenceBody.data as EvidenceFile[]);
+    }).catch((error: unknown) => {
+      if (error instanceof DOMException && error.name === 'AbortError') return;
+      setRegistryError(error instanceof Error ? error.message : 'โหลดทะเบียนหลักฐานไม่สำเร็จ');
+    }).finally(() => setIsLoadingRegistry(false));
+    return () => controller.abort();
+  }, [reloadToken]);
 
   const handleFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0] || null;
@@ -117,9 +139,8 @@ export default function EvidencePage() {
         throw new Error(payload.error?.message || 'ไม่สามารถจัดเก็บหลักฐานได้');
       }
 
-      saveEvidence(payload.data);
-
-      setEvidenceList(getEvidence());
+      if (isDemoModeEnabled()) saveEvidence(payload.data);
+      setEvidenceList((current) => [payload.data!, ...current.filter((item) => item.id !== payload.data!.id)]);
       setSuccessMessage(payload.message || 'รับหลักฐานแล้วและกำลังรอการสแกนความปลอดภัย');
       window.dispatchEvent(new Event('ev-data-change'));
       
@@ -296,7 +317,11 @@ export default function EvidencePage() {
               ทะเบียนไฟล์หลักฐานทั้งหมดในระบบ
             </h3>
 
-            {evidenceList.length > 0 ? (
+            {isLoadingRegistry ? (
+              <div className="flex min-h-52 items-center justify-center text-sm text-slate-400" role="status"><Loader2 className="mr-2 h-5 w-5 animate-spin" />กำลังโหลดทะเบียนหลักฐาน...</div>
+            ) : registryError ? (
+              <div className="py-14 text-center" role="alert"><p className="text-sm text-rose-300">{registryError}</p><button type="button" onClick={() => { setIsLoadingRegistry(true); setRegistryError(''); setReloadToken((value) => value + 1); }} className="mt-4 inline-flex items-center rounded-xl border border-rose-400/20 px-4 py-2 text-xs font-semibold text-rose-200"><RefreshCw className="mr-2 h-4 w-4" />ลองใหม่</button></div>
+            ) : evidenceList.length > 0 ? (
               <div className="overflow-x-auto">
                 <table className="min-w-full divide-y divide-slate-950 text-xs md:text-sm">
                   <thead>
@@ -326,8 +351,8 @@ export default function EvidencePage() {
                             {file.sha256.substring(0, 10)}...{file.sha256.substring(file.sha256.length - 6)}
                           </td>
                           <td className="py-4 text-right">
-                            <span className="inline-block px-2.5 py-1 text-[10px] font-semibold border rounded-lg bg-indigo-500/10 text-indigo-400 border-indigo-500/20">
-                              {file.status === 'PROCESSED' ? 'ประมวลผลเสร็จสิ้น' : file.status}
+                            <span className={`inline-block px-2.5 py-1 text-[10px] font-semibold border rounded-lg ${file.malware_scan_status === 'CLEAN' ? 'bg-emerald-500/10 text-emerald-400 border-emerald-500/20' : file.malware_scan_status === 'INFECTED' ? 'bg-rose-500/10 text-rose-400 border-rose-500/20' : 'bg-amber-500/10 text-amber-300 border-amber-500/20'}`}>
+                              {file.malware_scan_status === 'CLEAN' ? 'สแกนแล้ว · ปลอดภัย' : file.malware_scan_status === 'INFECTED' ? 'กักกัน · พบความเสี่ยง' : 'ยังไม่ถือว่าปลอดภัย'}
                             </span>
                           </td>
                         </tr>

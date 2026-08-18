@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState, useSyncExternalStore } from 'react';
+import React, { useEffect, useRef, useState, useSyncExternalStore } from 'react';
 import Link from 'next/link';
 import { usePathname, useRouter } from 'next/navigation';
 import {
@@ -19,6 +19,7 @@ import {
   LogOut,
   Menu,
   PanelLeftClose,
+  ScanSearch,
   Settings,
   ShieldCheck,
   Sparkles,
@@ -41,6 +42,7 @@ const primaryNav: NavItem[] = [
   { name: 'ภาพรวมศูนย์บัญชาการ', href: '/', icon: LayoutDashboard },
   { name: 'คิวคัดกรองคำร้อง', href: '/intake', icon: Inbox },
   { name: 'สำนวนคดี', href: '/cases', icon: BriefcaseBusiness },
+  { name: 'แหล่งสืบค้น', href: '/sources', icon: ScanSearch },
   { name: 'คลังหลักฐาน', href: '/evidence', icon: FileSearch },
 ];
 
@@ -60,6 +62,7 @@ const sectionMeta = [
   { prefix: '/cases/new', eyebrow: 'Case workspace', title: 'สร้างสำนวนคดี' },
   { prefix: '/cases', eyebrow: 'Case workspace', title: 'สำนวนคดี' },
   { prefix: '/evidence', eyebrow: 'Evidence custody', title: 'คลังหลักฐาน' },
+  { prefix: '/sources', eyebrow: 'Authorized sources', title: 'แหล่งสืบค้น' },
   { prefix: '/review', eyebrow: 'Human review', title: 'ข้อเสนอจาก AI' },
   { prefix: '/entities', eyebrow: 'Data registry', title: 'ทะเบียนข้อมูล' },
   { prefix: '/matches', eyebrow: 'Cross-case analysis', title: 'ความเชื่อมโยง' },
@@ -101,13 +104,13 @@ function NavLink({ item, active, collapsed, onNavigate }: {
       onClick={onNavigate}
       aria-current={active ? 'page' : undefined}
       title={collapsed ? item.name : undefined}
-      className={`group relative flex min-h-11 items-center rounded-xl px-3 text-sm font-medium transition-[background,color,transform] duration-200 ${active ? 'bg-teal-300/[0.11] text-teal-100' : 'text-slate-400 hover:bg-white/[0.045] hover:text-slate-100'} ${collapsed ? 'justify-center' : ''}`}
+      className={`group relative flex min-h-11 items-center overflow-hidden rounded-xl px-3 text-sm font-medium transition-[background,color,transform,border-color] duration-300 ease-out ${active ? 'nav-active-glow border border-teal-300/10 bg-gradient-to-r from-teal-300/[0.13] to-sky-300/[0.035] text-teal-50' : 'border border-transparent text-slate-400 hover:translate-x-0.5 hover:border-white/[0.055] hover:bg-white/[0.04] hover:text-slate-100'} ${collapsed ? 'justify-center' : ''}`}
     >
-      {active && <span className="absolute inset-y-2 left-0 w-0.5 rounded-full bg-teal-300" />}
-      <Icon className={`h-[18px] w-[18px] shrink-0 transition-transform duration-200 group-hover:scale-105 ${active ? 'text-teal-300' : 'text-slate-500 group-hover:text-slate-300'}`} />
+      {active && <><span className="absolute inset-y-2 left-0 w-0.5 rounded-full bg-teal-300 shadow-[0_0_18px_rgba(66,232,206,0.9)]" /><span className="absolute -left-6 h-12 w-12 rounded-full bg-teal-300/10 blur-xl" /></>}
+      <Icon className={`relative h-[18px] w-[18px] shrink-0 transition-transform duration-300 ease-out group-hover:scale-110 ${active ? 'text-teal-300 drop-shadow-[0_0_8px_rgba(66,232,206,0.25)]' : 'text-slate-500 group-hover:text-slate-300'}`} />
       {!collapsed && (
         <>
-          <span className="ml-3 truncate">{item.name}</span>
+          <span className="relative ml-3 truncate">{item.name}</span>
           <ChevronRight className={`ml-auto h-3.5 w-3.5 transition-all ${active ? 'translate-x-0 opacity-70' : '-translate-x-1 opacity-0 group-hover:translate-x-0 group-hover:opacity-60'}`} />
         </>
       )}
@@ -121,8 +124,63 @@ export default function Navigation({ children }: NavigationProps) {
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
   const [isCollapsed, setIsCollapsed] = useState(false);
   const [isSigningOut, setIsSigningOut] = useState(false);
+  const mobileDialogRef = useRef<HTMLElement>(null);
+  const mobileMenuButtonRef = useRef<HTMLButtonElement>(null);
   const authSnapshot = useSyncExternalStore(subscribeToAuth, getAuthSnapshot, getServerAuthSnapshot);
-  const [userRole, userName] = authSnapshot.split('\u0000');
+  const [demoRole, demoName] = authSnapshot.split('\u0000');
+  const [serverIdentity, setServerIdentity] = useState<{ name: string; role: string } | null>(null);
+  const usesSupabase = isSupabaseConfigured();
+
+  useEffect(() => {
+    if (!usesSupabase) return;
+    const controller = new AbortController();
+    fetch('/api/v1/me', { credentials: 'same-origin', signal: controller.signal })
+      .then(async (response) => {
+        if (!response.ok) return null;
+        return response.json();
+      })
+      .then((body) => { if (body?.data) setServerIdentity({ name: body.data.name, role: body.data.role }); })
+      .catch((caught: unknown) => { if (!(caught instanceof DOMException && caught.name === 'AbortError')) console.error('Identity load failed'); });
+    return () => controller.abort();
+  }, [usesSupabase]);
+
+  const userRole = usesSupabase ? serverIdentity?.role || 'VIEWER' : demoRole;
+  const userName = usesSupabase ? serverIdentity?.name || 'กำลังโหลดข้อมูลผู้ใช้…' : demoName;
+
+  useEffect(() => {
+    if (!isMobileMenuOpen) return;
+    const dialog = mobileDialogRef.current;
+    const menuButton = mobileMenuButtonRef.current;
+    const focusableSelector = 'a[href], button:not([disabled]), [tabindex]:not([tabindex="-1"])';
+    const getFocusable = () => Array.from(dialog?.querySelectorAll<HTMLElement>(focusableSelector) || []);
+    getFocusable()[0]?.focus();
+
+    const handleKeyDown = (event: KeyboardEvent) => {
+      if (event.key === 'Escape') {
+        event.preventDefault();
+        setIsMobileMenuOpen(false);
+        return;
+      }
+      if (event.key !== 'Tab') return;
+      const focusable = getFocusable();
+      if (!focusable.length) return;
+      const first = focusable[0];
+      const last = focusable[focusable.length - 1];
+      if (event.shiftKey && document.activeElement === first) {
+        event.preventDefault();
+        last.focus();
+      } else if (!event.shiftKey && document.activeElement === last) {
+        event.preventDefault();
+        first.focus();
+      }
+    };
+
+    document.addEventListener('keydown', handleKeyDown);
+    return () => {
+      document.removeEventListener('keydown', handleKeyDown);
+      menuButton?.focus();
+    };
+  }, [isMobileMenuOpen]);
 
   if (pathname === '/login') return <>{children}</>;
 
@@ -157,22 +215,22 @@ export default function Navigation({ children }: NavigationProps) {
     const collapsed = forceExpanded ? false : isCollapsed;
     return (
     <>
-      <div className={`flex h-[76px] items-center border-b border-white/[0.06] ${collapsed ? 'justify-center px-3' : 'px-5'}`}>
+      <div className={`flex h-20 items-center border-b border-white/[0.055] ${collapsed ? 'justify-center px-3' : 'px-5'}`}>
         <Link href="/" onClick={onNavigate} className="flex min-w-0 items-center gap-3" aria-label="EvidenceVerse หน้าหลัก">
-          <span className="relative grid h-10 w-10 shrink-0 place-items-center rounded-xl border border-teal-300/20 bg-teal-300/10 text-teal-300 shadow-[0_0_32px_rgba(45,212,191,0.08)]">
+          <span className="floating-orb relative grid h-11 w-11 shrink-0 place-items-center rounded-[15px] border border-teal-300/25 bg-gradient-to-br from-teal-300/[0.16] to-sky-400/[0.06] text-teal-200 shadow-[0_0_36px_rgba(45,212,191,0.11),inset_0_1px_rgba(255,255,255,0.12)]">
             <Fingerprint className="h-5 w-5" />
             <span className="status-pulse absolute right-0.5 top-0.5 h-1.5 w-1.5 rounded-full bg-teal-300 text-teal-300" />
           </span>
           {!collapsed && (
             <span className="min-w-0">
-              <span className="block text-[17px] font-bold tracking-[-0.02em] text-white">EvidenceVerse</span>
-              <span className="block truncate text-[9px] font-semibold uppercase tracking-[0.2em] text-teal-300/70">National Intelligence</span>
+              <span className="block text-[17px] font-bold tracking-[-0.025em] text-white">EvidenceVerse</span>
+              <span className="block truncate text-[9px] font-semibold uppercase tracking-[0.22em] text-teal-300/70">National Intelligence</span>
             </span>
           )}
         </Link>
       </div>
 
-      <nav className="flex-1 space-y-4 overflow-y-auto px-3 py-4" aria-label="เมนูหลัก">
+      <nav className="flex-1 space-y-4 overflow-y-auto px-3 py-5" aria-label="เมนูหลัก">
         {renderNavGroup('ปฏิบัติการ', primaryNav, collapsed, onNavigate)}
         {renderNavGroup('วิเคราะห์และตรวจทาน', intelligenceNav, collapsed, onNavigate)}
         {renderNavGroup('กำกับดูแล', governanceNav, collapsed, onNavigate)}
@@ -180,8 +238,8 @@ export default function Navigation({ children }: NavigationProps) {
       </nav>
 
       <div className="border-t border-white/[0.06] p-3">
-        <div className={`mb-2 flex items-center rounded-xl border border-white/[0.06] bg-white/[0.025] p-2.5 ${collapsed ? 'justify-center' : 'gap-2.5'}`}>
-          <span className="grid h-9 w-9 shrink-0 place-items-center rounded-lg bg-slate-800 text-slate-300"><CircleUserRound className="h-[18px] w-[18px]" /></span>
+        <div className={`mb-2 flex items-center rounded-xl border border-white/[0.07] bg-gradient-to-br from-white/[0.045] to-transparent p-2.5 shadow-[inset_0_1px_rgba(255,255,255,0.025)] ${collapsed ? 'justify-center' : 'gap-2.5'}`}>
+          <span className="grid h-9 w-9 shrink-0 place-items-center rounded-lg border border-white/[0.06] bg-slate-800/80 text-slate-300"><CircleUserRound className="h-[18px] w-[18px]" /></span>
           {!collapsed && <span className="min-w-0 flex-1"><span className="block truncate text-xs font-semibold text-slate-100">{userName}</span><span className="block truncate text-[10px] text-slate-500">{roleLabel(userRole)}</span></span>}
         </div>
         <button type="button" onClick={handleLogout} disabled={isSigningOut} title={collapsed ? 'ออกจากระบบ' : undefined} className={`flex min-h-10 w-full items-center rounded-xl px-3 text-xs font-medium text-slate-500 transition-colors hover:bg-rose-400/[0.07] hover:text-rose-300 disabled:opacity-50 ${collapsed ? 'justify-center' : ''}`}>
@@ -195,34 +253,35 @@ export default function Navigation({ children }: NavigationProps) {
 
   return (
     <div className="app-backdrop relative flex h-dvh min-h-[640px] overflow-hidden text-slate-100">
-      <aside className={`relative z-20 hidden shrink-0 flex-col border-r border-white/[0.06] bg-[#07121f]/95 shadow-2xl shadow-black/10 backdrop-blur-xl transition-[width] duration-300 lg:flex ${isCollapsed ? 'w-[76px]' : 'w-[272px]'}`}>
+      <a href="#main-content" className="sr-only z-[100] rounded-lg bg-teal-300 px-4 py-2 font-bold text-slate-950 focus:not-sr-only focus:fixed focus:left-4 focus:top-4">ข้ามไปยังเนื้อหาหลัก</a>
+      <aside className={`nav-rail relative z-20 hidden shrink-0 flex-col border-r border-white/[0.055] transition-[width] duration-500 [transition-timing-function:var(--ease-out-expo)] lg:flex ${isCollapsed ? 'w-[80px]' : 'w-[280px]'}`}>
         {sidebarContent()}
-        <button type="button" onClick={() => setIsCollapsed((value) => !value)} className="absolute -right-3 top-[92px] grid h-7 w-7 place-items-center rounded-full border border-slate-700/80 bg-[#0c1a2b] text-slate-500 shadow-lg transition-colors hover:text-teal-300" aria-label={isCollapsed ? 'ขยายแถบเมนู' : 'ย่อแถบเมนู'}>
+        <button type="button" onClick={() => setIsCollapsed((value) => !value)} className="absolute -right-3.5 top-[98px] grid h-8 w-8 place-items-center rounded-full border border-white/[0.1] bg-[#0b1a29]/95 text-slate-500 shadow-[0_8px_24px_rgba(0,0,0,0.3)] transition-all duration-300 hover:scale-110 hover:border-teal-300/20 hover:text-teal-300" aria-label={isCollapsed ? 'ขยายแถบเมนู' : 'ย่อแถบเมนู'}>
           <PanelLeftClose className={`h-3.5 w-3.5 transition-transform ${isCollapsed ? 'rotate-180' : ''}`} />
         </button>
       </aside>
 
       <div className="relative z-10 flex min-w-0 flex-1 flex-col" inert={isMobileMenuOpen ? true : undefined}>
-        <header className="flex h-[76px] shrink-0 items-center justify-between border-b border-white/[0.06] bg-[#081421]/72 px-4 backdrop-blur-xl sm:px-6 lg:px-8">
+        <header className="relative flex h-20 shrink-0 items-center justify-between border-b border-white/[0.055] bg-[#06111d]/55 px-4 shadow-[0_16px_50px_rgba(0,4,12,0.08)] backdrop-blur-2xl sm:px-6 lg:px-8">
           <div className="flex min-w-0 items-center gap-3">
-            <button type="button" onClick={() => setIsMobileMenuOpen(true)} className="grid h-10 w-10 shrink-0 place-items-center rounded-xl border border-white/[0.08] bg-white/[0.035] text-slate-300 lg:hidden" aria-label="เปิดเมนูหลัก" aria-expanded={isMobileMenuOpen} aria-controls="mobile-navigation"><Menu className="h-5 w-5" /></button>
-            <div className="min-w-0"><p className="truncate text-[10px] font-semibold uppercase tracking-[0.18em] text-teal-300/70">{meta.eyebrow}</p><h2 className="truncate text-base font-semibold text-slate-100 sm:text-lg">{meta.title}</h2></div>
+            <button ref={mobileMenuButtonRef} type="button" onClick={() => setIsMobileMenuOpen(true)} className="grid h-10 w-10 shrink-0 place-items-center rounded-xl border border-white/[0.08] bg-white/[0.035] text-slate-300 lg:hidden" aria-label="เปิดเมนูหลัก" aria-expanded={isMobileMenuOpen} aria-controls="mobile-navigation"><Menu className="h-5 w-5" /></button>
+            <div className="min-w-0"><p className="truncate text-[9px] font-semibold uppercase tracking-[0.22em] text-teal-300/65">{meta.eyebrow}</p><h2 className="mt-0.5 truncate text-base font-semibold tracking-[-0.015em] text-slate-100 sm:text-lg">{meta.title}</h2></div>
           </div>
           <div className="flex items-center gap-2 sm:gap-3">
-            <div className="hidden items-center gap-2 rounded-full border border-emerald-400/15 bg-emerald-400/[0.06] px-3 py-1.5 text-[10px] font-medium text-emerald-300 sm:flex"><ShieldCheck className="h-3.5 w-3.5" /><span>โหมดตรวจสอบย้อนกลับ</span></div>
-            <Link href="/intake" aria-label="เปิดคิวแจ้งเตือน" className="relative grid h-10 w-10 place-items-center rounded-xl border border-white/[0.08] bg-white/[0.035] text-slate-400 transition-colors hover:text-slate-100"><Bell className="h-[18px] w-[18px]" /><span className="absolute right-2 top-2 h-1.5 w-1.5 rounded-full bg-amber-300 ring-2 ring-[#0a1725]" /></Link>
+            <div className="hidden items-center gap-2 rounded-full border border-emerald-300/15 bg-emerald-300/[0.055] px-3 py-1.5 text-[10px] font-medium text-emerald-200 shadow-[inset_0_1px_rgba(255,255,255,0.04)] sm:flex"><span className="status-pulse h-1.5 w-1.5 rounded-full bg-emerald-300 text-emerald-300" /><ShieldCheck className="h-3.5 w-3.5" /><span>Traceable workspace</span></div>
+            <Link href="/intake" aria-label="เปิดคิวรับเรื่อง" className="secondary-action relative grid h-10 w-10 place-items-center rounded-xl border border-white/[0.08] text-slate-400 hover:text-slate-100"><Bell className="h-[18px] w-[18px]" /></Link>
           </div>
         </header>
 
-        <main id="main-content" className="relative flex-1 overflow-y-auto px-4 py-6 sm:px-6 lg:px-8 lg:py-8">
-          <div key={pathname} className="page-enter mx-auto w-full max-w-[1440px] space-y-8">{children}</div>
+        <main id="main-content" className="relative flex-1 overflow-y-auto px-4 py-6 sm:px-6 lg:px-9 lg:py-9 xl:px-11">
+          <div key={pathname} className="page-enter mx-auto w-full max-w-[1480px] space-y-8">{children}</div>
         </main>
       </div>
 
       {isMobileMenuOpen && (
         <div className="fixed inset-0 z-50 lg:hidden" id="mobile-navigation">
           <button type="button" aria-label="ปิดเมนูหลัก" className="absolute inset-0 bg-black/65 backdrop-blur-sm" onClick={() => setIsMobileMenuOpen(false)} />
-          <aside role="dialog" aria-modal="true" aria-label="เมนูหลัก" className="absolute inset-y-0 left-0 flex w-[min(88vw,330px)] flex-col border-r border-white/[0.08] bg-[#07121f] shadow-2xl animate-[rise-in_260ms_ease-out]">
+          <aside ref={mobileDialogRef} role="dialog" aria-modal="true" aria-label="เมนูหลัก" className="nav-rail absolute inset-y-0 left-0 flex w-[min(88vw,330px)] flex-col border-r border-white/[0.08] shadow-2xl animate-[drawer-enter_420ms_var(--ease-out-expo)]">
             <button type="button" onClick={() => setIsMobileMenuOpen(false)} className="absolute right-4 top-5 z-10 grid h-9 w-9 place-items-center rounded-xl border border-white/[0.08] bg-white/[0.04] text-slate-400" aria-label="ปิดเมนู"><X className="h-4 w-4" /></button>
             {sidebarContent(() => setIsMobileMenuOpen(false), true)}
           </aside>

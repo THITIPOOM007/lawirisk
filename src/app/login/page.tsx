@@ -14,7 +14,7 @@ import {
   ShieldCheck,
   Sparkles,
 } from 'lucide-react';
-import { createClient, isSupabaseConfigured } from '@/lib/supabase';
+import { createClient, isDemoModeEnabled, isSupabaseConfigured } from '@/lib/supabase';
 import { writeDemoAuthCookies } from '@/lib/browser-cookies';
 import type { StaffRole } from '@/lib/roles';
 
@@ -37,13 +37,16 @@ export default function LoginPage() {
   const [password, setPassword] = useState('');
   const [isLoading, setIsLoading] = useState(false);
   const [activeDemoRole, setActiveDemoRole] = useState<DemoRole | null>(null);
-  const [isDemoMode] = useState(() => !isSupabaseConfigured());
+  const [isDemoMode] = useState(() => isDemoModeEnabled());
+  const [isAuthConfigured] = useState(() => isSupabaseConfigured());
   const [errorMessage, setErrorMessage] = useState('');
 
   const finishDemoLogin = (role: DemoRole, name: string) => {
     writeDemoAuthCookies(role, name);
-    router.replace('/');
-    router.refresh();
+    // Cross the authentication boundary with a full request so Proxy observes
+    // the cookies written above instead of reusing an unauthenticated RSC
+    // navigation that may already be in the client cache.
+    window.location.replace('/');
   };
 
   const handleLogin = async (event: React.FormEvent) => {
@@ -51,9 +54,15 @@ export default function LoginPage() {
     setIsLoading(true);
     setErrorMessage('');
 
+    if (!isDemoMode && !isAuthConfigured) {
+      setErrorMessage('ระบบ production ยังไม่ได้ตั้งค่า Supabase Auth กรุณาติดต่อผู้ดูแลระบบ');
+      setIsLoading(false);
+      return;
+    }
+
     if (isDemoMode) {
       setActiveDemoRole('INVESTIGATOR');
-      window.setTimeout(() => finishDemoLogin('INVESTIGATOR', 'ร.ต.อ. สมชาย (Investigator)'), 420);
+      finishDemoLogin('INVESTIGATOR', 'ร.ต.อ. สมชาย (Investigator)');
       return;
     }
 
@@ -77,7 +86,7 @@ export default function LoginPage() {
     setErrorMessage('');
     setActiveDemoRole(role);
     setIsLoading(true);
-    window.setTimeout(() => finishDemoLogin(role, name), 360);
+    finishDemoLogin(role, name);
   };
 
   return (
@@ -120,7 +129,7 @@ export default function LoginPage() {
 
             <div className={`mt-6 flex items-center gap-3 rounded-xl border p-3 text-xs ${isDemoMode ? 'border-amber-300/15 bg-amber-300/[0.045] text-amber-100' : 'border-emerald-300/15 bg-emerald-300/[0.045] text-emerald-100'}`}>
               <span className={`h-2 w-2 rounded-full ${isDemoMode ? 'bg-amber-300' : 'status-pulse bg-emerald-300 text-emerald-300'}`} />
-              <span className="font-medium">{isDemoMode ? 'โหมดสาธิต · ข้อมูลอยู่ในอุปกรณ์นี้' : 'เชื่อมต่อ Supabase Auth แล้ว'}</span>
+              <span className="font-medium">{isDemoMode ? 'โหมดสาธิต · ข้อมูลอยู่ในอุปกรณ์นี้' : isAuthConfigured ? 'เชื่อมต่อ Supabase Auth แล้ว' : 'ระบบยืนยันตัวตนยังตั้งค่าไม่ครบ'}</span>
             </div>
 
             {errorMessage && <div role="alert" className="mt-5 flex items-start gap-3 rounded-xl border border-rose-400/20 bg-rose-400/[0.06] p-4 text-sm text-rose-200"><AlertCircle className="mt-0.5 h-4 w-4 shrink-0" /><span>{errorMessage}</span></div>}
@@ -128,7 +137,7 @@ export default function LoginPage() {
             <form onSubmit={handleLogin} className="mt-6 space-y-5">
               <div><label htmlFor="email" className="text-xs font-medium text-slate-300">อีเมลผู้ใช้</label><input id="email" name="email" type="email" autoComplete="username" required={!isDemoMode} disabled={isLoading || isDemoMode} value={email} onChange={(event) => setEmail(event.target.value)} placeholder={isDemoMode ? 'ไม่จำเป็นสำหรับโหมดสาธิต' : 'name@agency.go.th'} className="mt-2 block min-h-12 w-full rounded-xl border border-white/[0.09] bg-[#07121f]/80 px-4 text-sm text-white placeholder:text-slate-700 focus:border-teal-300/40 focus:outline-none disabled:cursor-not-allowed disabled:opacity-45" /></div>
               <div><div className="flex items-center justify-between"><label htmlFor="password" className="text-xs font-medium text-slate-300">รหัสผ่าน</label>{!isDemoMode && <span className="text-[10px] text-slate-600">ติดต่อผู้ดูแลเมื่อเข้าไม่ได้</span>}</div><input id="password" name="password" type="password" autoComplete="current-password" required={!isDemoMode} disabled={isLoading || isDemoMode} value={password} onChange={(event) => setPassword(event.target.value)} placeholder="••••••••••••" className="mt-2 block min-h-12 w-full rounded-xl border border-white/[0.09] bg-[#07121f]/80 px-4 text-sm text-white placeholder:text-slate-700 focus:border-teal-300/40 focus:outline-none disabled:cursor-not-allowed disabled:opacity-45" /></div>
-              <button type="submit" disabled={isLoading} className="flex min-h-12 w-full items-center justify-center gap-2 rounded-xl bg-teal-300 px-5 text-sm font-bold text-[#05201d] shadow-[0_12px_34px_rgba(45,212,191,0.14)] transition hover:-translate-y-0.5 hover:bg-teal-200 disabled:cursor-wait disabled:opacity-60">
+              <button type="submit" disabled={isLoading || (!isDemoMode && !isAuthConfigured)} className="flex min-h-12 w-full items-center justify-center gap-2 rounded-xl bg-teal-300 px-5 text-sm font-bold text-[#05201d] shadow-[0_12px_34px_rgba(45,212,191,0.14)] transition hover:-translate-y-0.5 hover:bg-teal-200 disabled:cursor-wait disabled:opacity-60">
                 {isLoading && activeDemoRole === 'INVESTIGATOR' ? <Loader2 className="h-4 w-4 animate-spin" /> : <ShieldCheck className="h-4 w-4" />}
                 {isDemoMode ? 'เข้าใช้งานในฐานะพนักงานสืบสวน' : 'ลงชื่อเข้าใช้งาน'}
                 {!isLoading && <ArrowRight className="h-4 w-4" />}

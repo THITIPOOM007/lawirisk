@@ -19,12 +19,14 @@ export interface EvidenceFile {
   id: string;
   case_id: string;
   filename: string;
-  file_path: string;
+  file_path?: string;
   file_size: number;
   mime_type: string;
   sha256: string;
   status: 'PENDING' | 'PROCESSING' | 'PROCESSED' | 'FAILED';
-  created_by: string;
+  upload_state?: 'RESERVED' | 'STORED' | 'FAILED';
+  malware_scan_status?: 'PENDING' | 'CLEAN' | 'INFECTED' | 'UNAVAILABLE' | 'ERROR';
+  created_by: string | null;
   created_at: string;
 }
 

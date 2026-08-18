@@ -14,6 +14,10 @@ export default function IntakeQueuePage() {
   const [reloadToken, setReloadToken] = useState(0);
   const [statusFilter, setStatusFilter] = useState('TRIAGE_PENDING');
   const [channelFilter, setChannelFilter] = useState('ALL');
+  const [importFile, setImportFile] = useState<File | null>(null);
+  const [isImporting, setIsImporting] = useState(false);
+  const [importMessage, setImportMessage] = useState('');
+  const [importError, setImportError] = useState('');
 
   useEffect(() => {
     const controller = new AbortController();
@@ -71,6 +75,34 @@ export default function IntakeQueuePage() {
     return matchesStatus && matchesChannel;
   });
 
+  const importCsv = async (event: React.FormEvent) => {
+    event.preventDefault();
+    const form = event.currentTarget as HTMLFormElement;
+    const nativeFile = new FormData(form).get('file');
+    const selectedFile = importFile
+      || (nativeFile instanceof File && nativeFile.size > 0 ? nativeFile : null);
+    if (!selectedFile) return setImportError('กรุณาเลือกไฟล์ CSV');
+    setIsImporting(true);
+    setImportError('');
+    setImportMessage('');
+    try {
+      const formData = new FormData();
+      formData.set('file', selectedFile);
+      const response = await fetch('/api/v1/intake/imports', { method: 'POST', credentials: 'same-origin', body: formData });
+      const body = await response.json();
+      if (!response.ok) throw new Error(body.error?.message || body.error || 'นำเข้า CSV ไม่สำเร็จ');
+      setImportMessage(`นำเข้าแล้ว ${body.data.success_rows} แถว; ไม่ผ่าน ${body.data.failed_rows} แถว (Batch ${body.data.batch_id})`);
+      setImportFile(null);
+      form.reset();
+      setIsLoading(true);
+      setReloadToken((value) => value + 1);
+    } catch (caught: unknown) {
+      setImportError(caught instanceof Error ? caught.message : 'นำเข้า CSV ไม่สำเร็จ');
+    } finally {
+      setIsImporting(false);
+    }
+  };
+
   return (
     <div className="space-y-8">
       {/* Page Header */}
@@ -114,6 +146,11 @@ export default function IntakeQueuePage() {
       </div>
 
       {/* Filter and controls */}
+      <form onSubmit={importCsv} className="rounded-3xl border border-slate-900 bg-slate-900/30 p-5">
+        <div className="flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between"><div><h2 className="flex items-center text-sm font-bold text-white"><FileUp className="mr-2 h-4 w-4 text-amber-300" />นำเข้ารายการรับเรื่องจาก CSV</h2><p className="mt-1 text-xs leading-5 text-slate-500">UTF-8 ไม่เกิน 2 MB/1,000 แถว · ต้องมี complainant_mode, urgency, urgency_reason · รองรับ quoted fields; ไม่รองรับ ZIP</p></div><div className="flex flex-col gap-2 sm:flex-row"><input name="file" type="file" accept=".csv,text/csv" onChange={(event) => setImportFile(event.target.files?.[0] || null)} className="max-w-sm rounded-xl border border-slate-800 bg-slate-950 p-2 text-xs text-slate-300" /><button disabled={isImporting} className="inline-flex items-center justify-center rounded-xl bg-amber-400 px-4 py-2.5 text-xs font-bold text-slate-950 disabled:opacity-50">{isImporting && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}นำเข้า</button></div></div>
+        {importError && <p role="alert" className="mt-3 text-xs text-rose-300">{importError}</p>}{importMessage && <p role="status" className="mt-3 text-xs text-emerald-300">{importMessage}</p>}
+      </form>
+
       <div className="flex flex-col lg:flex-row gap-4 bg-slate-900/40 p-4 border border-slate-900 rounded-3xl items-center justify-between">
         <div className="flex flex-wrap items-center gap-3">
           <span className="text-xs font-semibold text-slate-500 uppercase tracking-wider flex items-center">

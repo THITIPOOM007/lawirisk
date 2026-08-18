@@ -9,6 +9,12 @@ export const isSupabaseConfigured = () => {
   );
 };
 
+export const isDemoModeEnabled = () => {
+  return !isSupabaseConfigured()
+    && process.env.NODE_ENV !== 'production'
+    && process.env.NEXT_PUBLIC_DEMO_MODE !== 'false';
+};
+
 // Browser client (for Client Components)
 export function createClient() {
   return createBrowserClient(supabaseUrl, supabaseAnonKey);

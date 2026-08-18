@@ -1,6 +1,10 @@
 allowBuilds:
+  esbuild: true
   sharp: true
   unrs-resolver: true
+  workerd: true
 ignoredBuiltDependencies:
   - sharp
   - unrs-resolver
+overrides:
+  '@napi-rs/wasm-runtime': 1.2.3

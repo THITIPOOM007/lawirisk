@@ -3,6 +3,8 @@ import { NextRequest, NextResponse } from 'next/server';
 import { saveIntakeEnvelope, saveIntakeMessage, saveIntakeParticipant, addAuditLog } from '@/lib/demo-data';
 import { externalIntakeSchema } from '@/lib/intake-contracts';
 import { createServiceClient } from '@/lib/supabase-server';
+import { consumeRateLimit } from '@/lib/rate-limit';
+import { isDemoServerEnabled, isSupabaseServerConfigured } from '@/lib/runtime-config';
 
 function safeEqual(left: string, right: string) {
   const leftBytes = Buffer.from(left);
@@ -53,9 +55,11 @@ export async function POST(
     }
     const payload = parsedPayload.data;
 
-    if (process.env.NEXT_PUBLIC_SUPABASE_URL && process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY) {
+    if (isSupabaseServerConfigured()) {
       try {
         const supabase = createServiceClient();
+        const limit = await consumeRateLimit({ client: supabase, key: `external:partner:${partnerId}`, limit: 120, windowSeconds: 60 });
+        if (!limit.allowed) return NextResponse.json({ error: 'ส่งคำขอถี่เกินไป' }, { status: 429, headers: { 'Retry-After': String(limit.retryAfterSeconds) } });
         const { data: envelopeId, error } = await supabase.rpc('create_external_intake', {
           p_channel_code: 'PARTNER_API',
           p_payload: { ...payload, partner_id: partnerId },
@@ -71,6 +75,10 @@ export async function POST(
         return NextResponse.json({ error: 'ระบบจัดเก็บคำร้องภายนอกยังตั้งค่าไม่ครบ' }, { status: 503 });
       }
     }
+
+    if (!isDemoServerEnabled()) return NextResponse.json({ error: 'ระบบจัดเก็บคำร้องภายนอกยังตั้งค่าไม่ครบ' }, { status: 503 });
+    const demoLimit = await consumeRateLimit({ key: `external:partner:${partnerId}`, limit: 120, windowSeconds: 60 });
+    if (!demoLimit.allowed) return NextResponse.json({ error: 'ส่งคำขอถี่เกินไป' }, { status: 429, headers: { 'Retry-After': String(demoLimit.retryAfterSeconds) } });
 
     const envelopeId = `env-pr-${Date.now()}`;
     saveIntakeEnvelope({

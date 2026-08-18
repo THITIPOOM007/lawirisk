@@ -3,6 +3,7 @@ import 'server-only';
 import type { NextRequest } from 'next/server';
 import { createServer } from '@/lib/supabase-server';
 import { isStaffRole, type StaffRole } from '@/lib/roles';
+import { isDemoServerEnabled, isSupabaseServerConfigured } from '@/lib/runtime-config';
 
 export type StaffIdentity = {
   id: string;
@@ -13,17 +14,18 @@ export type StaffIdentity = {
 
 export type StaffAuthResult =
   | { ok: true; identity: StaffIdentity }
-  | { ok: false; status: 401 | 403; code: 'UNAUTHENTICATED' | 'FORBIDDEN' };
+  | { ok: false; status: 401 | 403 | 503; code: 'UNAUTHENTICATED' | 'FORBIDDEN' | 'AUTH_NOT_CONFIGURED' };
 
 export async function authorizeStaff(
   request: NextRequest,
   allowedRoles: ReadonlySet<StaffRole>,
 ): Promise<StaffAuthResult> {
-  const hasSupabase = Boolean(
-    process.env.NEXT_PUBLIC_SUPABASE_URL && process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY,
-  );
+  const hasSupabase = isSupabaseServerConfigured();
 
   if (!hasSupabase) {
+    if (!isDemoServerEnabled()) {
+      return { ok: false, status: 503, code: 'AUTH_NOT_CONFIGURED' };
+    }
     const isLoggedIn = request.cookies.get('mock-auth-logged-in')?.value === 'true';
     if (!isLoggedIn) return { ok: false, status: 401, code: 'UNAUTHENTICATED' };
     const rawRole = request.cookies.get('mock-auth-role')?.value || 'VIEWER';
