@@ -5,20 +5,26 @@ import { addAuditLog, saveIntakeEnvelope, saveIntakeMessage, saveIntakeParticipa
 import { INTAKE_WRITE_ROLES } from '@/lib/roles';
 import { manualIntakeSchema } from '@/lib/intake-contracts';
 import { createServer } from '@/lib/supabase-server';
+import { consumeRateLimit } from '@/lib/rate-limit';
+import { hasTrustedBrowserOrigin } from '@/lib/request-security';
 
 export async function POST(request: NextRequest) {
   const auth = await authorizeStaff(request, INTAKE_WRITE_ROLES);
   if (!auth.ok) {
     return NextResponse.json({ success: false, error: { code: auth.code, message: auth.status === 401 ? 'กรุณาเข้าสู่ระบบ' : 'ไม่มีสิทธิ์รับเรื่อง' } }, { status: auth.status });
   }
+  if (!hasTrustedBrowserOrigin(request)) return NextResponse.json({ success: false, error: { code: 'UNTRUSTED_ORIGIN', message: 'คำขอไม่ได้มาจากระบบที่อนุญาต' } }, { status: 403 });
   try {
+    const supabase = auth.identity.mode === 'supabase' ? await createServer() : undefined;
+    const limit = await consumeRateLimit({ client: supabase, key: `intake-manual:${auth.identity.id}`, limit: 30, windowSeconds: 60 });
+    if (!limit.allowed) return NextResponse.json({ success: false, error: { code: 'RATE_LIMITED', message: 'บันทึกรายการถี่เกินไป' } }, { status: 429, headers: { 'Retry-After': String(limit.retryAfterSeconds) } });
     const parsed = manualIntakeSchema.safeParse(await request.json().catch(() => null));
     if (!parsed.success) {
       return NextResponse.json({ success: false, error: { code: 'INVALID_REQUEST', message: 'ข้อมูลคำร้องไม่ครบหรือรูปแบบไม่ถูกต้อง', fields: parsed.error.flatten().fieldErrors } }, { status: 400 });
     }
     const payload = parsed.data;
     if (auth.identity.mode === 'supabase') {
-      const supabase = await createServer();
+      if (!supabase) return NextResponse.json({ success: false, error: { code: 'AUTH_NOT_CONFIGURED', message: 'ฐานข้อมูลยังไม่พร้อมใช้งาน' } }, { status: 503 });
       const { data: envelopeId, error } = await supabase.rpc('create_manual_intake', {
         p_channel_code: payload.channel_id === 'ch-phone' ? 'MANUAL_PHONE' : 'MANUAL_WALKIN',
         p_complainant_mode: payload.complainant_mode,

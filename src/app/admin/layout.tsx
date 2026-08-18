@@ -1,15 +1,15 @@
 import { cookies } from 'next/headers';
 import { redirect } from 'next/navigation';
 import { createServer } from '@/lib/supabase-server';
+import { isDemoServerEnabled, isSupabaseServerConfigured } from '@/lib/runtime-config';
 
 const adminRoles = new Set(['ADMIN']);
 
 export default async function AdminLayout({ children }: { children: React.ReactNode }) {
-  const hasSupabase = Boolean(
-    process.env.NEXT_PUBLIC_SUPABASE_URL && process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY,
-  );
+  const hasSupabase = isSupabaseServerConfigured();
 
   if (!hasSupabase) {
+    if (!isDemoServerEnabled()) redirect('/login?configuration=missing');
     const cookieStore = await cookies();
     const isLoggedIn = cookieStore.get('mock-auth-logged-in')?.value === 'true';
     const role = cookieStore.get('mock-auth-role')?.value || 'VIEWER';

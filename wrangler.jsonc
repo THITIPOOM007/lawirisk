@@ -1,0 +1,40 @@
+{
+  "$schema": "node_modules/wrangler/config-schema.json",
+  "name": "evidenceverse-lite",
+  "compatibility_date": "2026-08-18",
+  "compatibility_flags": [
+    "nodejs_compat"
+  ],
+  "main": "vinext/server/fetch-handler",
+  "assets": {
+    "directory": "dist/client",
+    "not_found_handling": "none",
+    "binding": "ASSETS"
+  },
+  "cache": {
+    "enabled": true
+  },
+  "observability": {
+    "enabled": true,
+    "head_sampling_rate": 1
+  },
+  "env": {
+    "staging": {
+      "name": "evidenceverse-staging",
+      "workers_dev": true,
+      "preview_urls": false,
+      "vars": {
+        "NEXT_PUBLIC_DEMO_MODE": "false"
+      },
+      "secrets": {
+        "required": [
+          "NEXT_PUBLIC_SUPABASE_URL",
+          "NEXT_PUBLIC_SUPABASE_ANON_KEY",
+          "SUPABASE_SERVICE_ROLE_KEY",
+          "PRIVATE_EVIDENCE_BUCKET",
+          "APP_ORIGIN"
+        ]
+      }
+    }
+  }
+}

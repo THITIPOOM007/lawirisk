@@ -1,5 +1,6 @@
 import { createServerClient } from '@supabase/ssr';
 import { NextResponse, type NextRequest } from 'next/server';
+import { isDemoServerEnabled, isSupabaseServerConfigured } from '@/lib/runtime-config';
 
 const protectedPrefixes = [
   '/intake',
@@ -18,11 +19,17 @@ const isProtectedPath = (pathname: string) =>
 
 export async function proxy(request: NextRequest) {
   const { pathname } = request.nextUrl;
-  const hasSupabase = Boolean(
-    process.env.NEXT_PUBLIC_SUPABASE_URL && process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY,
-  );
+  const hasSupabase = isSupabaseServerConfigured();
 
   if (!hasSupabase) {
+    if (!isDemoServerEnabled()) {
+      if (pathname !== '/login') {
+        const loginUrl = new URL('/login', request.url);
+        loginUrl.searchParams.set('configuration', 'missing');
+        return NextResponse.redirect(loginUrl);
+      }
+      return NextResponse.next();
+    }
     const isDemoLoggedIn = request.cookies.get('mock-auth-logged-in')?.value === 'true';
     if (isProtectedPath(pathname) && !isDemoLoggedIn) {
       const loginUrl = new URL('/login', request.url);

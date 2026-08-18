@@ -1,233 +1,121 @@
 'use client';
 
-import React, { useState } from 'react';
-import { FileBarChart, Loader2, Download, Copy, FileText, Check } from 'lucide-react';
-import { getCases, getEvidence, getEntities, getRelationships, Case, addAuditLog } from '@/lib/demo-data';
+import { useEffect, useState } from 'react';
+import { Check, Copy, FileBarChart, Loader2, RefreshCw } from 'lucide-react';
+import type { Case } from '@/lib/demo-data';
+
+type ReportRecord = {
+  id: string;
+  case_id: string;
+  title: string;
+  report_type?: 'SUMMARY' | 'OVERLAP';
+  content: string;
+  snapshot_sha256?: string | null;
+  created_at?: string;
+};
 
 export default function ReportsPage() {
-  const [casesList] = useState<Case[]>(() => getCases());
+  const [cases, setCases] = useState<Case[]>([]);
+  const [reports, setReports] = useState<ReportRecord[]>([]);
   const [selectedCaseId, setSelectedCaseId] = useState('');
-  const [reportType, setReportType] = useState('SUMMARY');
+  const [reportType, setReportType] = useState<'SUMMARY' | 'OVERLAP'>('SUMMARY');
+  const [title, setTitle] = useState('');
+  const [activeReport, setActiveReport] = useState<ReportRecord | null>(null);
+  const [isLoading, setIsLoading] = useState(true);
   const [isGenerating, setIsGenerating] = useState(false);
-  const [generatedReport, setGeneratedReport] = useState('');
+  const [error, setError] = useState('');
   const [copied, setCopied] = useState(false);
 
-  const handleGenerateReport = () => {
-    if (!selectedCaseId) return;
+  const load = async () => {
+    setIsLoading(true);
+    setError('');
+    try {
+      const [caseResponse, reportResponse] = await Promise.all([
+        fetch('/api/v1/cases', { credentials: 'same-origin' }),
+        fetch('/api/v1/reports', { credentials: 'same-origin' }),
+      ]);
+      const [caseBody, reportBody] = await Promise.all([caseResponse.json(), reportResponse.json()]);
+      if (!caseResponse.ok) throw new Error(caseBody.error?.message || 'โหลดรายการคดีไม่สำเร็จ');
+      if (!reportResponse.ok) throw new Error(reportBody.error?.message || 'โหลดรายงานไม่สำเร็จ');
+      setCases(caseBody.data as Case[]);
+      setReports(reportBody.data as ReportRecord[]);
+    } catch (caught: unknown) {
+      setError(caught instanceof Error ? caught.message : 'โหลดข้อมูลรายงานไม่สำเร็จ');
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    const controller = new AbortController();
+    Promise.all([
+      fetch('/api/v1/cases', { credentials: 'same-origin', signal: controller.signal }),
+      fetch('/api/v1/reports', { credentials: 'same-origin', signal: controller.signal }),
+    ]).then(async ([caseResponse, reportResponse]) => {
+      const [caseBody, reportBody] = await Promise.all([caseResponse.json(), reportResponse.json()]);
+      if (!caseResponse.ok) throw new Error(caseBody.error?.message || 'โหลดรายการคดีไม่สำเร็จ');
+      if (!reportResponse.ok) throw new Error(reportBody.error?.message || 'โหลดรายงานไม่สำเร็จ');
+      setCases(caseBody.data as Case[]);
+      setReports(reportBody.data as ReportRecord[]);
+    }).catch((caught: unknown) => {
+      if (caught instanceof DOMException && caught.name === 'AbortError') return;
+      setError(caught instanceof Error ? caught.message : 'โหลดข้อมูลรายงานไม่สำเร็จ');
+    }).finally(() => setIsLoading(false));
+    return () => controller.abort();
+  }, []);
+
+  const generate = async (event: React.FormEvent) => {
+    event.preventDefault();
+    if (!selectedCaseId) return setError('กรุณาเลือกสำนวนคดี');
     setIsGenerating(true);
-    setGeneratedReport('');
-
-    setTimeout(() => {
-      const activeCase = casesList.find((c) => c.id === selectedCaseId);
-      const associatedEvidence = getEvidence().filter((e) => e.case_id === selectedCaseId);
-      const associatedEntities = getEntities().filter((ent) => ent.case_id === selectedCaseId);
-      const associatedRelations = getRelationships().filter((r) => r.case_id === selectedCaseId);
-
-      if (!activeCase) return;
-
-      let reportText = '';
-
-      if (reportType === 'SUMMARY') {
-        reportText = `==================================================
-รายงานสรุปข้อมูลคดีพนักงานสอบสวน (Case Summary Report)
-==================================================
-เลขรหัสคดีอ้างอิง: ${activeCase.number}
-ชื่อคดีสืบสวน: ${activeCase.title}
-ผู้รับผิดชอบคดี: ${activeCase.created_by}
-สถานะการสืบสวน: ${activeCase.status}
-วันที่บันทึกคดี: ${new Date(activeCase.created_at).toLocaleDateString('th-TH')}
---------------------------------------------------
-
-1. พฤติการณ์และเป้าหมายสืบสวน:
-${activeCase.description || 'ไม่มีรายละเอียดพฤติการณ์คดี'}
-
-2. สถิติพยานหลักฐานดิจิทัลที่นำเข้า:
-- จำนวนหลักฐานนำเข้าทั้งหมด: ${associatedEvidence.length} ไฟล์
-${associatedEvidence.map(e => `  * ${e.filename} (${(e.file_size / (1024 * 1024)).toFixed(2)} MB) [Hash: ${e.sha256.substring(0, 12)}...]`).join('\n')}
-
-3. เอนทิตีที่ได้รับการตรวจสอบยืนยัน (Confirmed Entities):
-- จำนวนเอนทิตีที่เก็บรักษาในระบบ: ${associatedEntities.length} รายการ
-  * บุคคล: ${associatedEntities.filter(e => e.type === 'PERSON').map(e => e.value).join(', ') || '-'}
-  * เบอร์โทรศัพท์: ${associatedEntities.filter(e => e.type === 'PHONE').map(e => e.value).join(', ') || '-'}
-  * บัญชีธนาคาร: ${associatedEntities.filter(e => e.type === 'BANK_ACCOUNT').map(e => e.value).join(', ') || '-'}
-  * เลขบัตรประชาชน: ${associatedEntities.filter(e => e.type === 'CITIZEN_ID').map(e => e.value).join(', ') || '-'}
-
-4. เครือข่ายความสัมพันธ์ภายในคดี (Internal Relationships):
-- ยืนยันความสัมพันธ์แล้ว: ${associatedRelations.filter(r => r.status === 'VERIFIED').length} รายการ
-${associatedRelations.filter(r => r.status === 'VERIFIED').map(r => {
-  const src = associatedEntities.find(e => e.id === r.source_entity_id)?.value || 'N/A';
-  const tgt = associatedEntities.find(e => e.id === r.target_entity_id)?.value || 'N/A';
-  return `  * ${src} === [${r.type}] ===> ${tgt}`;
-}).join('\n')}
-
---------------------------------------------------
-ลงชื่อ พนักงานสืบสวนคดีเทคโนโลยีดิจิทัล
-วันที่พิมพ์รายงาน: ${new Date().toLocaleDateString('th-TH')}
-==================================================`;
-      } else {
-        reportText = `==================================================
-รายงานวิเคราะห์เครือข่ายความเชื่อมโยงผู้ร่วมกระทำผิด (Case Overlap & Match Report)
-==================================================
-รหัสคดีอ้างอิง: ${activeCase.number}
-ชื่อคดี: ${activeCase.title}
---------------------------------------------------
-
-จากการวิเคราะห์และเปรียบเทียบข้อมูลเอนทิตีกลาง ระบบสืบพบจุดทับซ้อนและข้อมูลที่มีความเชื่อมโยงกับคดีภายนอกดังรายการต่อไปนี้:
-
-* ตรวจพบเลขบัตรประชาชน / เบอร์โทรศัพท์ ทับซ้อนกับคดีภายนอก
-* ยืนยันพฤติกรรมการเชื่อมโยงเพื่อนำไปออกหมายจับ/หมายค้นเพิ่มเติม
-
---------------------------------------------------
-ข้อมูลความเชื่อมโยงนี้จัดทำขึ้นโดยการสกัดและจับคู่ข้อมูลเอนทิตีเพื่อใช้ประกอบการสืบสวนเท่านั้น
-==================================================`;
-      }
-
-      const getCookie = (name: string) => {
-        const value = `; ${document.cookie}`;
-        const parts = value.split(`; ${name}=`);
-        if (parts.length === 2) return parts.pop()?.split(';').shift();
-        return null;
-      };
-      const user = getCookie('mock-auth-name') 
-        ? decodeURIComponent(getCookie('mock-auth-name')!) 
-        : 'เจ้าหน้าที่';
-      addAuditLog(user, 'REPORT_GENERATE', `สร้างรายงานสรุปสำหรับคดี: ${activeCase.title}`);
-
-      setGeneratedReport(reportText);
+    setError('');
+    setCopied(false);
+    try {
+      const response = await fetch('/api/v1/reports', {
+        method: 'POST', credentials: 'same-origin', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ case_id: selectedCaseId, report_type: reportType, ...(title.trim() ? { title: title.trim() } : {}) }),
+      });
+      const body = await response.json();
+      if (!response.ok) throw new Error(body.error?.message || 'สร้างรายงานไม่สำเร็จ');
+      const report = body.data as ReportRecord;
+      setActiveReport(report);
+      setReports((current) => [report, ...current.filter((item) => item.id !== report.id)]);
+    } catch (caught: unknown) {
+      setError(caught instanceof Error ? caught.message : 'สร้างรายงานไม่สำเร็จ');
+    } finally {
       setIsGenerating(false);
-    }, 1000);
+    }
   };
 
-  const handleCopy = () => {
-    navigator.clipboard.writeText(generatedReport);
+  const copy = async () => {
+    if (!activeReport) return;
+    await navigator.clipboard.writeText(activeReport.content);
     setCopied(true);
-    setTimeout(() => setCopied(false), 2000);
-  };
-
-  const handleDownload = () => {
-    const element = document.createElement('a');
-    const file = new Blob([generatedReport], { type: 'text/plain;charset=utf-8' });
-    element.href = URL.createObjectURL(file);
-    element.download = `report_${selectedCaseId}_${reportType}.txt`;
-    document.body.appendChild(element);
-    element.click();
-    document.body.removeChild(element);
+    window.setTimeout(() => setCopied(false), 1500);
   };
 
   return (
     <div className="space-y-8">
-      {/* Page Header */}
-      <div>
-        <h1 className="text-3xl font-extrabold text-white tracking-tight flex items-center space-x-3">
-          <FileBarChart className="h-8 w-8 text-indigo-500 shrink-0" />
-          <span>รายงานสรุปคดี (Reports & Summaries)</span>
-        </h1>
-        <p className="mt-2 text-slate-400">
-          สร้างไฟล์รายงานสรุปพฤติการณ์คดี ข้อมูลพยานหลักฐานดิจิทัลที่รวบรวม และโครงข่ายความสัมพันธ์เพื่อประกอบการส่งฟ้อง
-        </p>
-      </div>
-
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
-        
-        {/* Generator Controls (Left 1/3) */}
-        <div className="lg:col-span-1">
-          <div className="bg-slate-900/40 border border-slate-900 rounded-3xl p-6 space-y-6">
-            <h3 className="text-lg font-bold text-white flex items-center">
-              <FileBarChart className="h-5 w-5 mr-2 text-indigo-500" />
-              สร้างรายงานสรุป
-            </h3>
-
-            <div className="space-y-4">
-              <div>
-                <label className="block text-xs font-semibold text-slate-400 uppercase tracking-wider">เลือกคดีเป้าหมาย</label>
-                <select
-                  value={selectedCaseId}
-                  onChange={(e) => setSelectedCaseId(e.target.value)}
-                  className="mt-2 block w-full rounded-2xl border-0 bg-slate-950 py-3 px-4 text-white shadow-sm ring-1 ring-inset ring-slate-800 focus:ring-2 focus:ring-inset focus:ring-indigo-500 text-sm"
-                >
-                  <option value="">-- กรุณาเลือกคดี --</option>
-                  {casesList.map((c) => (
-                    <option key={c.id} value={c.id}>
-                      {c.number} - {c.title}
-                    </option>
-                  ))}
-                </select>
-              </div>
-
-              <div>
-                <label className="block text-xs font-semibold text-slate-400 uppercase tracking-wider">รูปแบบรายงาน</label>
-                <select
-                  value={reportType}
-                  onChange={(e) => setReportType(e.target.value)}
-                  className="mt-2 block w-full rounded-2xl border-0 bg-slate-950 py-3 px-4 text-white shadow-sm ring-1 ring-inset ring-slate-800 focus:ring-2 focus:ring-inset focus:ring-indigo-500 text-sm"
-                >
-                  <option value="SUMMARY">รายงานสรุปสาระสำคัญคดี (Summary)</option>
-                  <option value="OVERLAP">รายงานวิเคราะห์การทับซ้อนและเครือข่ายร่วม (Cross-Case Linkage)</option>
-                </select>
-              </div>
-
-              <button
-                onClick={handleGenerateReport}
-                disabled={isGenerating || !selectedCaseId}
-                className="w-full inline-flex items-center justify-center px-4 py-3 border border-transparent rounded-2xl shadow-lg text-sm font-semibold text-white bg-indigo-600 hover:bg-indigo-500 active:bg-indigo-700 disabled:opacity-50 transition-all cursor-pointer"
-              >
-                {isGenerating ? (
-                  <>
-                    <Loader2 className="h-5 w-5 mr-2 animate-spin shrink-0" />
-                    กำลังสร้างรายงาน...
-                  </>
-                ) : (
-                  <>
-                    <FileText className="h-5 w-5 mr-2 shrink-0" />
-                    สร้างรายงาน
-                  </>
-                )}
-              </button>
-            </div>
-          </div>
+      <header><h1 className="flex items-center gap-3 text-3xl font-extrabold tracking-tight text-white"><FileBarChart className="h-8 w-8 text-indigo-500" />รายงานแบบมีแหล่งอ้างอิง</h1><p className="mt-2 text-slate-400">รายงานทุกฉบับสร้างจากข้อมูลที่มี source mention หรือ relationship reference และเก็บ snapshot แยกจากข้อมูลปัจจุบัน</p></header>
+      {error && <div role="alert" className="rounded-2xl border border-rose-500/20 bg-rose-500/5 p-4 text-sm text-rose-300">{error}</div>}
+      <div className="grid gap-6 xl:grid-cols-[380px_1fr]">
+        <div className="space-y-6">
+          <form onSubmit={generate} className="space-y-5 rounded-3xl border border-slate-900 bg-slate-900/30 p-6">
+            <h2 className="font-bold text-white">สร้าง snapshot ใหม่</h2>
+            <label className="block text-xs font-semibold text-slate-300">สำนวนคดี<select value={selectedCaseId} onChange={(event) => setSelectedCaseId(event.target.value)} required className="mt-2 w-full rounded-xl border border-slate-800 bg-slate-950 p-3 text-sm text-white"><option value="">เลือกคดี</option>{cases.map((item) => <option key={item.id} value={item.id}>{item.number} — {item.title}</option>)}</select></label>
+            <label className="block text-xs font-semibold text-slate-300">ประเภทรายงาน<select value={reportType} onChange={(event) => setReportType(event.target.value as 'SUMMARY' | 'OVERLAP')} className="mt-2 w-full rounded-xl border border-slate-800 bg-slate-950 p-3 text-sm text-white"><option value="SUMMARY">สรุปคดี</option><option value="OVERLAP">จุดทับซ้อนข้ามคดี</option></select></label>
+            <label className="block text-xs font-semibold text-slate-300">ชื่อรายงาน (ไม่บังคับ)<input value={title} onChange={(event) => setTitle(event.target.value)} maxLength={200} className="mt-2 w-full rounded-xl border border-slate-800 bg-slate-950 p-3 text-sm text-white" /></label>
+            <button disabled={isGenerating || !selectedCaseId} className="flex w-full items-center justify-center rounded-xl bg-indigo-600 px-4 py-3 text-sm font-bold text-white disabled:opacity-50">{isGenerating && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}สร้างรายงานจากข้อมูลจริง</button>
+            <p className="text-[11px] leading-relaxed text-slate-500">ระบบจะปฏิเสธหากยังไม่มีแหล่งอ้างอิงที่มนุษย์ยืนยัน รายงานนี้ไม่ใช่คำวินิจฉัยทางกฎหมาย</p>
+          </form>
+          <section className="rounded-3xl border border-slate-900 bg-slate-900/20 p-5">
+            <div className="mb-4 flex items-center justify-between"><h2 className="text-sm font-bold text-white">รายงานที่จัดเก็บ</h2><button type="button" onClick={() => void load()} className="text-slate-400" aria-label="รีเฟรช"><RefreshCw className={`h-4 w-4 ${isLoading ? 'animate-spin' : ''}`} /></button></div>
+            {isLoading ? <p className="text-xs text-slate-500">กำลังโหลด...</p> : reports.length ? <div className="space-y-2">{reports.map((item) => <button key={item.id} type="button" onClick={() => setActiveReport(item)} className="w-full rounded-xl border border-slate-800 p-3 text-left hover:border-indigo-500/50"><span className="block truncate text-xs font-semibold text-slate-200">{item.title}</span><span className="mt-1 block text-[10px] text-slate-600">{item.created_at ? new Date(item.created_at).toLocaleString('th-TH') : item.id}</span></button>)}</div> : <p className="text-xs text-slate-500">ยังไม่มีรายงานที่จัดเก็บ</p>}
+          </section>
         </div>
-
-        {/* Generated Report viewer (Right 2/3) */}
-        <div className="lg:col-span-2 space-y-6">
-          <div className="bg-slate-900/40 border border-slate-900 rounded-3xl p-6 flex flex-col justify-between min-h-[480px]">
-            {generatedReport ? (
-              <div className="space-y-4 flex-1 flex flex-col justify-between">
-                <div className="flex items-center justify-between pb-4 border-b border-slate-950">
-                  <span className="text-xs text-slate-500">ผลลัพธ์รายงานที่สร้างสำเร็จ</span>
-                  <div className="flex items-center space-x-2">
-                    <button
-                      onClick={handleCopy}
-                      className="inline-flex items-center px-3 py-1.5 bg-slate-950 hover:bg-slate-900 rounded-xl text-xs text-slate-300 font-semibold cursor-pointer border border-slate-900"
-                    >
-                      {copied ? <Check className="h-4 w-4 mr-1.5 text-emerald-400" /> : <Copy className="h-4 w-4 mr-1.5" />}
-                      {copied ? 'คัดลอกแล้ว' : 'คัดลอกรายงาน'}
-                    </button>
-                    <button
-                      onClick={handleDownload}
-                      className="inline-flex items-center px-3 py-1.5 bg-slate-950 hover:bg-slate-900 rounded-xl text-xs text-slate-300 font-semibold cursor-pointer border border-slate-900"
-                    >
-                      <Download className="h-4 w-4 mr-1.5" />
-                      ดาวน์โหลด (.txt)
-                    </button>
-                  </div>
-                </div>
-
-                <pre className="mt-4 flex-1 p-5 bg-slate-950 border border-slate-900/60 rounded-2xl font-mono text-xs md:text-sm text-slate-300 overflow-x-auto whitespace-pre-wrap leading-relaxed">
-                  {generatedReport}
-                </pre>
-              </div>
-            ) : (
-              <div className="text-center py-20 my-auto">
-                <FileBarChart className="h-12 w-12 text-slate-700 mx-auto" />
-                <h3 className="mt-4 text-lg font-semibold text-white">ยังไม่มีรายงานที่สร้าง</h3>
-                <p className="mt-2 text-sm text-slate-500">
-                  กรุณาเลือกคดีและรูปแบบทางด้านซ้ายเพื่อกดสร้างรายงาน
-                </p>
-              </div>
-            )}
-          </div>
-        </div>
-
+        <section className="min-h-[560px] rounded-3xl border border-slate-900 bg-slate-900/30 p-6">
+          {activeReport ? <div className="space-y-5"><div className="flex flex-col gap-3 border-b border-slate-800 pb-5 sm:flex-row sm:items-center sm:justify-between"><div><h2 className="font-bold text-white">{activeReport.title}</h2>{activeReport.snapshot_sha256 && <p className="mt-1 break-all font-mono text-[10px] text-emerald-400">Snapshot SHA-256: {activeReport.snapshot_sha256}</p>}</div><button type="button" onClick={() => void copy()} className="inline-flex items-center justify-center rounded-xl border border-slate-700 px-3 py-2 text-xs text-slate-300">{copied ? <Check className="mr-2 h-4 w-4 text-emerald-400" /> : <Copy className="mr-2 h-4 w-4" />}{copied ? 'คัดลอกแล้ว' : 'คัดลอกข้อความ'}</button></div><pre className="whitespace-pre-wrap break-words font-sans text-sm leading-7 text-slate-300">{activeReport.content}</pre></div> : <div className="flex min-h-[500px] items-center justify-center text-center"><div><FileBarChart className="mx-auto h-12 w-12 text-slate-800" /><p className="mt-4 text-sm text-slate-500">เลือกรายงานเดิมหรือสร้าง snapshot ใหม่</p></div></div>}
+        </section>
       </div>
     </div>
   );

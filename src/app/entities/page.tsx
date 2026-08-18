@@ -1,15 +1,35 @@
 'use client';
 
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import Link from 'next/link';
-import { Database, Search } from 'lucide-react';
+import { Database, Loader2, RefreshCw, Search } from 'lucide-react';
 import { getEntities, getCases, ExtractedEntity, Case } from '@/lib/demo-data';
 
 export default function EntitiesPage() {
-  const [entities] = useState<ExtractedEntity[]>(() => getEntities());
-  const [casesList] = useState<Case[]>(() => getCases());
+  const [entities, setEntities] = useState<ExtractedEntity[]>(() => getEntities());
+  const [casesList, setCasesList] = useState<Case[]>(() => getCases());
+  const [isLoading, setIsLoading] = useState(true);
+  const [loadError, setLoadError] = useState('');
+  const [reloadToken, setReloadToken] = useState(0);
   const [searchQuery, setSearchQuery] = useState('');
   const [typeFilter, setTypeFilter] = useState<string>('ALL');
+
+  useEffect(() => {
+    const controller = new AbortController();
+    fetch('/api/v1/entities', { signal: controller.signal, credentials: 'same-origin' })
+      .then(async (response) => {
+        const body = await response.json();
+        if (!response.ok) throw new Error(body.error?.message || 'โหลดทะเบียนข้อมูลไม่สำเร็จ');
+        setEntities(body.data.entities as ExtractedEntity[]);
+        setCasesList(body.data.cases as Case[]);
+      })
+      .catch((error: unknown) => {
+        if (error instanceof DOMException && error.name === 'AbortError') return;
+        setLoadError(error instanceof Error ? error.message : 'โหลดทะเบียนข้อมูลไม่สำเร็จ');
+      })
+      .finally(() => setIsLoading(false));
+    return () => controller.abort();
+  }, [reloadToken]);
 
   const getEntityTypeLabel = (type: string) => {
     switch (type) {
@@ -85,7 +105,11 @@ export default function EntitiesPage() {
 
       {/* Registry Table */}
       <div className="bg-slate-900/40 border border-slate-900 rounded-3xl p-6">
-        {filteredEntities.length > 0 ? (
+        {isLoading ? (
+          <div className="flex min-h-52 items-center justify-center text-sm text-slate-400" role="status"><Loader2 className="mr-2 h-5 w-5 animate-spin" />กำลังโหลดทะเบียนข้อมูล...</div>
+        ) : loadError ? (
+          <div className="py-14 text-center" role="alert"><p className="text-sm text-rose-300">{loadError}</p><button type="button" onClick={() => { setIsLoading(true); setLoadError(''); setReloadToken((value) => value + 1); }} className="mt-4 inline-flex items-center rounded-xl border border-rose-400/20 px-4 py-2 text-xs font-semibold text-rose-200"><RefreshCw className="mr-2 h-4 w-4" />ลองใหม่</button></div>
+        ) : filteredEntities.length > 0 ? (
           <div className="overflow-x-auto">
             <table className="min-w-full divide-y divide-slate-950 text-sm">
               <thead>

@@ -1,0 +1,9 @@
+{
+  "users": [
+    { "email": "admin@staging.example.invalid", "name": "Staging Admin", "role": "ADMIN" },
+    { "email": "investigator-a@staging.example.invalid", "name": "Investigator A", "role": "INVESTIGATOR" },
+    { "email": "investigator-b@staging.example.invalid", "name": "Investigator B", "role": "INVESTIGATOR" },
+    { "email": "reviewer@staging.example.invalid", "name": "Staging Reviewer", "role": "REVIEWER" },
+    { "email": "viewer@staging.example.invalid", "name": "Staging Viewer", "role": "VIEWER" }
+  ]
+}

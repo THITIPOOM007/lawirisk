@@ -12,7 +12,10 @@ AS $$
   SELECT role FROM public.profiles WHERE id = auth.uid();
 $$;
 
-CREATE OR REPLACE FUNCTION public.is_case_member(target_case_id UUID)
+-- Keep the original parameter name from 202607270002_rls.sql. PostgreSQL does
+-- not allow CREATE OR REPLACE FUNCTION to rename input parameters while
+-- dependent RLS policies still reference the function.
+CREATE OR REPLACE FUNCTION public.is_case_member(case_id UUID)
 RETURNS BOOLEAN
 LANGUAGE sql
 STABLE
@@ -21,7 +24,7 @@ SET search_path = ''
 AS $$
   SELECT EXISTS (
     SELECT 1 FROM public.case_members cm
-    WHERE cm.case_id = target_case_id AND cm.profile_id = auth.uid()
+    WHERE cm.case_id = $1 AND cm.profile_id = auth.uid()
   );
 $$;
 

@@ -14,6 +14,7 @@ dist/
 .env
 .env.local
 .env.*.local
+ops/staging-users.json
 
 # debug
 npm-debug.log*
@@ -32,7 +33,12 @@ desktop.ini
 
 # test coverage
 coverage/
+playwright-report/
+test-results/
 
 # turbopack
 .turbo/
 *.tsbuildinfo
+.vinext/
+.wrangler/
+supabase/.temp/

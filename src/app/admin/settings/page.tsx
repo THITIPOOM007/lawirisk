@@ -1,264 +1,76 @@
 'use client';
 
-import React, { useState } from 'react';
-import { Settings, Save, ShieldAlert, ToggleLeft, ToggleRight, Users, Database, Smartphone, Landmark, ShieldCheck } from 'lucide-react';
-import { getSettings, saveSettings, INITIAL_USERS, UserProfile, UserSettings, addAuditLog, INITIAL_INTAKE_CHANNELS, IntakeChannel } from '@/lib/demo-data';
+import { useEffect, useState } from 'react';
+import { Database, Loader2, Save, Settings, ShieldAlert, ToggleLeft, ToggleRight, Users } from 'lucide-react';
+import type { StaffRole } from '@/lib/roles';
 import { roleLabel } from '@/lib/roles';
 
+type UserRecord = { id: string; email: string; name: string; role: StaffRole; created_at: string };
+
 export default function AdminSettingsPage() {
-  const [settings] = useState<UserSettings>(() => getSettings());
-  const users: UserProfile[] = INITIAL_USERS;
-  const channels: IntakeChannel[] = INITIAL_INTAKE_CHANNELS;
-  const [saveSuccess, setSaveSuccess] = useState(false);
+  const [threshold, setThreshold] = useState(0.75);
+  const [autoExtract, setAutoExtract] = useState(false);
+  const [users, setUsers] = useState<UserRecord[]>([]);
+  const [isLoading, setIsLoading] = useState(true);
+  const [isSaving, setIsSaving] = useState(false);
+  const [error, setError] = useState('');
+  const [success, setSuccess] = useState('');
 
-  // Form parameters
-  const [threshold, setThreshold] = useState(() => getSettings().confidenceThreshold);
-  const [autoExtract, setAutoExtract] = useState(() => getSettings().autoExtraction);
-  const [webhookUrl, setWebhookUrl] = useState('https://n8n.evidenceverse.go.th/webhook/search');
+  useEffect(() => {
+    const controller = new AbortController();
+    fetch('/api/v1/admin/settings', { credentials: 'same-origin', signal: controller.signal })
+      .then(async (response) => {
+        const body = await response.json();
+        if (!response.ok) throw new Error(body.error?.message || 'โหลดการตั้งค่าไม่สำเร็จ');
+        setThreshold(body.data.settings.confidenceThreshold);
+        setAutoExtract(body.data.settings.autoExtraction);
+        setUsers(body.data.users as UserRecord[]);
+      })
+      .catch((caught: unknown) => {
+        if (caught instanceof DOMException && caught.name === 'AbortError') return;
+        setError(caught instanceof Error ? caught.message : 'โหลดการตั้งค่าไม่สำเร็จ');
+      })
+      .finally(() => setIsLoading(false));
+    return () => controller.abort();
+  }, []);
 
-  // Agencies state mock
-  const agencies = [
-    { id: 'a-1', name: 'กองบริหารสาธารณสุขส่วนกลาง', level: 'CENTRAL' },
-    { id: 'a-2', name: 'สำนักงานสาธารณสุขจังหวัดศรีสะเกษ', level: 'PROVINCE' },
-    { id: 'a-3', name: 'โรงพยาบาลขุขันธ์', level: 'FACILITY' }
-  ];
-
-  // Laws state mock
-  const laws = [
-    { id: 'l-1', name: 'พระราชบัญญัติวิชาชีพทันตกรรม พ.ศ. 2537', code: 'มาตรา 28' },
-    { id: 'l-2', name: 'พระราชบัญญัติสถานพยาบาล พ.ศ. 2541', code: 'มาตรา 16' },
-    { id: 'l-3', name: 'พระราชบัญญัติเครื่องมือแพทย์ พ.ศ. 2551', code: 'มาตรา 46' }
-  ];
-
-  const handleSave = (e: React.FormEvent) => {
-    e.preventDefault();
-    const newSettings: UserSettings = {
-      ...settings,
-      confidenceThreshold: threshold,
-      autoExtraction: autoExtract,
-    };
-
-    saveSettings(newSettings);
-    
-    // Audit Log
-    const getCookie = (name: string) => {
-      const value = `; ${document.cookie}`;
-      const parts = value.split(`; ${name}=`);
-      if (parts.length === 2) return parts.pop()?.split(';').shift();
-      return null;
-    };
-    const user = getCookie('mock-auth-name') 
-      ? decodeURIComponent(getCookie('mock-auth-name')!) 
-      : 'ผู้ดูแลระบบ';
-    addAuditLog(user, 'SETTINGS_UPDATE', 'ปรับปรุงค่าการตั้งค่าระดับระบบ (System Settings)');
-
-    setSaveSuccess(true);
-    setTimeout(() => setSaveSuccess(false), 3000);
+  const save = async (event: React.FormEvent) => {
+    event.preventDefault();
+    setIsSaving(true);
+    setError('');
+    setSuccess('');
+    try {
+      const response = await fetch('/api/v1/admin/settings', {
+        method: 'PATCH', credentials: 'same-origin', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ confidenceThreshold: threshold, autoExtraction: autoExtract }),
+      });
+      const body = await response.json();
+      if (!response.ok) throw new Error(body.error?.message || 'บันทึกการตั้งค่าไม่สำเร็จ');
+      setSuccess('บันทึกค่าระบบและ Audit log แล้ว');
+    } catch (caught: unknown) {
+      setError(caught instanceof Error ? caught.message : 'บันทึกการตั้งค่าไม่สำเร็จ');
+    } finally {
+      setIsSaving(false);
+    }
   };
-
-  const getRoleLabel = roleLabel;
 
   return (
     <div className="space-y-8">
-      {/* Page Header */}
-      <div>
-        <h1 className="text-3xl font-extrabold text-white tracking-tight flex items-center space-x-3">
-          <Settings className="h-8 w-8 text-indigo-500 shrink-0" />
-          <span>จัดการระบบและการตั้งค่า (System Control Panel)</span>
-        </h1>
-        <p className="mt-2 text-slate-400">
-          กำหนดระดับความเชื่อมั่นของ AI ตัวเลือก webhook n8n ช่องทางการรับเรื่อง เครือข่ายหน่วยงาน และข้อบทกฎหมายอ้างอิง
-        </p>
-      </div>
-
-      {saveSuccess && (
-        <div className="bg-emerald-950/40 border border-emerald-900/50 p-4 rounded-2xl text-emerald-300 text-sm">
-          บันทึกการตั้งค่าระบบเรียบร้อยแล้ว! (ประวัติกิจกรรมถูกบันทึกใน Audit log)
+      <header><h1 className="flex items-center gap-3 text-3xl font-extrabold tracking-tight text-white"><Settings className="h-8 w-8 text-indigo-500" />การตั้งค่าระบบ</h1><p className="mt-2 text-slate-400">ค่าที่แสดงในหน้านี้อ่านและบันทึกผ่านฐานข้อมูลจริง รายการที่ยังไม่มี persistence จะไม่แสดงเป็นตัวควบคุม</p></header>
+      {error && <div role="alert" className="rounded-2xl border border-rose-500/20 bg-rose-500/5 p-4 text-sm text-rose-300">{error}</div>}
+      {success && <div role="status" className="rounded-2xl border border-emerald-500/20 bg-emerald-500/5 p-4 text-sm text-emerald-300">{success}</div>}
+      {isLoading ? <div className="flex min-h-64 items-center justify-center text-sm text-slate-400"><Loader2 className="mr-2 h-5 w-5 animate-spin" />กำลังโหลด...</div> : (
+        <div className="grid gap-6 lg:grid-cols-[minmax(0,1.4fr)_minmax(320px,0.8fr)]">
+          <form onSubmit={save} className="space-y-7 rounded-3xl border border-slate-900 bg-slate-900/30 p-6">
+            <h2 className="flex items-center text-lg font-bold text-white"><Database className="mr-2 h-5 w-5 text-indigo-400" />ข้อกำหนดงานวิเคราะห์</h2>
+            <div><label htmlFor="confidence" className="text-sm font-semibold text-slate-300">เกณฑ์ความเชื่อมั่นที่แสดงต่อผู้ตรวจทาน</label><p className="mt-1 text-xs text-slate-500">ค่านี้เป็นตัวกรองข้อเสนอ ไม่ใช่สิทธิ์ยืนยันข้อเท็จจริงอัตโนมัติ</p><div className="mt-4 flex items-center gap-4"><input id="confidence" type="range" min="0" max="1" step="0.01" value={threshold} onChange={(event) => setThreshold(Number(event.target.value))} className="flex-1 accent-indigo-500" /><output className="w-14 text-right font-mono text-sm font-bold text-indigo-300">{Math.round(threshold * 100)}%</output></div></div>
+            <div className="flex items-center justify-between rounded-2xl border border-slate-900 bg-slate-950/50 p-4"><div><p className="text-sm font-semibold text-slate-300">สร้างงาน extraction อัตโนมัติ</p><p className="mt-1 text-xs text-slate-500">ผลลัพธ์ยังคงเป็น SUGGESTED และต้องตรวจโดยมนุษย์</p></div><button type="button" onClick={() => setAutoExtract((value) => !value)} aria-pressed={autoExtract} aria-label="สลับการสร้างงาน extraction อัตโนมัติ">{autoExtract ? <ToggleRight className="h-10 w-10 text-indigo-500" /> : <ToggleLeft className="h-10 w-10 text-slate-600" />}</button></div>
+            <div className="flex items-start gap-3 rounded-2xl border border-amber-500/20 bg-amber-500/5 p-4 text-xs leading-6 text-amber-100"><ShieldAlert className="mt-1 h-4 w-4 shrink-0" />การเปิดค่านี้จะมีผลเมื่อ worker/provider สำหรับ OCR และ extraction ถูกตั้งค่าและผ่าน health check เท่านั้น</div>
+            <div className="flex justify-end border-t border-slate-900 pt-5"><button disabled={isSaving} className="inline-flex items-center rounded-xl bg-indigo-600 px-5 py-3 text-sm font-bold text-white disabled:opacity-50">{isSaving ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Save className="mr-2 h-4 w-4" />}บันทึก</button></div>
+          </form>
+          <section className="rounded-3xl border border-slate-900 bg-slate-900/30 p-6"><h2 className="flex items-center text-lg font-bold text-white"><Users className="mr-2 h-5 w-5 text-indigo-400" />เจ้าหน้าที่ที่เข้าถึงได้ ({users.length})</h2><div className="mt-5 space-y-3">{users.map((user) => <div key={user.id} className="rounded-2xl border border-slate-900 bg-slate-950/50 p-4"><p className="text-sm font-semibold text-white">{user.name}</p><p className="mt-1 break-all text-xs text-slate-500">{user.email}</p><span className="mt-3 inline-flex rounded-lg border border-indigo-500/20 bg-indigo-500/10 px-2 py-1 text-[10px] font-semibold text-indigo-300">{roleLabel(user.role)}</span></div>)}</div></section>
         </div>
       )}
-
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
-        
-        {/* Settings Form (Left 2/3) */}
-        <div className="lg:col-span-2 space-y-6">
-          <div className="bg-slate-900/40 border border-slate-900 rounded-3xl p-6">
-            <h3 className="text-lg font-bold text-white mb-6 flex items-center">
-              <Database className="h-5 w-5 mr-2 text-indigo-500" />
-              การกำหนดค่าการทำงานระบบวิเคราะห์หลักฐาน
-            </h3>
-
-            <form onSubmit={handleSave} className="space-y-6">
-              
-              {/* Threshold */}
-              <div>
-                <label className="block text-sm font-semibold text-slate-300">
-                  เกณฑ์ระดับความเชื่อมั่นขั้นต่ำของ AI (Confidence Threshold)
-                </label>
-                <p className="mt-1 text-xs text-slate-500">
-                  ระบุความน่าจะเป็นขั้นต่ำที่อนุญาตให้ AI แสดงผลในการทำ Matching คดีสืบสวน (0.00 - 1.00)
-                </p>
-                <div className="mt-3 flex items-center space-x-4">
-                  <input
-                    type="range"
-                    min="0.50"
-                    max="0.99"
-                    step="0.05"
-                    value={threshold}
-                    onChange={(e) => setThreshold(parseFloat(e.target.value))}
-                    className="flex-1 accent-indigo-500 h-2 bg-slate-950 rounded-lg appearance-none cursor-pointer"
-                  />
-                  <span className="font-mono text-sm font-bold text-indigo-400 w-12 text-right">{(threshold * 100).toFixed(0)}%</span>
-                </div>
-              </div>
-
-              {/* Toggle Auto Extract */}
-              <div className="flex items-center justify-between p-4 bg-slate-950/40 border border-slate-900 rounded-2xl">
-                <div>
-                  <label className="block text-sm font-semibold text-slate-300">
-                    เรียกงานสกัดคำอัตโนมัติ (Auto AI Extraction)
-                  </label>
-                  <p className="text-xs text-slate-500 mt-1">
-                    เมื่ออัปโหลดหลักฐานเสร็จสิ้น ระบบจะเรียก OCR และวิเคราะห์ Entity ทันที
-                  </p>
-                </div>
-                <button
-                  type="button"
-                  onClick={() => setAutoExtract(!autoExtract)}
-                  className="text-slate-400 hover:text-white cursor-pointer"
-                >
-                  {autoExtract ? (
-                    <ToggleRight className="h-10 w-10 text-indigo-500" />
-                  ) : (
-                    <ToggleLeft className="h-10 w-10 text-slate-600" />
-                  )}
-                </button>
-              </div>
-
-              {/* Webhook Settings */}
-              <div>
-                <label className="block text-sm font-semibold text-slate-300">
-                  ที่อยู่เว็บฮุกค้นหาอัจฉริยะ (n8n Webhook Endpoint)
-                </label>
-                <p className="mt-1 text-xs text-slate-500">
-                  URL ของ workflow n8n ที่รับผิดชอบการเชื่อมต่อ Thai FDA และ Data.go.th
-                </p>
-                <div className="mt-2">
-                  <input
-                    type="url"
-                    value={webhookUrl}
-                    onChange={(e) => setWebhookUrl(e.target.value)}
-                    placeholder="https://n8n.yourdomain.com/..."
-                    className="block w-full rounded-2xl border-0 bg-slate-950 py-3 px-4 text-white shadow-sm ring-1 ring-inset ring-slate-800 focus:ring-2 focus:ring-inset focus:ring-indigo-500 text-sm"
-                  />
-                </div>
-              </div>
-
-              <div className="pt-4 border-t border-slate-900 flex justify-end">
-                <button
-                  type="submit"
-                  className="inline-flex items-center px-5 py-3 border border-transparent rounded-2xl shadow-lg text-sm font-semibold text-white bg-indigo-600 hover:bg-indigo-500 transition-colors cursor-pointer"
-                >
-                  <Save className="h-5 w-5 mr-2" />
-                  บันทึกการตั้งค่า
-                </button>
-              </div>
-            </form>
-          </div>
-
-          {/* Config Controls for Channels & Laws */}
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-            
-            {/* Channels listing */}
-            <div className="p-6 bg-slate-900/40 border border-slate-900 rounded-3xl space-y-4">
-              <h3 className="text-sm font-bold text-white flex items-center">
-                <Smartphone className="h-4.5 w-4.5 mr-2 text-indigo-400" /> ช่องทางการรับเรื่องร้องเรียน (Channels)
-              </h3>
-              <div className="space-y-2 text-xs">
-                {channels.map(ch => (
-                  <div key={ch.id} className="p-3 bg-slate-950/60 border border-slate-900 rounded-xl flex justify-between items-center text-slate-300">
-                    <span>{ch.name}</span>
-                    <span className="text-[10px] text-slate-500 font-mono">{ch.type}</span>
-                  </div>
-                ))}
-              </div>
-            </div>
-
-            {/* Laws listing */}
-            <div className="p-6 bg-slate-900/40 border border-slate-900 rounded-3xl space-y-4">
-              <h3 className="text-sm font-bold text-white flex items-center">
-                <ShieldCheck className="h-4.5 w-4.5 mr-2 text-indigo-400" /> สารบบข้อบทกฎหมายและมาตรา (Laws Catalog)
-              </h3>
-              <div className="space-y-2 text-xs">
-                {laws.map(law => (
-                  <div key={law.id} className="p-3 bg-slate-950/60 border border-slate-900 rounded-xl flex justify-between items-center text-slate-300">
-                    <span className="truncate max-w-[150px]">{law.name}</span>
-                    <span className="text-[10px] text-indigo-400 font-bold font-mono">{law.code}</span>
-                  </div>
-                ))}
-              </div>
-            </div>
-
-          </div>
-        </div>
-
-        {/* User & Agency Management View (Right 1/3) */}
-        <div className="lg:col-span-1 space-y-6">
-          {/* Members listing */}
-          <div className="bg-slate-900/40 border border-slate-900 rounded-3xl p-6">
-            <h3 className="text-lg font-bold text-white mb-6 flex items-center">
-              <Users className="h-5 w-5 mr-2 text-indigo-500" />
-              เจ้าหน้าที่ผู้เข้าถึงระบบ ({users.length})
-            </h3>
-
-            <div className="space-y-4">
-              {users.map((user) => (
-                <div
-                  key={user.id}
-                  className="p-4 bg-slate-950/60 border border-slate-900 rounded-2xl flex items-center justify-between"
-                >
-                  <div>
-                    <p className="text-sm font-bold text-white">{user.name}</p>
-                    <p className="text-xs text-slate-500 mt-0.5">{user.email}</p>
-                  </div>
-                  <span className="px-2.5 py-1 text-[10px] font-semibold border rounded-lg bg-indigo-500/10 text-indigo-400 border-indigo-500/20">
-                    {getRoleLabel(user.role)}
-                  </span>
-                </div>
-              ))}
-            </div>
-          </div>
-
-          {/* Agencies listing */}
-          <div className="bg-slate-900/40 border border-slate-900 rounded-3xl p-6">
-            <h3 className="text-lg font-bold text-white mb-6 flex items-center">
-              <Landmark className="h-5 w-5 mr-2 text-indigo-500" />
-              หน่วยงานและเขตอำนาจ (Agencies)
-            </h3>
-
-            <div className="space-y-4 text-xs">
-              {agencies.map((age) => (
-                <div
-                  key={age.id}
-                  className="p-4 bg-slate-950/60 border border-slate-900 rounded-2xl flex items-center justify-between"
-                >
-                  <span className="text-white font-semibold">{age.name}</span>
-                  <span className="px-2 py-0.5 text-[10px] font-semibold border rounded bg-indigo-500/10 text-indigo-400 border-indigo-500/25">
-                    {age.level}
-                  </span>
-                </div>
-              ))}
-            </div>
-            
-            <div className="mt-6 bg-slate-950/40 p-4 border border-slate-900 rounded-2xl flex items-start space-x-2 text-xs text-slate-400 leading-relaxed">
-              <ShieldAlert className="h-5 w-5 text-indigo-400 shrink-0 mt-0.5" />
-              <span>
-                การเข้าใช้งานตามหน่วยงาน เขตอำนาจ และบทบาทระดับประเทศ ถูกแยก RLS ในระดับฐานข้อมูล SQL ป้องกันการเข้าถึงข้อมูลนอกสิทธิ์เด็ดขาด
-              </span>
-            </div>
-          </div>
-        </div>
-
-      </div>
     </div>
   );
 }
