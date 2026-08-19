@@ -1,6 +1,6 @@
 {
   "$schema": "node_modules/wrangler/config-schema.json",
-  "name": "evidenceverse-lite",
+  "name": "lawirisk-ssk-production",
   "compatibility_date": "2026-08-18",
   "compatibility_flags": [
     "nodejs_compat"
@@ -20,11 +20,12 @@
   },
   "env": {
     "staging": {
-      "name": "evidenceverse-staging",
+      "name": "lawirisk-ssk",
       "workers_dev": true,
       "preview_urls": false,
       "vars": {
-        "NEXT_PUBLIC_DEMO_MODE": "false"
+        "NEXT_PUBLIC_DEMO_MODE": "false",
+        "GEMINI_MODEL": "gemini-2.5-flash"
       },
       "secrets": {
         "required": [
@@ -32,6 +33,7 @@
           "NEXT_PUBLIC_SUPABASE_ANON_KEY",
           "SUPABASE_SERVICE_ROLE_KEY",
           "PRIVATE_EVIDENCE_BUCKET",
+          "GEMINI_API_KEY",
           "APP_ORIGIN"
         ]
       }

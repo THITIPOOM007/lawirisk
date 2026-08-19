@@ -1,13 +1,13 @@
 'use client';
 
 import React, { useState } from 'react';
+import Image from 'next/image';
 import { useRouter } from 'next/navigation';
 import {
   AlertCircle,
   ArrowRight,
   BadgeCheck,
   Database,
-  Fingerprint,
   Loader2,
   LockKeyhole,
   ScanLine,
@@ -93,9 +93,15 @@ export default function LoginPage() {
     <main className="app-backdrop relative grid min-h-dvh overflow-hidden lg:grid-cols-[minmax(420px,0.9fr)_minmax(520px,1.1fr)]">
       <section className="relative hidden overflow-hidden border-r border-white/[0.07] p-10 lg:flex lg:flex-col lg:justify-between xl:p-14">
         <div className="absolute -left-28 top-[18%] h-80 w-80 rounded-full bg-teal-300/[0.08] blur-[100px]" />
-        <div className="relative z-10 flex items-center gap-3">
-          <span className="grid h-11 w-11 place-items-center rounded-xl border border-teal-300/20 bg-teal-300/10 text-teal-300"><Fingerprint className="h-5 w-5" /></span>
-          <span><span className="block text-lg font-bold text-white">EvidenceVerse</span><span className="block text-[9px] font-semibold uppercase tracking-[0.2em] text-teal-300/70">National Intelligence</span></span>
+        <div className="relative z-10 flex items-center gap-5">
+          <span className="relative grid h-24 w-24 shrink-0 place-items-center overflow-hidden rounded-[26px] border border-cyan-200/30 bg-gradient-to-br from-cyan-300/20 via-[#03101c] to-amber-300/20 shadow-[0_0_55px_rgba(34,211,238,0.18),0_0_70px_rgba(251,191,36,0.08),inset_0_1px_rgba(255,255,255,0.16)]">
+            <span className="absolute inset-px rounded-[25px] bg-[#020b18]/90" />
+            <Image src="/lawirisk-ssk-mark-v2.png" alt="" width={96} height={88} className="relative z-10 h-full w-full object-contain p-2 drop-shadow-[0_8px_18px_rgba(34,211,238,0.22)]" priority />
+          </span>
+          <span>
+            <span className="block bg-gradient-to-r from-cyan-200 via-white to-amber-200 bg-clip-text text-2xl font-black tracking-[-0.045em] text-transparent">LawiRisk-SSK</span>
+            <span className="mt-1 block text-[9px] font-bold uppercase tracking-[0.24em] text-cyan-200/80">Digital Evidence Intelligence</span>
+          </span>
         </div>
 
         <div className="relative z-10 max-w-xl">
@@ -116,9 +122,12 @@ export default function LoginPage() {
 
       <section className="relative z-10 flex min-h-dvh items-center justify-center px-4 py-8 sm:px-8 lg:px-12">
         <div className="w-full max-w-[520px]">
-          <div className="mb-8 flex items-center gap-3 lg:hidden">
-            <span className="grid h-10 w-10 place-items-center rounded-xl border border-teal-300/20 bg-teal-300/10 text-teal-300"><Fingerprint className="h-5 w-5" /></span>
-            <span><span className="block font-bold text-white">EvidenceVerse</span><span className="block text-[8px] uppercase tracking-[0.18em] text-teal-300/70">National Intelligence</span></span>
+          <div className="mb-8 flex items-center gap-3.5 lg:hidden">
+            <span className="relative grid h-14 w-14 shrink-0 place-items-center overflow-hidden rounded-2xl border border-cyan-200/30 bg-gradient-to-br from-cyan-300/20 via-[#03101c] to-amber-300/20 shadow-[0_0_34px_rgba(34,211,238,0.16)]">
+              <span className="absolute inset-px rounded-[15px] bg-[#020b18]/90" />
+              <Image src="/lawirisk-ssk-mark-v2.png" alt="" width={56} height={51} className="relative z-10 h-full w-full object-contain p-1.5" priority />
+            </span>
+            <span><span className="block bg-gradient-to-r from-cyan-200 via-white to-amber-200 bg-clip-text text-lg font-black tracking-[-0.035em] text-transparent">LawiRisk-SSK</span><span className="mt-0.5 block text-[8px] font-bold uppercase tracking-[0.2em] text-cyan-200/75">Digital Evidence Intelligence</span></span>
           </div>
 
           <div className="glass-panel rounded-[28px] p-6 sm:p-8">

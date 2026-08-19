@@ -1,6 +1,7 @@
 'use client';
 
 import React, { useEffect, useRef, useState, useSyncExternalStore } from 'react';
+import Image from 'next/image';
 import Link from 'next/link';
 import { usePathname, useRouter } from 'next/navigation';
 import {
@@ -11,7 +12,6 @@ import {
   Database,
   FileBarChart,
   FileSearch,
-  Fingerprint,
   History,
   Inbox,
   LayoutDashboard,
@@ -23,6 +23,7 @@ import {
   Settings,
   ShieldCheck,
   Sparkles,
+  Workflow,
   X,
 } from 'lucide-react';
 import { createClient, isSupabaseConfigured } from '@/lib/supabase';
@@ -47,6 +48,7 @@ const primaryNav: NavItem[] = [
 ];
 
 const intelligenceNav: NavItem[] = [
+  { name: 'ศูนย์งานอัตโนมัติ', href: '/automation', icon: Workflow },
   { name: 'ข้อเสนอจาก AI', href: '/review', icon: Sparkles },
   { name: 'ทะเบียนข้อมูล', href: '/entities', icon: Database },
   { name: 'ความเชื่อมโยง', href: '/matches', icon: Link2 },
@@ -63,6 +65,7 @@ const sectionMeta = [
   { prefix: '/cases', eyebrow: 'Case workspace', title: 'สำนวนคดี' },
   { prefix: '/evidence', eyebrow: 'Evidence custody', title: 'คลังหลักฐาน' },
   { prefix: '/sources', eyebrow: 'Authorized sources', title: 'แหล่งสืบค้น' },
+  { prefix: '/automation', eyebrow: 'n8n orchestration', title: 'ศูนย์งานอัตโนมัติ' },
   { prefix: '/review', eyebrow: 'Human review', title: 'ข้อเสนอจาก AI' },
   { prefix: '/entities', eyebrow: 'Data registry', title: 'ทะเบียนข้อมูล' },
   { prefix: '/matches', eyebrow: 'Cross-case analysis', title: 'ความเชื่อมโยง' },
@@ -90,6 +93,7 @@ const getAuthSnapshot = () => {
 };
 
 const getServerAuthSnapshot = () => 'VIEWER\u0000เจ้าหน้าที่ตรวจสอบ';
+const subscribeToHydration = () => () => {};
 
 function NavLink({ item, active, collapsed, onNavigate }: {
   item: NavItem;
@@ -127,6 +131,7 @@ export default function Navigation({ children }: NavigationProps) {
   const mobileDialogRef = useRef<HTMLElement>(null);
   const mobileMenuButtonRef = useRef<HTMLButtonElement>(null);
   const authSnapshot = useSyncExternalStore(subscribeToAuth, getAuthSnapshot, getServerAuthSnapshot);
+  const isHydrated = useSyncExternalStore(subscribeToHydration, () => true, () => false);
   const [demoRole, demoName] = authSnapshot.split('\u0000');
   const [serverIdentity, setServerIdentity] = useState<{ name: string; role: string } | null>(null);
   const usesSupabase = isSupabaseConfigured();
@@ -216,15 +221,16 @@ export default function Navigation({ children }: NavigationProps) {
     return (
     <>
       <div className={`flex h-20 items-center border-b border-white/[0.055] ${collapsed ? 'justify-center px-3' : 'px-5'}`}>
-        <Link href="/" onClick={onNavigate} className="flex min-w-0 items-center gap-3" aria-label="EvidenceVerse หน้าหลัก">
-          <span className="floating-orb relative grid h-11 w-11 shrink-0 place-items-center rounded-[15px] border border-teal-300/25 bg-gradient-to-br from-teal-300/[0.16] to-sky-400/[0.06] text-teal-200 shadow-[0_0_36px_rgba(45,212,191,0.11),inset_0_1px_rgba(255,255,255,0.12)]">
-            <Fingerprint className="h-5 w-5" />
+        <Link href="/" onClick={onNavigate} className="flex min-w-0 items-center gap-3" aria-label="LawiRisk-SSK หน้าหลัก">
+          <span className="floating-orb relative grid h-12 w-12 shrink-0 place-items-center overflow-hidden rounded-2xl border border-cyan-200/30 bg-gradient-to-br from-cyan-300/20 via-[#020b18] to-amber-300/20 shadow-[0_0_38px_rgba(34,211,238,0.15),0_0_42px_rgba(251,191,36,0.06),inset_0_1px_rgba(255,255,255,0.14)]">
+            <span className="absolute inset-px rounded-[15px] bg-[#020b18]/92" />
+            <Image src="/lawirisk-ssk-mark-v2.png" alt="" width={48} height={44} className="relative z-10 h-full w-full object-contain p-1.5" priority />
             <span className="status-pulse absolute right-0.5 top-0.5 h-1.5 w-1.5 rounded-full bg-teal-300 text-teal-300" />
           </span>
           {!collapsed && (
             <span className="min-w-0">
-              <span className="block text-[17px] font-bold tracking-[-0.025em] text-white">EvidenceVerse</span>
-              <span className="block truncate text-[9px] font-semibold uppercase tracking-[0.22em] text-teal-300/70">National Intelligence</span>
+              <span className="block bg-gradient-to-r from-cyan-200 via-white to-amber-200 bg-clip-text text-[18px] font-black tracking-[-0.035em] text-transparent">LawiRisk-SSK</span>
+              <span className="block truncate text-[8px] font-bold uppercase tracking-[0.2em] text-cyan-200/70">Evidence Intelligence</span>
             </span>
           )}
         </Link>
@@ -264,7 +270,7 @@ export default function Navigation({ children }: NavigationProps) {
       <div className="relative z-10 flex min-w-0 flex-1 flex-col" inert={isMobileMenuOpen ? true : undefined}>
         <header className="relative flex h-20 shrink-0 items-center justify-between border-b border-white/[0.055] bg-[#06111d]/55 px-4 shadow-[0_16px_50px_rgba(0,4,12,0.08)] backdrop-blur-2xl sm:px-6 lg:px-8">
           <div className="flex min-w-0 items-center gap-3">
-            <button ref={mobileMenuButtonRef} type="button" onClick={() => setIsMobileMenuOpen(true)} className="grid h-10 w-10 shrink-0 place-items-center rounded-xl border border-white/[0.08] bg-white/[0.035] text-slate-300 lg:hidden" aria-label="เปิดเมนูหลัก" aria-expanded={isMobileMenuOpen} aria-controls="mobile-navigation"><Menu className="h-5 w-5" /></button>
+            <button ref={mobileMenuButtonRef} type="button" disabled={!isHydrated} onClick={() => setIsMobileMenuOpen(true)} className="grid h-10 w-10 shrink-0 place-items-center rounded-xl border border-white/[0.08] bg-white/[0.035] text-slate-300 disabled:cursor-wait disabled:opacity-60 lg:hidden" aria-label="เปิดเมนูหลัก" aria-expanded={isMobileMenuOpen} aria-controls="mobile-navigation"><Menu className="h-5 w-5" /></button>
             <div className="min-w-0"><p className="truncate text-[9px] font-semibold uppercase tracking-[0.22em] text-teal-300/65">{meta.eyebrow}</p><h2 className="mt-0.5 truncate text-base font-semibold tracking-[-0.015em] text-slate-100 sm:text-lg">{meta.title}</h2></div>
           </div>
           <div className="flex items-center gap-2 sm:gap-3">

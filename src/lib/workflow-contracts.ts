@@ -15,6 +15,34 @@ export const manualSuggestionSchema = z.object({
   reason: z.string().trim().min(1).max(2000),
 }).strict();
 
+export const aiExtractionRequestSchema = z.object({
+  case_id: z.string().uuid(),
+  evidence_id: z.string().uuid(),
+  page_number: z.number().int().min(1).max(100_000),
+  source_text: z.string().trim().min(1).max(4000),
+  source_location: z.record(z.string(), z.unknown()).default({}),
+}).strict();
+
+export const automationJobCreateSchema = aiExtractionRequestSchema;
+
+export const automationRunRequestSchema = z.object({
+  dispatch_id: z.string().uuid(),
+  external_execution_id: z.string().trim().min(1).max(200).optional(),
+}).strict();
+
+export const aiExtractionCandidateSchema = z.object({
+  entity_type: entityTypeSchema,
+  candidate_value: z.string().trim().min(1).max(1000),
+  confidence: z.number().min(0).max(1),
+  reason: z.string().trim().min(1).max(2000),
+}).strict();
+
+export const aiExtractionProviderResultSchema = z.object({
+  candidates: z.array(aiExtractionCandidateSchema).max(20),
+}).strict();
+
+export type AiExtractionCandidate = z.infer<typeof aiExtractionCandidateSchema>;
+
 export const reviewSuggestionSchema = z.object({
   decision: z.enum(['CONFIRMED', 'REJECTED', 'UNCERTAIN']),
   reason: z.string().trim().min(1).max(2000),
