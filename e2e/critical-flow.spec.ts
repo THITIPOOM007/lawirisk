@@ -84,3 +84,12 @@ test('denies source registry access to viewer role', async ({ page }) => {
   expect(response.status()).toBe(403);
   await expect(response.json()).resolves.toMatchObject({ error: { code: 'FORBIDDEN' } });
 });
+
+test('shows the n8n automation command center and fails closed in demo mode', async ({ page }) => {
+  await loginAsInvestigator(page);
+  await page.goto('/automation');
+  await expect(page.getByRole('heading', { name: 'Automation Command Center' })).toBeVisible();
+  await expect(page.getByText(/โหมดสาธิตแสดงหน้าจอและ state model เท่านั้น/)).toBeVisible();
+  await expect(page.getByRole('button', { name: /ส่งเข้า n8n Pipeline/ })).toBeDisabled();
+  await expect(page.getByText('n8n เห็นเฉพาะ Job ID')).toBeVisible();
+});

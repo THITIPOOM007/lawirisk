@@ -9,6 +9,9 @@ const required = [
   'MALWARE_SCANNER_URL',
   'MALWARE_SCANNER_TOKEN',
   'APP_ORIGIN',
+  'N8N_AUTOMATION_WEBHOOK_URL',
+  'N8N_DISPATCH_TOKEN',
+  'N8N_CALLBACK_TOKEN',
 ];
 
 const results = [];
@@ -23,7 +26,16 @@ for (const name of required) {
 
 record('NEXT_PUBLIC_DEMO_MODE', valueOf('NEXT_PUBLIC_DEMO_MODE') === 'false', 'must be false on staging');
 
-for (const name of ['NEXT_PUBLIC_SUPABASE_URL', 'MALWARE_SCANNER_URL', 'APP_ORIGIN']) {
+for (const name of ['N8N_DISPATCH_TOKEN', 'N8N_CALLBACK_TOKEN']) {
+  record(`${name}_STRENGTH`, valueOf(name).length >= 32, 'must contain at least 32 characters');
+}
+record(
+  'N8N_TOKENS_SEPARATED',
+  Boolean(valueOf('N8N_DISPATCH_TOKEN')) && valueOf('N8N_DISPATCH_TOKEN') !== valueOf('N8N_CALLBACK_TOKEN'),
+  'dispatch and callback tokens must be different',
+);
+
+for (const name of ['NEXT_PUBLIC_SUPABASE_URL', 'MALWARE_SCANNER_URL', 'APP_ORIGIN', 'N8N_AUTOMATION_WEBHOOK_URL']) {
   try {
     const url = new URL(valueOf(name));
     record(`${name}_HTTPS`, url.protocol === 'https:', url.protocol === 'https:' ? url.hostname : 'must use https');
@@ -69,7 +81,7 @@ if (runNetworkChecks && results.every((item) => item.ok)) {
   }, (response) => ({ ok: response.ok, detail: `HTTP ${response.status}` }));
 
   const scannerBody = new FormData();
-  scannerBody.set('file', new Blob(['EvidenceVerse staging scanner connectivity probe'], { type: 'text/plain' }), 'safe-probe.txt');
+  scannerBody.set('file', new Blob(['LawiRisk-SSK staging scanner connectivity probe'], { type: 'text/plain' }), 'safe-probe.txt');
   await checkHttp('MALWARE_SCANNER_SAFE_PROBE', {
     url: valueOf('MALWARE_SCANNER_URL'),
     options: {

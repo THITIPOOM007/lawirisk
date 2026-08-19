@@ -4,10 +4,14 @@ import Navigation from "@/components/Navigation";
 
 export const metadata: Metadata = {
   title: {
-    default: "EvidenceVerse | ศูนย์บัญชาการหลักฐานดิจิทัล",
-    template: "%s | EvidenceVerse",
+    default: "LawiRisk-SSK | ศูนย์บัญชาการหลักฐานดิจิทัล",
+    template: "%s | LawiRisk-SSK",
   },
   description: "ระบบช่วยจัดระเบียบ ตรวจทาน และเชื่อมโยงหลักฐานดิจิทัลที่ตรวจสอบย้อนกลับถึงต้นฉบับได้",
+  icons: {
+    icon: "/lawirisk-ssk-mark-v2.png",
+    apple: "/lawirisk-ssk-mark-v2.png",
+  },
 };
 
 export default function RootLayout({

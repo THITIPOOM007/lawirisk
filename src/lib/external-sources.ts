@@ -28,15 +28,15 @@ export const EXTERNAL_SOURCES: readonly ExternalSource[] = [
     authMode: 'EGOV_OIDC',
     accessMode: 'MANUAL_ONLY',
     transport: 'HTTPS',
-    launchUrl: 'https://privus.fda.moph.go.th/',
+    launchUrl: 'https://privus.fda.moph.go.th/FDA_LOGIN2/HOME/SET_STATE?STATE=3',
     verifiedAt: '2026-08-18',
     guidance: [
-      'เข้าสู่ระบบด้วยบัญชี eGov/อย. ของเจ้าหน้าที่ในหน้าแยก',
+      'เข้าสู่ระบบผ่าน Digital ID สำหรับเมนูเจ้าหน้าที่ สสจ. ในหน้าแยก',
       'ค้นเฉพาะวัตถุประสงค์และขอบเขตที่หน่วยงานอนุญาต',
       'ส่งออกผลทางการเป็น PDF หรือภาพหน้าจอที่มีเลขอ้างอิงและวันเวลา',
       'นำไฟล์กลับเข้าคลังหลักฐานเพื่อ hash, สแกน และผูกกับคดี',
     ],
-    limitation: 'EvidenceVerse ไม่รับหรือเก็บรหัสผ่าน eGov/อย. และไม่ดึงข้อมูลอัตโนมัติจนมี API/ข้อตกลงอย่างเป็นทางการ',
+    limitation: 'LawiRisk-SSK ไม่รับหรือเก็บรหัสผ่าน eGov/อย. และไม่ดึงข้อมูลอัตโนมัติจนมี API/ข้อตกลงอย่างเป็นทางการ',
   },
   {
     key: 'HSS_OSS',
@@ -50,7 +50,7 @@ export const EXTERNAL_SOURCES: readonly ExternalSource[] = [
     verifiedAt: '2026-08-18',
     guidance: [
       'ขอ HTTPS endpoint หรือ API ที่ สบส. รับรองสำหรับการใช้งานระบบต่อระบบ',
-      'ห้ามกรอก username/password ผ่านตัวเชื่อม EvidenceVerse ขณะที่ปลายทางย้อนกลับไป HTTP',
+      'ห้ามกรอก username/password ผ่านตัวเชื่อม LawiRisk-SSK ขณะที่ปลายทางย้อนกลับไป HTTP',
       'เมื่อได้รับช่องทางปลอดภัย ให้ทดสอบ TLS, สิทธิ์, audit และ data minimization ก่อนเปิดใช้',
     ],
     limitation: 'ตรวจพบว่า HTTPS endpoint ย้อนกลับไปหน้าเข้าสู่ระบบแบบ HTTP จึงถูกบล็อกแบบ fail closed',

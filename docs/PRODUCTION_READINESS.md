@@ -95,7 +95,7 @@ vinext ใช้ Workers Cache, ไม่ใช้ Data Cache/KV และไม
 
 ## External capability still requiring a decision
 
-- OCR/automatic extraction worker/provider ยังไม่ได้เชื่อม production ระบบมี manual source-backed suggestion เป็นทางทำงานที่ปลอดภัย และ `auto_extraction` default ปิดอยู่ ต้องเลือก provider, data residency, DPA, retention, model/version contract และ evaluation set ก่อนเปิด
+- Gemini text extraction เชื่อมผ่าน route ฝั่งเซิร์ฟเวอร์แล้ว โดยรับเฉพาะข้อความที่เจ้าหน้าที่เลือกจากหลักฐาน `CLEAN`, ตรวจผลด้วย schema และบันทึกเป็น `SUGGESTED`; OCR สำหรับไฟล์ทั้งฉบับและ background worker ยังไม่ได้เชื่อม ระบบยังมี manual source-backed suggestion เป็น fallback และ `auto_extraction` default ปิดอยู่ ต้องสรุป data residency, DPA, retention และ evaluation set ก่อนขยายการใช้งาน
 - Kouprey/Partner endpoints พร้อม contract แต่ต้องมี production key, partner test fixture และการซ้อม key rotation/replay response
 - Email ingestion ไม่มี SMTP/mail provider เชื่อมจริง จึงยังไม่ควรประกาศช่องทางอีเมลว่าเปิดใช้งาน
 - FDA SKYNET/Privus เปิดใช้ในโหมด manual-only ผ่าน stable HTTPS entry point; ไม่เก็บ eGov credential/callback URL และต้องนำ official export กลับเข้า Evidence Intake

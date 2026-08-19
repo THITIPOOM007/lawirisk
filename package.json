@@ -1,5 +1,5 @@
 {
-  "name": "evidenceverse-lite",
+  "name": "lawirisk-ssk",
   "version": "0.1.0",
   "type": "module",
   "private": true,
@@ -25,7 +25,7 @@
     "build:vinext": "vinext build",
     "start:vinext": "wrangler dev --config dist/server/wrangler.json",
     "deploy:vinext": "vinext-cloudflare deploy --config dist/server/wrangler.json",
-    "deploy:staging": "vinext-cloudflare deploy --env staging"
+    "deploy:staging": "node scripts/deploy-staging.mjs"
   },
   "dependencies": {
     "@supabase/ssr": "^0.12.4",

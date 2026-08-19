@@ -1,4 +1,4 @@
-# EvidenceVerse incident response runbook
+# LawiRisk-SSK incident response runbook
 
 Status: **staging-ready template; owner names and contact channels must be assigned**
 

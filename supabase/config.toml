@@ -26,9 +26,9 @@ file_size_limit = "50MiB"
 
 [auth]
 enabled = true
-site_url = "https://evidenceverse-staging.evidenceverse-th.workers.dev"
+site_url = "https://lawirisk-ssk.evidenceverse-th.workers.dev"
 additional_redirect_urls = [
-  "https://evidenceverse-staging.evidenceverse-th.workers.dev/login",
+  "https://lawirisk-ssk.evidenceverse-th.workers.dev/login",
   "http://127.0.0.1:3000/login",
 ]
 jwt_expiry = 3600

@@ -66,7 +66,7 @@ export default function SourcesPage() {
           </div>
           <h1 className="text-3xl font-bold tracking-[-0.035em] text-white sm:text-4xl">แหล่งสืบค้นที่ได้รับอนุญาต</h1>
           <p className="mt-4 max-w-2xl text-sm leading-7 text-slate-400">
-            เปิดระบบต้นทางจากรายการที่กำหนดโดยเซิร์ฟเวอร์เท่านั้น EvidenceVerse ไม่รับรหัสผ่านภายนอก และทุกผลค้นที่นำมาใช้ต้องกลับเข้าสู่คลังหลักฐานเพื่อ hash, สแกน และตรวจสอบย้อนกลับ
+            เปิดระบบต้นทางจากรายการที่กำหนดโดยเซิร์ฟเวอร์เท่านั้น LawiRisk-SSK ไม่รับรหัสผ่านภายนอก และทุกผลค้นที่นำมาใช้ต้องกลับเข้าสู่คลังหลักฐานเพื่อ hash, สแกน และตรวจสอบย้อนกลับ
           </p>
         </div>
       </header>
@@ -122,7 +122,7 @@ export default function SourcesPage() {
 
       <section className="glass-panel rounded-[26px] p-6 sm:p-7">
         <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
-          <div><h2 className="flex items-center gap-2 text-lg font-semibold text-white"><Route className="h-5 w-5 text-teal-300" />กระบวนการนำผลค้นมาใช้อย่างตรวจสอบย้อนกลับได้</h2><p className="mt-1 text-xs text-slate-500">ข้อมูลหน้าจอหรือข้อสรุปจากระบบภายนอกยังไม่เป็นหลักฐานใน EvidenceVerse จนกว่าจะผ่านขั้นตอนนี้</p></div>
+          <div><h2 className="flex items-center gap-2 text-lg font-semibold text-white"><Route className="h-5 w-5 text-teal-300" />กระบวนการนำผลค้นมาใช้อย่างตรวจสอบย้อนกลับได้</h2><p className="mt-1 text-xs text-slate-500">ข้อมูลหน้าจอหรือข้อสรุปจากระบบภายนอกยังไม่เป็นหลักฐานใน LawiRisk-SSK จนกว่าจะผ่านขั้นตอนนี้</p></div>
           <Link href="/evidence" className="secondary-action inline-flex min-h-10 items-center justify-center gap-2 rounded-xl border border-white/[0.08] px-4 text-xs font-semibold text-slate-200"><FileUp className="h-4 w-4 text-teal-300" />ไปคลังหลักฐาน</Link>
         </div>
         <ol className="mt-6 grid gap-3 sm:grid-cols-2 xl:grid-cols-4">

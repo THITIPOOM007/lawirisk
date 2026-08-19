@@ -1,6 +1,16 @@
 import 'server-only';
 
 const hasValue = (name: string) => Boolean(process.env[name]?.trim());
+const hasStrongSecret = (name: string) => (process.env[name]?.trim().length || 0) >= 32;
+
+const hasSecureHttpsUrl = (name: string) => {
+  try {
+    const url = new URL(process.env[name]?.trim() || '');
+    return url.protocol === 'https:' && !url.username && !url.password;
+  } catch {
+    return false;
+  }
+};
 
 export function isSupabaseServerConfigured() {
   return hasValue('NEXT_PUBLIC_SUPABASE_URL') && hasValue('NEXT_PUBLIC_SUPABASE_ANON_KEY');
@@ -20,6 +30,8 @@ export type RuntimeReadiness = {
     serviceRole: boolean;
     privateEvidenceBucket: boolean;
     malwareScanner: boolean;
+    gemini: boolean;
+    n8nAutomation: boolean;
     kouprey: boolean;
     partnerApi: boolean;
   };
@@ -33,6 +45,11 @@ export function getRuntimeReadiness(): RuntimeReadiness {
     serviceRole: hasValue('SUPABASE_SERVICE_ROLE_KEY'),
     privateEvidenceBucket: hasValue('PRIVATE_EVIDENCE_BUCKET'),
     malwareScanner: hasValue('MALWARE_SCANNER_URL') && hasValue('MALWARE_SCANNER_TOKEN'),
+    gemini: hasValue('GEMINI_API_KEY'),
+    n8nAutomation: hasSecureHttpsUrl('N8N_AUTOMATION_WEBHOOK_URL')
+      && hasStrongSecret('N8N_DISPATCH_TOKEN')
+      && hasStrongSecret('N8N_CALLBACK_TOKEN')
+      && process.env.N8N_DISPATCH_TOKEN?.trim() !== process.env.N8N_CALLBACK_TOKEN?.trim(),
     kouprey: hasValue('KOUPREY_SECRET_KEY'),
     partnerApi: hasValue('PARTNER_API_KEYS'),
   };
@@ -41,6 +58,7 @@ export function getRuntimeReadiness(): RuntimeReadiness {
   if (!checks.serviceRole) blockers.push('SERVICE_ROLE_NOT_CONFIGURED');
   if (!checks.privateEvidenceBucket) blockers.push('PRIVATE_BUCKET_NOT_CONFIGURED');
   if (!checks.malwareScanner) blockers.push('MALWARE_SCANNER_NOT_CONFIGURED');
+  if (!checks.n8nAutomation) blockers.push('N8N_AUTOMATION_NOT_CONFIGURED');
 
   if (isDemoServerEnabled()) {
     return { ready: false, mode: 'demo', checks, blockers };

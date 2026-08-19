@@ -10,7 +10,7 @@ describe('external source allowlist', () => {
   it('allows launch only for a reviewed HTTPS entry point', () => {
     const fda = findExternalSource('FDA_SKYNET');
     expect(fda && isLaunchableSource(fda)).toBe(true);
-    expect(fda?.launchUrl).toMatch(/^https:\/\//);
+    expect(fda?.launchUrl).toBe('https://privus.fda.moph.go.th/FDA_LOGIN2/HOME/SET_STATE?STATE=3');
   });
 
   it('fails closed for the HSS portal while it redirects to HTTP', () => {

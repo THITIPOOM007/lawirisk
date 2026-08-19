@@ -1,0 +1,78 @@
+{
+  "name": "LawiRisk-SSK · Secure Text Extraction V1",
+  "nodes": [
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "lawirisk-automation-v1",
+        "authentication": "headerAuth",
+        "responseMode": "onReceived",
+        "options": {}
+      },
+      "id": "71dc75ff-20ce-45c8-9f2a-c2377b7b6709",
+      "name": "LawiRisk Dispatch",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2.1,
+      "position": [
+        0,
+        0
+      ],
+      "webhookId": "0a2092ec-dbb8-4d80-a78b-b83a735d8592"
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "={{ $json.body.run_url }}",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "sendBody": true,
+        "contentType": "raw",
+        "rawContentType": "application/json",
+        "body": "={{ JSON.stringify({ dispatch_id: $json.body.dispatch_id, external_execution_id: $execution.id }) }}",
+        "options": {
+          "timeout": 120000
+        }
+      },
+      "id": "21871a34-f285-4c48-acfa-80c897c0d91f",
+      "name": "Run Inside LawiRisk",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        280,
+        0
+      ],
+      "retryOnFail": true,
+      "maxTries": 3,
+      "waitBetweenTries": 5000
+    }
+  ],
+  "connections": {
+    "LawiRisk Dispatch": {
+      "main": [
+        [
+          {
+            "node": "Run Inside LawiRisk",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "pinData": {},
+  "settings": {
+    "executionOrder": "v1",
+    "saveDataErrorExecution": "all",
+    "saveDataSuccessExecution": "none",
+    "saveManualExecutions": false,
+    "saveExecutionProgress": false,
+    "executionTimeout": 180,
+    "timezone": "Asia/Bangkok"
+  },
+  "active": false,
+  "versionId": "2e2cb80f-aa31-46cc-9a94-e5e04aad94bf",
+  "meta": {
+    "templateCredsSetupCompleted": false
+  },
+  "tags": []
+}

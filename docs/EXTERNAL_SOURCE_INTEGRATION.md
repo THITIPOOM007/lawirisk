@@ -1,24 +1,24 @@
 # External investigation source integration
 
-Verified 2026-08-18. This document records only public entry-point behavior and EvidenceVerse controls. It contains no external credentials, query results, citizen identifiers, or live OAuth state/nonce values.
+Verified 2026-08-18. This document records only public entry-point behavior and LawiRisk-SSK controls. It contains no external credentials, query results, citizen identifiers, or live OAuth state/nonce values.
 
 ## FDA SKYNET / Privus
 
 - Authority: สำนักงานคณะกรรมการอาหารและยา กระทรวงสาธารณสุข
 - Public entry point: `https://privus.fda.moph.go.th/`
 - Observed authentication: eGov Connect / OpenID Connect with PKCE-style callback parameters
-- EvidenceVerse mode: `MANUAL_ONLY`
+- LawiRisk-SSK mode: `MANUAL_ONLY`
 
-EvidenceVerse opens only the stable public entry point. It never stores or replays the long callback URL because its state, nonce, and code challenge belong to a single authentication session. The officer authenticates directly with eGov/FDA. An official PDF/image export with source reference and capture time must be imported as private evidence before any extracted fact can be reviewed or confirmed.
+LawiRisk-SSK opens the stable Privus state endpoint for `เจ้าหน้าที่ สสจ.` (`STATE=3`), which creates a fresh Digital ID/OIDC transaction. It never stores or replays the long callback URL because its state, nonce, and code challenge belong to a single authentication session. The officer authenticates directly with eGov/FDA. An official PDF/image export with source reference and capture time must be imported as private evidence before any extracted fact can be reviewed or confirmed.
 
 ## HSS OSS
 
 - Authority: กรมสนับสนุนบริการสุขภาพ กระทรวงสาธารณสุข
 - Supplied entry point: `http://oss.hss.moph.go.th/auth/login`
 - Observed transport: requesting the HTTPS path redirects back to HTTP
-- EvidenceVerse mode: `BLOCKED_INSECURE_TRANSPORT`
+- LawiRisk-SSK mode: `BLOCKED_INSECURE_TRANSPORT`
 
-EvidenceVerse does not render a login form, store a credential, or launch the portal while the credential path is HTTP. Enablement requires an HTTPS endpoint or official API, valid TLS, written authorization for system-to-system use, scoped credentials, auditability, retention limits, test fixtures, and a revocation/rotation procedure.
+LawiRisk-SSK does not render a login form, store a credential, or launch the portal while the credential path is HTTP. Enablement requires an HTTPS endpoint or official API, valid TLS, written authorization for system-to-system use, scoped credentials, auditability, retention limits, test fixtures, and a revocation/rotation procedure.
 
 ## Manual evidence capture invariant
 

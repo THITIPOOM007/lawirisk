@@ -1,7 +1,7 @@
 'use client';
 
 import { useCallback, useEffect, useMemo, useState } from 'react';
-import { Check, ExternalLink, Eye, Loader2, RefreshCw, Save, ShieldAlert, X } from 'lucide-react';
+import { Check, ExternalLink, Eye, Loader2, RefreshCw, Save, ShieldAlert, Sparkles, X } from 'lucide-react';
 import type { Case, EvidenceFile } from '@/lib/demo-data';
 
 type SuggestionStatus = 'SUGGESTED' | 'CONFIRMED' | 'REJECTED' | 'UNCERTAIN';
@@ -39,6 +39,7 @@ export default function ReviewPage() {
   const [submitting, setSubmitting] = useState('');
   const [reviewReasons, setReviewReasons] = useState<Record<string, string>>({});
   const [editedValues, setEditedValues] = useState<Record<string, string>>({});
+  const [aiInput, setAiInput] = useState({ evidence_id: '', page_number: '1', source_text: '' });
   const [manual, setManual] = useState({ evidence_id: '', page_number: '1', source_text: '', entity_type: 'PERSON', candidate_value: '', reason: '' });
 
   const load = useCallback(async (signal?: AbortSignal) => {
@@ -81,7 +82,43 @@ export default function ReviewPage() {
   }, []);
 
   const caseEvidence = useMemo(() => evidence.filter((item) => !selectedCaseId || item.case_id === selectedCaseId), [evidence, selectedCaseId]);
+  const cleanCaseEvidence = useMemo(() => caseEvidence.filter((item) => item.malware_scan_status === 'CLEAN'), [caseEvidence]);
   const visibleSuggestions = useMemo(() => suggestions.filter((item) => !selectedCaseId || item.case_id === selectedCaseId), [suggestions, selectedCaseId]);
+
+  const createAiSuggestions = async (event: React.FormEvent) => {
+    event.preventDefault();
+    if (!selectedCaseId || !aiInput.evidence_id) {
+      setActionError('กรุณาเลือกคดีและหลักฐานที่สแกนเป็น CLEAN');
+      return;
+    }
+    setSubmitting('ai');
+    setActionError('');
+    setSuccess('');
+    try {
+      const response = await fetch('/api/v1/ai/extract', {
+        method: 'POST', credentials: 'same-origin', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          case_id: selectedCaseId,
+          evidence_id: aiInput.evidence_id,
+          page_number: Number(aiInput.page_number),
+          source_text: aiInput.source_text,
+          source_location: {},
+        }),
+      });
+      const body = await response.json();
+      if (!response.ok) throw new Error(body.error?.message || 'Gemini วิเคราะห์ไม่สำเร็จ');
+      const count = Number(body.data?.count || 0);
+      setAiInput({ evidence_id: '', page_number: '1', source_text: '' });
+      setSuccess(count > 0
+        ? `Gemini สร้างข้อเสนอ ${count} รายการแล้ว ทุกข้อยังเป็น SUGGESTED และต้องให้ผู้ตรวจทานตัดสิน`
+        : 'Gemini ไม่พบข้อมูลที่รองรับจากข้อความต้นทาง จึงไม่ได้สร้างข้อเสนอ');
+      await load();
+    } catch (error: unknown) {
+      setActionError(error instanceof Error ? error.message : 'Gemini วิเคราะห์ไม่สำเร็จ กรุณาใช้ Manual fallback');
+    } finally {
+      setSubmitting('');
+    }
+  };
 
   const createManualSuggestion = async (event: React.FormEvent) => {
     event.preventDefault();
@@ -162,7 +199,19 @@ export default function ReviewPage() {
       {success && <div role="status" className="rounded-2xl border border-emerald-500/20 bg-emerald-500/5 p-4 text-sm text-emerald-300">{success}</div>}
       {actionError && <div role="alert" className="rounded-2xl border border-rose-500/20 bg-rose-500/5 p-4 text-sm text-rose-300">{actionError}</div>}
 
-      <div className="rounded-3xl border border-slate-900 bg-slate-900/30 p-5"><label htmlFor="case-filter" className="text-xs font-semibold text-slate-300">กรองตามคดี</label><select id="case-filter" value={selectedCaseId} onChange={(event) => { setSelectedCaseId(event.target.value); setManual((current) => ({ ...current, evidence_id: '' })); }} className="mt-2 w-full rounded-xl border border-slate-800 bg-slate-950 p-3 text-sm text-white"><option value="">ทุกคดีที่เข้าถึงได้</option>{cases.map((item) => <option key={item.id} value={item.id}>{item.number} — {item.title}</option>)}</select></div>
+      <div className="rounded-3xl border border-slate-900 bg-slate-900/30 p-5"><label htmlFor="case-filter" className="text-xs font-semibold text-slate-300">กรองตามคดี</label><select id="case-filter" value={selectedCaseId} onChange={(event) => { setSelectedCaseId(event.target.value); setAiInput((current) => ({ ...current, evidence_id: '' })); setManual((current) => ({ ...current, evidence_id: '' })); }} className="mt-2 w-full rounded-xl border border-slate-800 bg-slate-950 p-3 text-sm text-white"><option value="">ทุกคดีที่เข้าถึงได้</option>{cases.map((item) => <option key={item.id} value={item.id}>{item.number} — {item.title}</option>)}</select></div>
+
+      <form onSubmit={createAiSuggestions} className="rounded-3xl border border-indigo-400/15 bg-indigo-400/[0.035] p-6">
+        <div className="flex items-center gap-2"><Sparkles className="h-5 w-5 text-indigo-300" /><h2 className="font-bold text-white">Gemini extraction: สร้างข้อเสนอจากข้อความต้นทาง</h2></div>
+        <p className="mt-2 text-xs leading-5 text-slate-500">ส่งเฉพาะข้อความที่เจ้าหน้าที่เลือกจากหลักฐานซึ่งสแกนเป็น CLEAN ผลลัพธ์ผ่าน schema และถูกบันทึกเป็น SUGGESTED เท่านั้น</p>
+        <div className="mt-5 grid gap-4 md:grid-cols-[minmax(0,1fr)_150px]">
+          <label className="text-xs text-slate-300">หลักฐาน CLEAN<select required disabled={!selectedCaseId || mode === 'demo'} value={aiInput.evidence_id} onChange={(event) => setAiInput((current) => ({ ...current, evidence_id: event.target.value }))} className="mt-2 w-full rounded-xl border border-slate-800 bg-slate-950 p-3 text-sm text-white"><option value="">เลือกไฟล์</option>{cleanCaseEvidence.map((item) => <option key={item.id} value={item.id}>{item.filename}</option>)}</select></label>
+          <label className="text-xs text-slate-300">หน้า<input required type="number" min="1" max="100000" value={aiInput.page_number} onChange={(event) => setAiInput((current) => ({ ...current, page_number: event.target.value }))} className="mt-2 w-full rounded-xl border border-slate-800 bg-slate-950 p-3 text-sm text-white" /></label>
+          <label className="text-xs text-slate-300 md:col-span-2">ข้อความต้นทาง<textarea required maxLength={4000} rows={5} value={aiInput.source_text} onChange={(event) => setAiInput((current) => ({ ...current, source_text: event.target.value }))} aria-describedby="ai-source-help" className="mt-2 w-full rounded-xl border border-slate-800 bg-slate-950 p-3 text-sm text-white" /><span id="ai-source-help" className="mt-1 block text-[10px] text-slate-600">ไม่ส่งไฟล์ทั้งฉบับ รหัสผ่าน หรือข้อมูลนอกขอบเขตคดีไปยัง AI</span></label>
+        </div>
+        {selectedCaseId && cleanCaseEvidence.length === 0 && <p role="status" className="mt-4 rounded-xl border border-amber-400/15 bg-amber-400/[0.04] p-3 text-xs text-amber-200">คดีนี้ยังไม่มีหลักฐานที่สแกนเป็น CLEAN จึงยังเรียก AI ไม่ได้</p>}
+        <button type="submit" disabled={submitting === 'ai' || mode === 'demo' || !selectedCaseId || cleanCaseEvidence.length === 0} className="mt-5 inline-flex min-h-11 items-center rounded-xl bg-indigo-400 px-4 py-2.5 text-sm font-bold text-slate-950 disabled:opacity-50">{submitting === 'ai' ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Sparkles className="mr-2 h-4 w-4" />}ให้ Gemini สร้างข้อเสนอ</button>
+      </form>
 
       <form onSubmit={createManualSuggestion} className="rounded-3xl border border-slate-900 bg-slate-900/30 p-6">
         <div className="flex items-center gap-2"><Save className="h-5 w-5 text-teal-300" /><h2 className="font-bold text-white">Manual fallback: สร้างข้อเสนอจากต้นฉบับ</h2></div>
