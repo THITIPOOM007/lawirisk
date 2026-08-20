@@ -271,11 +271,34 @@ export default function Navigation({ children }: NavigationProps) {
         <header className="relative flex h-20 shrink-0 items-center justify-between border-b border-white/[0.055] bg-[#06111d]/55 px-4 shadow-[0_16px_50px_rgba(0,4,12,0.08)] backdrop-blur-2xl sm:px-6 lg:px-8">
           <div className="flex min-w-0 items-center gap-3">
             <button ref={mobileMenuButtonRef} type="button" disabled={!isHydrated} onClick={() => setIsMobileMenuOpen(true)} className="grid h-10 w-10 shrink-0 place-items-center rounded-xl border border-white/[0.08] bg-white/[0.035] text-slate-300 disabled:cursor-wait disabled:opacity-60 lg:hidden" aria-label="เปิดเมนูหลัก" aria-expanded={isMobileMenuOpen} aria-controls="mobile-navigation"><Menu className="h-5 w-5" /></button>
-            <div className="min-w-0"><p className="truncate text-[9px] font-semibold uppercase tracking-[0.22em] text-teal-300/65">{meta.eyebrow}</p><h2 className="mt-0.5 truncate text-base font-semibold tracking-[-0.015em] text-slate-100 sm:text-lg">{meta.title}</h2></div>
+            <div className="min-w-0">
+              <div className="flex items-center gap-2">
+                <p className="truncate text-[9px] font-semibold uppercase tracking-[0.22em] text-teal-300/65">{meta.eyebrow}</p>
+                <span className="hidden h-1 w-1 rounded-full bg-slate-600 sm:inline-block" />
+                <span className="hidden items-center gap-1 font-mono text-[9px] text-slate-500 sm:inline-flex">
+                  <span className="h-1.5 w-1.5 rounded-full bg-emerald-400 animate-pulse" />
+                  LEDGER: ONLINE
+                </span>
+              </div>
+              <h2 className="mt-0.5 truncate text-base font-semibold tracking-[-0.015em] text-slate-100 sm:text-lg">{meta.title}</h2>
+            </div>
           </div>
           <div className="flex items-center gap-2 sm:gap-3">
-            <div className="hidden items-center gap-2 rounded-full border border-emerald-300/15 bg-emerald-300/[0.055] px-3 py-1.5 text-[10px] font-medium text-emerald-200 shadow-[inset_0_1px_rgba(255,255,255,0.04)] sm:flex"><span className="status-pulse h-1.5 w-1.5 rounded-full bg-emerald-300 text-emerald-300" /><ShieldCheck className="h-3.5 w-3.5" /><span>Traceable workspace</span></div>
-            <Link href="/intake" aria-label="เปิดคิวรับเรื่อง" className="secondary-action relative grid h-10 w-10 place-items-center rounded-xl border border-white/[0.08] text-slate-400 hover:text-slate-100"><Bell className="h-[18px] w-[18px]" /></Link>
+            {/* Live Command Guard Pill */}
+            <div className="hidden items-center gap-2.5 rounded-full border border-emerald-400/20 bg-emerald-950/40 px-3.5 py-1.5 text-[10px] font-medium text-emerald-300 shadow-[0_0_20px_rgba(52,211,153,0.1),inset_0_1px_rgba(255,255,255,0.05)] sm:flex">
+              <span className="status-pulse h-2 w-2 rounded-full bg-emerald-400 text-emerald-400" />
+              <ShieldCheck className="h-3.5 w-3.5 text-emerald-400" />
+              <span className="font-mono font-semibold tracking-wider">COMMAND GUARD · ACTIVE</span>
+              <div className="flex items-center gap-0.5 h-3 ml-1">
+                <span className="waveform-bar" style={{ height: '8px' }} />
+                <span className="waveform-bar" style={{ height: '14px', animationDelay: '0.2s' }} />
+                <span className="waveform-bar" style={{ height: '10px', animationDelay: '0.4s' }} />
+              </div>
+            </div>
+            <Link href="/intake" aria-label="เปิดคิวรับเรื่อง" className="secondary-action relative grid h-10 w-10 place-items-center rounded-xl border border-white/[0.08] text-slate-400 hover:text-slate-100">
+              <Bell className="h-[18px] w-[18px]" />
+              <span className="absolute right-2 top-2 h-2 w-2 rounded-full bg-teal-400 shadow-[0_0_8px_rgba(45,212,191,0.8)] animate-pulse" />
+            </Link>
           </div>
         </header>
 
