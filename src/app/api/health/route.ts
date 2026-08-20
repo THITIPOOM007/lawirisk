@@ -14,7 +14,7 @@ export async function GET() {
       timestamp: new Date().toISOString(),
     },
     {
-      status: readiness.mode === 'misconfigured' ? 503 : 200,
+      status: readiness.ready || readiness.mode === 'demo' ? 200 : 503,
       headers: { 'Cache-Control': 'no-store' },
     },
   );

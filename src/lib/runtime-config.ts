@@ -44,7 +44,7 @@ export function getRuntimeReadiness(): RuntimeReadiness {
     supabase,
     serviceRole: hasValue('SUPABASE_SERVICE_ROLE_KEY'),
     privateEvidenceBucket: hasValue('PRIVATE_EVIDENCE_BUCKET'),
-    malwareScanner: hasValue('MALWARE_SCANNER_URL') && hasValue('MALWARE_SCANNER_TOKEN'),
+    malwareScanner: hasSecureHttpsUrl('MALWARE_SCANNER_URL') && hasStrongSecret('MALWARE_SCANNER_TOKEN'),
     gemini: hasValue('GEMINI_API_KEY'),
     n8nAutomation: hasSecureHttpsUrl('N8N_AUTOMATION_WEBHOOK_URL')
       && hasStrongSecret('N8N_DISPATCH_TOKEN')
@@ -59,6 +59,7 @@ export function getRuntimeReadiness(): RuntimeReadiness {
   if (!checks.privateEvidenceBucket) blockers.push('PRIVATE_BUCKET_NOT_CONFIGURED');
   if (!checks.malwareScanner) blockers.push('MALWARE_SCANNER_NOT_CONFIGURED');
   if (!checks.n8nAutomation) blockers.push('N8N_AUTOMATION_NOT_CONFIGURED');
+  if (!checks.gemini) blockers.push('GEMINI_NOT_CONFIGURED');
 
   if (isDemoServerEnabled()) {
     return { ready: false, mode: 'demo', checks, blockers };

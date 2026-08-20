@@ -33,5 +33,17 @@ export async function PATCH(request: NextRequest, { params }: { params: Promise<
     };
     return apiError(error.message, messages[error.message] || 'บันทึกผลตรวจทานไม่สำเร็จ', 409);
   }
+
+  if (parsed.data.decision === 'CONFIRMED') {
+    const resultObj = data as { entity_id?: string } | null;
+    if (resultObj?.entity_id) {
+      try {
+        await supabase.rpc('create_exact_match_candidates', { p_entity_id: resultObj.entity_id });
+      } catch (matchError: unknown) {
+        console.error('Exact match candidate generation non-fatal error:', matchError);
+      }
+    }
+  }
+
   return NextResponse.json({ data });
 }

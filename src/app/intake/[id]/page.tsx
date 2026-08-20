@@ -19,6 +19,8 @@ import {
   type IntakeParticipant,
 } from '@/lib/demo-data';
 
+import { validateFileInBrowser } from '@/lib/file-validator';
+
 export default function IntakeDetailPage() {
   const params = useParams();
   const router = useRouter();
@@ -33,6 +35,11 @@ export default function IntakeDetailPage() {
   const [isLoading, setIsLoading] = useState(true);
   const [loadError, setLoadError] = useState('');
 
+  // Attachment upload states
+  const [isUploadingFile, setIsUploadingFile] = useState(false);
+  const [uploadStatus, setUploadStatus] = useState('');
+  const [uploadError, setUploadError] = useState('');
+
   // Triage form states
   const [triageAction, setTriageAction] = useState<'CREATE_CASE' | 'MERGE_INTAKE' | 'REQUEST_MORE_INFO' | 'REJECT_SPAM'>('CREATE_CASE');
   const [triageReason, setTriageReason] = useState('');
@@ -46,6 +53,50 @@ export default function IntakeDetailPage() {
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [successMessage, setSuccessMessage] = useState('');
   const [submitError, setSubmitError] = useState('');
+
+  const handleFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    setIsUploadingFile(true);
+    setUploadError('');
+    setUploadStatus('กำลังตรวจสอบความปลอดภัยและคำนวณ SHA-256...');
+
+    try {
+      const validation = await validateFileInBrowser(file);
+      if (!validation.isValid) {
+        setUploadError(validation.error || 'ไฟล์ไม่ผ่านเกณฑ์ความปลอดภัย');
+        return;
+      }
+
+      setUploadStatus('กำลังส่งไฟล์ขึ้นระบบและรัน Malware Scanner...');
+      const formData = new FormData();
+      formData.set('file', file);
+
+      const res = await fetch(`/api/v1/intake/${encodeURIComponent(intakeId)}/attachments`, {
+        method: 'POST',
+        credentials: 'same-origin',
+        body: formData,
+      });
+
+      const body = await res.json();
+      if (!res.ok) {
+        throw new Error(body.error?.message || 'อัปโหลดไฟล์แนบไม่สำเร็จ');
+      }
+
+      setUploadStatus('');
+      // Add attachment to list
+      if (body.data) {
+        setAttachments((prev) => [...prev, body.data as IntakeAttachment]);
+      }
+    } catch (err: unknown) {
+      setUploadError(err instanceof Error ? err.message : 'เกิดข้อผิดพลาดในการอัปโหลด');
+    } finally {
+      setIsUploadingFile(false);
+      setUploadStatus('');
+      e.target.value = '';
+    }
+  };
 
   useEffect(() => {
     const controller = new AbortController();
@@ -201,14 +252,44 @@ export default function IntakeDetailPage() {
 
             {/* Attachments Section */}
             <div className="space-y-4">
-              <span className="block text-xs font-semibold text-slate-400 uppercase tracking-wider">เอกสารหลักฐานที่แนบมา ({attachments.length})</span>
+              <div className="flex items-center justify-between">
+                <span className="block text-xs font-semibold text-slate-400 uppercase tracking-wider">เอกสารหลักฐานที่แนบมา ({attachments.length})</span>
+              </div>
+
+              {/* Upload Dropzone / Form */}
+              <div className="p-4 bg-slate-950/40 border border-slate-800 rounded-2xl space-y-3">
+                <div className="flex flex-wrap items-center justify-between gap-2">
+                  <span className="text-xs font-semibold text-slate-300">แนบไฟล์พยานหลักฐานเพิ่มเติม</span>
+                  <span className="text-[10px] text-slate-500">PDF, PNG, JPG (สูงสุด 20 MB)</span>
+                </div>
+                <input
+                  type="file"
+                  accept=".pdf,.png,.jpg,.jpeg"
+                  disabled={isUploadingFile}
+                  onChange={handleFileUpload}
+                  className="block w-full text-xs text-slate-400 file:mr-3 file:py-2 file:px-3 file:rounded-xl file:border-0 file:text-xs file:font-semibold file:bg-indigo-600 file:text-white hover:file:bg-indigo-500 cursor-pointer disabled:opacity-50"
+                />
+                {uploadStatus && (
+                  <p className="text-xs text-indigo-300 flex items-center">
+                    <Loader2 className="mr-1.5 h-3.5 w-3.5 animate-spin" />
+                    {uploadStatus}
+                  </p>
+                )}
+                {uploadError && (
+                  <p className="text-xs text-rose-400 flex items-center">
+                    <ShieldAlert className="mr-1.5 h-3.5 w-3.5 shrink-0" />
+                    {uploadError}
+                  </p>
+                )}
+              </div>
+
               {attachments.length > 0 ? (
                 <div className="space-y-3">
                   {attachments.map(att => (
                     <div key={att.id} className="p-4 bg-slate-950/60 border border-slate-900 rounded-2xl flex items-center justify-between">
                       <div className="space-y-1">
                         <p className="text-xs font-bold text-white truncate max-w-[200px] sm:max-w-xs">{att.filename}</p>
-                        <span className="text-[10px] text-slate-500 block">ขนาด: {(att.file_size / (1024 * 1024)).toFixed(2)} MB | SHA-256: {att.sha256.substring(0, 10)}...</span>
+                        <span className="text-[10px] text-slate-500 block">ขนาด: {(att.file_size / (1024 * 1024)).toFixed(2)} MB | SHA-256: {att.sha256.substring(0, 16)}...</span>
                       </div>
                       <div>
                         {att.malware_scan_status === 'INFECTED' ? (
