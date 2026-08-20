@@ -2,6 +2,8 @@ import crypto from 'node:crypto';
 import { NextRequest, NextResponse } from 'next/server';
 import { z } from 'zod';
 import { saveIntakeEnvelope, saveIntakeMessage, saveIntakeParticipant } from '@/lib/demo-data';
+import { isSupabaseServerConfigured } from '@/lib/runtime-config';
+import { createServiceClient } from '@/lib/supabase-server';
 
 const publicComplaintSchema = z.object({
   topic: z.string().trim().min(3).max(200),
@@ -35,48 +37,94 @@ export async function POST(request: NextRequest) {
     const trackingToken = `TRK-${new Date().getFullYear()}-${randomCode}`;
     const envelopeId = `env-pub-${crypto.randomUUID()}`;
     const now = new Date().toISOString();
-
-    // Map urgency based on category
     const urgency = category === 'HEALTH_HAZARD' || category === 'ONLINE_FRAUD' ? 'HIGH' : 'NORMAL';
 
-    saveIntakeEnvelope({
-      id: envelopeId,
-      channel_id: 'ch-kouprey',
-      status: 'TRIAGE_PENDING',
-      complainant_mode: isAnonymous ? 'ANONYMOUS' : 'IDENTIFIED',
-      urgency,
-      urgency_reason: `[ประชาชนแจ้งเรื่อง: ${trackingToken}] ${topic}: ${description.slice(0, 200)}`,
-      jurisdiction_region: region || 'ส่วนกลาง',
-      malware_scan_status: 'PENDING',
-      privacy_risk_status: isAnonymous ? 'LOW' : 'MEDIUM',
-      created_at: now,
-      updated_at: now,
-    });
-
-    saveIntakeMessage({
-      id: `msg-${crypto.randomUUID()}`,
-      envelope_id: envelopeId,
-      raw_payload: JSON.stringify({
-        trackingToken,
-        topic,
-        description,
-        category,
-        region,
-        complainantName: isAnonymous ? 'ไม่ประสงค์ออกนาม' : complainantName,
-        complainantContact: isAnonymous ? '-' : complainantContact,
-        source: 'CITIZEN_PUBLIC_PORTAL',
-      }),
-      message_id: trackingToken,
-    });
-
-    if (!isAnonymous && (complainantName || complainantContact)) {
-      saveIntakeParticipant({
-        id: `part-${crypto.randomUUID()}`,
-        envelope_id: envelopeId,
-        role: 'COMPLAINANT',
-        name: complainantName,
-        phone: complainantContact,
+    if (!isSupabaseServerConfigured()) {
+      saveIntakeEnvelope({
+        id: envelopeId,
+        channel_id: 'ch-kouprey', // Mock channel
+        status: 'TRIAGE_PENDING',
+        complainant_mode: isAnonymous ? 'ANONYMOUS' : 'IDENTIFIED',
+        urgency,
+        urgency_reason: `[ประชาชนแจ้งเรื่อง: ${trackingToken}] ${topic}: ${description.slice(0, 200)}`,
+        jurisdiction_region: region || 'ส่วนกลาง',
+        malware_scan_status: 'PENDING',
+        privacy_risk_status: isAnonymous ? 'LOW' : 'MEDIUM',
+        created_at: now,
+        updated_at: now,
       });
+
+      saveIntakeMessage({
+        id: `msg-${crypto.randomUUID()}`,
+        envelope_id: envelopeId,
+        raw_payload: JSON.stringify({
+          trackingToken,
+          topic,
+          description,
+          category,
+          region,
+          complainantName: isAnonymous ? 'ไม่ประสงค์ออกนาม' : complainantName,
+          complainantContact: isAnonymous ? '-' : complainantContact,
+          source: 'CITIZEN_PUBLIC_PORTAL',
+        }),
+        message_id: trackingToken,
+      });
+
+      if (!isAnonymous && (complainantName || complainantContact)) {
+        saveIntakeParticipant({
+          id: `part-${crypto.randomUUID()}`,
+          envelope_id: envelopeId,
+          role: 'COMPLAINANT',
+          name: complainantName,
+          phone: complainantContact,
+        });
+      }
+    } else {
+      const supabase = createServiceClient();
+      
+      // We must insert into the real database
+      const channelRes = await supabase.from('intake_channels').select('id').eq('type', 'PUBLIC_PORTAL').maybeSingle();
+      const channelId = channelRes.data?.id || 'public-portal-uuid'; // Note: In reality a channel should exist.
+
+      const { error: envelopeError } = await supabase.from('intake_envelopes').insert({
+        id: envelopeId,
+        channel_id: channelId,
+        status: 'TRIAGE_PENDING',
+        complainant_mode: isAnonymous ? 'ANONYMOUS' : 'IDENTIFIED',
+        urgency,
+        urgency_reason: `[ประชาชนแจ้งเรื่อง: ${trackingToken}] ${topic}: ${description.slice(0, 200)}`,
+        jurisdiction_region: region || 'ส่วนกลาง',
+        malware_scan_status: 'PENDING',
+        privacy_risk_status: isAnonymous ? 'LOW' : 'MEDIUM',
+      });
+      if (envelopeError) throw envelopeError;
+
+      const { error: msgError } = await supabase.from('intake_messages').insert({
+        id: crypto.randomUUID(),
+        envelope_id: envelopeId,
+        raw_payload: {
+          trackingToken,
+          topic,
+          description,
+          category,
+          region,
+          complainantName: isAnonymous ? 'ไม่ประสงค์ออกนาม' : complainantName,
+          complainantContact: isAnonymous ? '-' : complainantContact,
+          source: 'CITIZEN_PUBLIC_PORTAL',
+        },
+        message_id: trackingToken,
+      });
+      if (msgError) throw msgError;
+
+      if (!isAnonymous && (complainantName || complainantContact)) {
+        await supabase.from('intake_participants').insert({
+          id: crypto.randomUUID(),
+          envelope_id: envelopeId,
+          role: 'COMPLAINANT',
+          name: complainantName || null,
+          phone: complainantContact || null,
+        });
+      }
     }
 
     return NextResponse.json(
