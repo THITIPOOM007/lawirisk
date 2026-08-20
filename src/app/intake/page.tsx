@@ -21,10 +21,17 @@ export default function IntakeQueuePage() {
   const [showManualModal, setShowManualModal] = useState(false);
   const [isSubmittingManual, setIsSubmittingManual] = useState(false);
   const [manualError, setManualError] = useState('');
-  const [manualForm, setManualForm] = useState({
+  const [manualForm, setManualForm] = useState<{
+    channel_id: string;
+    complainant_mode: 'IDENTIFIED' | 'ANONYMOUS' | 'INCOMPLETE';
+    urgency: 'CRITICAL' | 'HIGH' | 'NORMAL' | 'LOW';
+    urgency_reason: string;
+    agency: string;
+    region: string;
+  }>({
     channel_id: 'ch-walkin',
-    complainant_mode: 'IDENTIFIED' as const,
-    urgency: 'NORMAL' as const,
+    complainant_mode: 'IDENTIFIED',
+    urgency: 'NORMAL',
     urgency_reason: '',
     agency: '',
     region: '',

@@ -12,6 +12,7 @@ import {
   Database,
   FileBarChart,
   FileSearch,
+  Globe,
   History,
   Inbox,
   LayoutDashboard,
@@ -57,6 +58,7 @@ const intelligenceNav: NavItem[] = [
 
 const governanceNav: NavItem[] = [
   { name: 'บันทึกการตรวจสอบ', href: '/audit', icon: History },
+  { name: 'ประตูประชาชน (Public Portal)', href: '/public', icon: Globe },
 ];
 
 const sectionMeta = [
@@ -187,7 +189,7 @@ export default function Navigation({ children }: NavigationProps) {
     };
   }, [isMobileMenuOpen]);
 
-  if (pathname === '/login') return <>{children}</>;
+  if (pathname === '/login' || pathname.startsWith('/public')) return <>{children}</>;
 
   const isAdmin = userRole === 'ADMIN';
   const meta = sectionMeta.find((item) => pathname.startsWith(item.prefix)) || { eyebrow: 'National command center', title: 'ภาพรวมระบบ' };
