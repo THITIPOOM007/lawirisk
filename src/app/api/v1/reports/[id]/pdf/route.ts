@@ -58,8 +58,24 @@ export async function GET(
     }
 
     const pdfDoc = await PDFDocument.create();
-    const font = await pdfDoc.embedFont(StandardFonts.Helvetica);
-    const fontBold = await pdfDoc.embedFont(StandardFonts.HelveticaBold);
+    let font = await pdfDoc.embedFont(StandardFonts.Helvetica);
+    let fontBold = await pdfDoc.embedFont(StandardFonts.HelveticaBold);
+    
+    // Attempt to load Thai font
+    try {
+      // Must dynamically import to avoid breaking edge if fontkit not available
+      const fontkit = await import('@pdf-lib/fontkit');
+      pdfDoc.registerFontkit(fontkit.default || fontkit);
+      const fontUrl = new URL('/Thasadith-Regular.ttf', request.url);
+      const fontRes = await fetch(fontUrl);
+      if (fontRes.ok) {
+        const fontBytes = await fontRes.arrayBuffer();
+        font = await pdfDoc.embedFont(fontBytes);
+        fontBold = font; // Use same font if bold is not available
+      }
+    } catch (err) {
+      console.warn('Failed to load Thai font, falling back to Helvetica', err);
+    }
 
     pdfDoc.setTitle(reportTitle);
     pdfDoc.setAuthor('LAWiRISK-SSK');
@@ -70,9 +86,8 @@ export async function GET(
     let y = height - 50;
 
     const drawLine = (text: string, isBold = false, size = 10, color = rgb(0.1, 0.1, 0.1)) => {
-      // Basic ASCII / Romanized fallback representation for standard font
-      const safeText = text.replace(/[^\x20-\x7E]/g, '?');
-      page.drawText(safeText, {
+      // Just use the text directly; if font is loaded it will render Thai
+      page.drawText(text, {
         x: 50,
         y,
         size,

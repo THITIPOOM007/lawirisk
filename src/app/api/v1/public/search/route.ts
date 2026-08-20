@@ -23,7 +23,7 @@ export async function GET(request: NextRequest) {
   const rawQuery = parsed.data.q.trim();
 
   // Intelligent Multi-Channel Resolver across all 8 government registries
-  const allResults = resolveMultiChannelSearch(rawQuery);
+  const allResults = await resolveMultiChannelSearch(rawQuery);
   const results = parsed.data.category === 'ALL'
     ? allResults
     : allResults.filter((item) => item.category === parsed.data.category);

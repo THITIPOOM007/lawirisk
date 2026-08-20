@@ -83,8 +83,17 @@ export async function POST(request: NextRequest) {
       const supabase = createServiceClient();
       
       // We must insert into the real database
-      const channelRes = await supabase.from('intake_channels').select('id').eq('type', 'PUBLIC_PORTAL').maybeSingle();
-      const channelId = channelRes.data?.id || 'public-portal-uuid'; // Note: In reality a channel should exist.
+      const channelRes = await supabase.from('intake_channels').select('id').eq('type', 'MANUAL_POST').limit(1).maybeSingle();
+      let channelId = channelRes.data?.id;
+      if (!channelId) {
+        channelId = crypto.randomUUID();
+        await supabase.from('intake_channels').insert({
+          id: channelId,
+          name: 'Public Portal',
+          type: 'MANUAL_POST',
+          code: 'PUBLIC_PORTAL_' + Date.now()
+        });
+      }
 
       const { error: envelopeError } = await supabase.from('intake_envelopes').insert({
         id: envelopeId,

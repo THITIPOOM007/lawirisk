@@ -35,8 +35,8 @@ const relationshipSchema = z.object({
   case_id: z.string().uuid(),
   source_entity_id: z.string().uuid(),
   target_entity_id: z.string().uuid(),
-  relationship_type: z.string().min(1).max(50),
-  confidence: z.enum(['LOW', 'MEDIUM', 'HIGH', 'CONFIRMED']),
+  relationship_type: z.string().min(1).max(50).optional(),
+  type: z.string().min(1).max(50).optional(),
 });
 
 export async function POST(request: NextRequest) {
@@ -47,6 +47,9 @@ export async function POST(request: NextRequest) {
 
   const parsed = relationshipSchema.safeParse(await request.json().catch(() => null));
   if (!parsed.success) return apiError('INVALID_REQUEST', 'ข้อมูลความสัมพันธ์ไม่ถูกต้อง', 400, undefined, parsed.error.flatten().fieldErrors);
+  
+  const relType = parsed.data.type || parsed.data.relationship_type;
+  if (!relType) return apiError('INVALID_REQUEST', 'ต้องระบุประเภทความสัมพันธ์ (type)', 400);
 
   const supabase = await createServer();
   const { data, error } = await supabase
@@ -55,8 +58,7 @@ export async function POST(request: NextRequest) {
       case_id: parsed.data.case_id,
       source_entity_id: parsed.data.source_entity_id,
       target_entity_id: parsed.data.target_entity_id,
-      relationship_type: parsed.data.relationship_type,
-      confidence: parsed.data.confidence,
+      type: relType,
       status: 'PROPOSED',
     })
     .select()

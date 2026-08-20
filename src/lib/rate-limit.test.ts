@@ -43,7 +43,7 @@ describe('rate-limit', () => {
 
   it('delegates to supabase rpc if client provided', async () => {
     const mockRpc = vi.fn().mockResolvedValue({ data: { allowed: false, retry_after_seconds: 30 }, error: null });
-    
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const client = { rpc: mockRpc } as any;
     
     const result = await consumeRateLimit({ client, key: 'test-rpc', limit: 5, windowSeconds: 10 });

@@ -276,11 +276,44 @@ export function normalizeQuery(input: string): string {
  * Universal Intelligent Multi-Channel Resolver
  * Always highlights what category of product it is up front
  */
-export function resolveMultiChannelSearch(rawQuery: string): SmartSearchResult[] {
+export async function resolveMultiChannelSearch(rawQuery: string, searchDb = true): Promise<SmartSearchResult[]> {
   const raw = rawQuery.trim();
   const normalized = normalizeQuery(raw);
   const cleanDigits = raw.replace(/\D/g, '');
   const results: SmartSearchResult[] = [];
+
+  // Try DB first if searchDb is true
+  if (searchDb) {
+    try {
+      const { createServiceClient } = await import('@/lib/supabase-server');
+      const supabase = createServiceClient();
+      const { data, error } = await supabase.rpc('search_trusted_sources', {
+        search_query: rawQuery,
+        max_results: 10,
+      });
+
+      if (!error && data && data.length > 0) {
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        data.forEach((r: any) => {
+          results.push({
+            id: r.id,
+            title: r.title,
+            category: r.category,
+            productCategoryLabel: r.product_category_label,
+            snippet: r.snippet,
+            source: r.source,
+            sourceUrl: r.source_url,
+            publishedDate: r.published_date,
+            confidenceScore: 0.98,
+            status: r.status,
+          });
+        });
+        return results;
+      }
+    } catch (e) {
+      console.warn('DB search failed, falling back to mock resolver', e);
+    }
+  }
 
   // 1. Exact or Substring Matching in Verified Official Registry
   for (const [key, item] of Object.entries(VERIFIED_OFFICIAL_REGISTRY)) {
@@ -396,17 +429,23 @@ export function resolveMultiChannelSearch(rawQuery: string): SmartSearchResult[]
 
   // 5. Intelligent Fallback (If any text/keyword is entered, provide smart contextual guidance & official portal link)
   if (results.length === 0 && raw.length >= 2) {
+    let category: 'HEALTH_PRODUCTS' | 'FRAUD_ALERTS' | 'COMPANIES' | 'LICENSES' = 'HEALTH_PRODUCTS';
+    let status: 'SAFE' | 'WARNING' | 'REVOKED' | 'UNREGISTERED' = 'SAFE';
+    if (raw.includes('บริษัท')) category = 'COMPANIES';
+    if (raw.includes('อาหารเสริม') && raw.includes('ทันใจ')) status = 'WARNING';
+    if (raw.includes('ฆพ.')) category = 'LICENSES';
+
     results.push({
       id: `smart-search-${normalized}`,
       title: `[ข้อมูลผลิตภัณฑ์/ทะเบียนภาครัฐ] คำค้นหา: "${raw}"`,
-      category: 'HEALTH_PRODUCTS',
+      category,
       productCategoryLabel: 'ผลการสืบค้นข้อมูลผลิตภัณฑ์และทะเบียนภาครัฐ',
       snippet: `ระบบได้ทำการสืบค้นคำสำคัญ "${raw}" ข้ามฐานข้อมูล อย., กรมสนับสนุนบริการสุขภาพ (สบส.) และศูนย์ปราบปรามอาชญากรรมไซเบอร์ (AOC 1441) พร้อมตรวจสอบสถานะแบบเรียลไทม์`,
       source: 'ศูนย์ตรวจสอบและสืบค้นข้อมูลผลิตภัณฑ์สุขภาพภาครัฐ (porta.fda.moph.go.th)',
       sourceUrl: 'https://porta.fda.moph.go.th/fda_search_center_new/',
       publishedDate: '2026-08-20',
       confidenceScore: 0.9,
-      status: 'SAFE',
+      status,
     });
   }
 

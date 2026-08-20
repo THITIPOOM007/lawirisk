@@ -6,6 +6,8 @@ import {
   normalizeCitizenId,
   normalizeEntityValue,
   isExactMatchType,
+  calculateTrigramSimilarity,
+  calculateLevenshteinSimilarity,
 } from './entity-normalizers';
 
 describe('normalizePhone', () => {
@@ -101,5 +103,27 @@ describe('isExactMatchType', () => {
     
     expect(isExactMatchType('PERSON')).toBe(false);
     expect(isExactMatchType('UNKNOWN')).toBe(false);
+  });
+});
+
+describe('calculateTrigramSimilarity', () => {
+  it('gives 1.0 for identical strings', () => {
+    expect(calculateTrigramSimilarity('สมชาย ใจดี', 'สมชาย ใจดี')).toBe(1.0);
+  });
+
+  it('calculates high similarity for minor typos or variations', () => {
+    const score = calculateTrigramSimilarity('บริษัท วีรชัย เทรดดิ้ง จำกัด', 'บจก. วีรชัย เทรดดิ้ง');
+    expect(score).toBeGreaterThan(0.4);
+  });
+
+  it('gives 0.0 for completely unrelated strings', () => {
+    expect(calculateTrigramSimilarity('กรุงเทพมหานคร', 'เชียงใหม่')).toBeLessThan(0.2);
+  });
+});
+
+describe('calculateLevenshteinSimilarity', () => {
+  it('calculates distance accurately', () => {
+    expect(calculateLevenshteinSimilarity('Somchai', 'Somchai')).toBe(1.0);
+    expect(calculateLevenshteinSimilarity('Somchai', 'Somchai1')).toBeCloseTo(0.88, 1);
   });
 });

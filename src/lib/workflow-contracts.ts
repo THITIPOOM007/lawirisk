@@ -19,7 +19,7 @@ export const aiExtractionRequestSchema = z.object({
   case_id: z.string().uuid(),
   evidence_id: z.string().uuid(),
   page_number: z.number().int().min(1).max(100_000),
-  source_text: z.string().trim().min(1).max(4000),
+  source_text: z.string().trim().min(1).max(4000).optional(),
   source_location: z.record(z.string(), z.unknown()).default({}),
 }).strict();
 

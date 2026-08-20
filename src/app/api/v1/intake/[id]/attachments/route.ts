@@ -104,14 +104,14 @@ export async function POST(
        return apiError('ENVELOPE_NOT_ATTACHABLE', 'สถานะซองนำเข้าไม่สามารถแนบไฟล์ได้', 409, traceId);
     }
 
-    const bucketName = process.env.PRIVATE_INTAKE_BUCKET || 'intake-vault';
+    const bucketName = process.env.PRIVATE_EVIDENCE_BUCKET || 'evidence-vault';
     const normalizedExtension = extension === 'jpeg' ? 'jpg' : extension;
     const storagePath = `intake/${envelopeId}/${crypto.randomUUID()}.${normalizedExtension}`;
     
     const { data: attachmentId, error: reserveError } = await supabase.rpc('reserve_intake_attachment_upload', {
       p_envelope_id: envelopeId,
       p_filename: file.name,
-      p_file_path: storagePath,
+      p_storage_path: storagePath,
       p_file_size: file.size,
       p_mime_type: rule.mime,
       p_sha256: sha256,
@@ -136,16 +136,20 @@ export async function POST(
       return apiError('STORAGE_UNAVAILABLE', 'จัดเก็บไฟล์ไม่สำเร็จ กรุณาลองใหม่', 503, traceId);
     }
 
-    const { data: record, error: finalizeError } = await supabase.rpc('finalize_intake_attachment_upload', {
+    const { error: finalizeError } = await supabase.rpc('finalize_intake_attachment_upload', {
       p_attachment_id: attachmentId,
     });
-    if (finalizeError || !record) {
+    if (finalizeError) {
       await supabase.storage.from(bucketName).remove([storagePath]);
       await supabase.rpc('cancel_intake_attachment_reservation', { p_attachment_id: attachmentId, p_reason: 'FINALIZE_FAILED' });
       console.error('Intake attachment finalize failed', { traceId, attachmentId, code: finalizeError?.code });
       return apiError('METADATA_WRITE_FAILED', 'บันทึกข้อมูลไฟล์แนบไม่สำเร็จ กรุณาลองใหม่', 503, traceId);
     }
 
+
+    // Fetch the updated record since the RPC returns VOID
+    const { data: record } = await supabase.from('intake_attachments').select('*').eq('id', attachmentId).single();
+    
     try {
       const service = createServiceClient();
       const scanDetails = 'reason' in scan
@@ -170,7 +174,7 @@ export async function POST(
       });
     }
 
-    const safeRecord = record as Record<string, unknown>;
+    const safeRecord = record as Record<string, unknown> || {};
     return NextResponse.json({
       success: true,
       message: scan.status === 'CLEAN'
@@ -179,16 +183,16 @@ export async function POST(
           ? 'จัดเก็บไฟล์แนบในพื้นที่ส่วนตัวและตรวจพบความเสี่ยง ห้ามนำไปประมวลผล'
           : 'จัดเก็บไฟล์แนบแล้ว แต่ผลสแกนยังไม่พร้อม จึงยังห้ามนำไปประมวลผล',
       data: {
-        id: safeRecord.id,
-        envelope_id: safeRecord.envelope_id,
-        filename: safeRecord.filename,
-        file_size: safeRecord.file_size,
-        mime_type: safeRecord.mime_type,
-        sha256: safeRecord.sha256,
-        status: scan.status === 'INFECTED' ? 'FAILED' : safeRecord.status,
-        upload_state: safeRecord.upload_state,
+        id: safeRecord.id || attachmentId,
+        envelope_id: safeRecord.envelope_id || envelopeId,
+        filename: safeRecord.filename || file.name,
+        file_size: safeRecord.file_size || file.size,
+        mime_type: safeRecord.mime_type || rule.mime,
+        sha256: safeRecord.sha256 || sha256,
+        status: scan.status === 'INFECTED' ? 'FAILED' : (safeRecord.status || 'PENDING'),
+        upload_state: safeRecord.upload_state || 'STORED',
         malware_scan_status: scan.status,
-        created_at: safeRecord.created_at,
+        created_at: safeRecord.created_at || new Date().toISOString(),
       },
     }, { status: 201, headers: { 'X-Request-ID': traceId } });
   } catch (error: unknown) {

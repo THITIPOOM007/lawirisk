@@ -79,3 +79,75 @@ export function normalizeEntityValue(type: string, value: string): string | null
       return null;
   }
 }
+
+export const FUZZY_MATCH_TYPES = ['PERSON', 'ORGANIZATION', 'LOCATION'] as const;
+export type FuzzyMatchType = typeof FUZZY_MATCH_TYPES[number];
+
+export function isFuzzyMatchType(type: string): type is FuzzyMatchType {
+  return (FUZZY_MATCH_TYPES as readonly string[]).includes(type);
+}
+
+/**
+ * Calculates trigram similarity (similar to PostgreSQL pg_trgm similarity)
+ */
+export function calculateTrigramSimilarity(a: string, b: string): number {
+  const cleanA = a.trim().toLowerCase();
+  const cleanB = b.trim().toLowerCase();
+  if (cleanA === cleanB) return 1.0;
+  if (!cleanA || !cleanB) return 0.0;
+
+  const getTrigrams = (str: string): Set<string> => {
+    const padded = `  ${str} `;
+    const trigrams = new Set<string>();
+    for (let i = 0; i < padded.length - 2; i++) {
+      trigrams.add(padded.substring(i, i + 3));
+    }
+    return trigrams;
+  };
+
+  const setA = getTrigrams(cleanA);
+  const setB = getTrigrams(cleanB);
+
+  let intersection = 0;
+  for (const tri of setA) {
+    if (setB.has(tri)) {
+      intersection++;
+    }
+  }
+
+  const union = setA.size + setB.size - intersection;
+  return union === 0 ? 0 : Number((intersection / union).toFixed(2));
+}
+
+/**
+ * Calculates Levenshtein Distance similarity
+ */
+export function calculateLevenshteinSimilarity(a: string, b: string): number {
+  const str1 = a.trim().toLowerCase();
+  const str2 = b.trim().toLowerCase();
+  if (str1 === str2) return 1.0;
+  const maxLen = Math.max(str1.length, str2.length);
+  if (maxLen === 0) return 1.0;
+
+  const matrix: number[][] = [];
+  for (let i = 0; i <= str1.length; i++) {
+    matrix[i] = [i];
+  }
+  for (let j = 0; j <= str2.length; j++) {
+    matrix[0][j] = j;
+  }
+
+  for (let i = 1; i <= str1.length; i++) {
+    for (let j = 1; j <= str2.length; j++) {
+      const cost = str1[i - 1] === str2[j - 1] ? 0 : 1;
+      matrix[i][j] = Math.min(
+        matrix[i - 1][j] + 1,
+        matrix[i][j - 1] + 1,
+        matrix[i - 1][j - 1] + cost
+      );
+    }
+  }
+
+  const distance = matrix[str1.length][str2.length];
+  return Number((1 - distance / maxLen).toFixed(2));
+}

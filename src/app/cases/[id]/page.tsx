@@ -69,6 +69,9 @@ export default function CaseDetailsPage() {
   const [reopenReason, setReopenReason] = useState('');
   const [showReopenModal, setShowReopenModal] = useState(false);
 
+  // Investigation tasks state
+  const [tasks, setTasks] = useState<{ id: string; title: string; description: string; priority: string; status: string }[]>([]);
+
   // Add member state
   const [newMemberProfileId, setNewMemberProfileId] = useState('');
   const [newMemberRole, setNewMemberRole] = useState<'OWNER' | 'MEMBER'>('MEMBER');
@@ -80,8 +83,9 @@ export default function CaseDetailsPage() {
     Promise.all([
       fetch(`/api/v1/cases/${encodeURIComponent(caseId)}`, { credentials: 'same-origin', signal: controller.signal }),
       fetch(`/api/v1/cases/${encodeURIComponent(caseId)}/members`, { credentials: 'same-origin', signal: controller.signal }),
+      fetch(`/api/v1/cases/${encodeURIComponent(caseId)}/tasks`, { credentials: 'same-origin', signal: controller.signal }),
     ])
-      .then(async ([caseRes, membersRes]) => {
+      .then(async ([caseRes, membersRes, tasksRes]) => {
         const caseBody = await caseRes.json();
         if (!caseRes.ok) throw new Error(caseBody.error?.message || 'โหลดรายละเอียดสำนวนคดีไม่สำเร็จ');
         setCaseRecord(caseBody.data.case as Case);
@@ -90,6 +94,11 @@ export default function CaseDetailsPage() {
         if (membersRes.ok) {
           const membersBody = await membersRes.json();
           setMembers(membersBody.data as CaseMember[]);
+        }
+
+        if (tasksRes.ok) {
+          const tasksBody = await tasksRes.json();
+          setTasks((tasksBody.data as { id: string; title: string; description: string; priority: string; status: string }[]) || []);
         }
       })
       .catch((caught: unknown) => {
@@ -438,6 +447,82 @@ export default function CaseDetailsPage() {
             <div className="py-16 text-center">
               <FileCheck2 className="mx-auto h-10 w-10 text-slate-800" />
               <p className="mt-3 text-sm text-slate-500">ยังไม่มีหลักฐานที่เข้าถึงได้ในสำนวนนี้</p>
+            </div>
+          )}
+        </div>
+      </section>
+
+      {/* Investigation Planner */}
+      <section className="rounded-3xl border border-indigo-500/30 bg-indigo-950/20 p-6 space-y-5 shadow-[0_0_30px_rgba(99,102,241,0.08)]">
+        <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
+          <div>
+            <div className="inline-flex items-center gap-2 rounded-full border border-indigo-400/30 bg-indigo-500/10 px-3 py-0.5 text-[10px] font-bold uppercase tracking-wider text-indigo-300 mb-1.5">
+              <Sparkles className="h-3 w-3" />
+              <span>AI Investigation Planner & SOP Automation</span>
+            </div>
+            <h2 className="flex items-center text-lg font-bold text-white">
+              แผนงานสืบสวนอัตโนมัติ ({tasks.length} งาน)
+            </h2>
+            <p className="mt-1 text-xs text-slate-400">
+              แผนปฏิบัติการสืบสวนและหนังสือขอพยานหลักฐานภายนอกที่ระบบสร้างขึ้นอัตโนมัติ
+            </p>
+          </div>
+        </div>
+
+        <div className="mt-5 space-y-3">
+          {tasks.length > 0 ? (
+            tasks.map((task) => {
+              const isDone = task.status === 'DONE';
+              const isInProgress = task.status === 'IN_PROGRESS';
+              const isCritical = task.priority === 'CRITICAL';
+              const isHigh = task.priority === 'HIGH';
+
+              return (
+                <article
+                  key={task.id}
+                  className="rounded-2xl border border-white/[0.08] bg-slate-900/60 p-4 sm:p-5 flex flex-col sm:flex-row sm:items-center justify-between gap-4 hover:border-indigo-400/30 transition-all duration-200"
+                >
+                  <div className="space-y-1.5 min-w-0 flex-1">
+                    <div className="flex flex-wrap items-center gap-2">
+                      <span
+                        className={`text-[10px] font-mono font-bold px-2 py-0.5 rounded-full border ${
+                          isCritical
+                            ? 'border-rose-400/40 bg-rose-500/10 text-rose-300 shadow-[0_0_10px_rgba(244,63,94,0.2)]'
+                            : isHigh
+                            ? 'border-amber-400/40 bg-amber-500/10 text-amber-300'
+                            : 'border-sky-400/40 bg-sky-500/10 text-sky-300'
+                        }`}
+                      >
+                        PRIORITY: {task.priority}
+                      </span>
+                      <span
+                        className={`text-[10px] font-mono font-bold px-2 py-0.5 rounded-full border ${
+                          isDone
+                            ? 'border-emerald-400/40 bg-emerald-500/10 text-emerald-300'
+                            : isInProgress
+                            ? 'border-teal-400/40 bg-teal-500/10 text-teal-300 animate-pulse'
+                            : 'border-slate-700 bg-slate-800 text-slate-400'
+                        }`}
+                      >
+                        STATUS: {task.status}
+                      </span>
+                    </div>
+                    <h3 className="text-sm font-bold text-white tracking-wide">
+                      {task.title}
+                    </h3>
+                    <p className="text-xs text-slate-400 leading-relaxed">
+                      {task.description}
+                    </p>
+                  </div>
+                </article>
+              );
+            })
+          ) : (
+            <div className="py-10 text-center rounded-2xl border border-dashed border-indigo-500/20">
+              <p className="text-sm text-slate-400 font-semibold mb-2">ยังไม่มีงานสืบสวน</p>
+              <p className="text-xs text-slate-500">
+                งานสืบสวนจะถูกสร้างโดยอัตโนมัติเมื่อมีการยืนยันข้อมูลจากหลักฐาน (เช่น บัญชีม้า, เบอร์โทรศัพท์)
+              </p>
             </div>
           )}
         </div>

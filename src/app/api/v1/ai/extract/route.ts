@@ -36,7 +36,7 @@ export async function POST(request: NextRequest) {
   const payload = parsed.data;
   const evidence = await supabase
     .from('evidence_files')
-    .select('id,case_id,upload_state,malware_scan_status')
+    .select('id,case_id,upload_state,malware_scan_status,file_path,mime_type')
     .eq('id', payload.evidence_id)
     .eq('case_id', payload.case_id)
     .maybeSingle();
@@ -45,13 +45,26 @@ export async function POST(request: NextRequest) {
     return apiError('EVIDENCE_NOT_CLEAN', 'ต้องสแกนหลักฐานเป็น CLEAN ก่อนส่งข้อความให้ AI', 409);
   }
 
+  let base64Image: string | undefined;
+  let mimeType: string | undefined;
+
+  // If no source text, attempt to use vision OCR
+  if (!payload.source_text) {
+    const bucketName = process.env.PRIVATE_EVIDENCE_BUCKET || 'evidence-vault';
+    const { data: fileData, error: fileError } = await supabase.storage.from(bucketName).download(evidence.data.file_path);
+    if (fileError || !fileData) return apiError('EVIDENCE_DOWNLOAD_FAILED', 'ไม่สามารถดาวน์โหลดไฟล์หลักฐานสำหรับ OCR ได้', 500);
+    const arrayBuffer = await fileData.arrayBuffer();
+    base64Image = Buffer.from(arrayBuffer).toString('base64');
+    mimeType = evidence.data.mime_type;
+  }
+
   try {
-    const result = await extractEntitiesWithGemini(payload.source_text);
+    const result = await extractEntitiesWithGemini(payload.source_text || '', base64Image, mimeType);
     const { data, error } = await supabase.rpc('create_ai_extraction_suggestions', {
       p_case_id: payload.case_id,
       p_evidence_id: payload.evidence_id,
       p_page_number: payload.page_number,
-      p_source_text: payload.source_text,
+      p_source_text: payload.source_text || '[OCR_EXTRACTED_IMAGE]',
       p_source_location: payload.source_location,
       p_candidates: result.candidates,
       p_provider: result.provider,

@@ -41,6 +41,42 @@ export default function MatchesPage() {
   const [actionError, setActionError] = useState('');
   const [success, setSuccess] = useState('');
   const [submittingId, setSubmittingId] = useState('');
+  const [isScanning, setIsScanning] = useState(false);
+  const [filterType, setFilterType] = useState<'ALL' | 'PENDING' | 'VERIFIED' | 'FUZZY' | 'EXACT'>('ALL');
+
+  const triggerScan = async () => {
+    setIsScanning(true);
+    setActionError('');
+    setSuccess('');
+    try {
+      const response = await fetch('/api/v1/matches/scan', {
+        method: 'POST',
+        credentials: 'same-origin',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({}),
+      });
+      const body = await response.json();
+      if (!response.ok) throw new Error(body.error?.message || 'การสแกนความเชื่อมโยงล้มเหลว');
+      const data = body.data || {};
+      setSuccess(
+        `สแกนเสร็จสิ้น: ตรวจพบความเชื่อมโยงทั้งหมด ${data.total_matches ?? 0} รายการ (Exact: ${data.exact_matches_found ?? 0}, Fuzzy: ${data.fuzzy_matches_found ?? 0}) จากข้อมูลที่สแกน ${data.scanned_entities ?? 0} เอนทิตี`
+      );
+      await load();
+    } catch (error: unknown) {
+      setActionError(error instanceof Error ? error.message : 'สแกนความเชื่อมโยงไม่สำเร็จ');
+    } finally {
+      setIsScanning(false);
+    }
+  };
+
+  const filteredMatches = matches.filter((item) => {
+    if (filterType === 'PENDING') return item.status === 'PENDING';
+    if (filterType === 'VERIFIED') return item.status === 'VERIFIED';
+    const isFuzzy = item.matching_signals && typeof item.matching_signals === 'object' && 'method' in item.matching_signals && item.matching_signals.method === 'TRIGRAM_FUZZY_SIMILARITY';
+    if (filterType === 'FUZZY') return isFuzzy || item.confidence < 1.0;
+    if (filterType === 'EXACT') return !isFuzzy && item.confidence === 1.0;
+    return true;
+  });
 
   const load = useCallback(async (signal?: AbortSignal) => {
     setIsLoading(true);
@@ -120,7 +156,16 @@ export default function MatchesPage() {
             ทุกผลลัพธ์เป็นข้อเสนอ (Pending Candidate) จนกว่าผู้ตรวจทานจะยืนยันพร้อมเหตุผลและตรวจสอบแหล่งอ้างอิงจากหลักฐานต้นฉบับ
           </p>
         </div>
-        <div className="flex items-center gap-3 self-start md:self-auto">
+        <div className="flex flex-wrap items-center gap-3 self-start md:self-auto">
+          <button
+            type="button"
+            onClick={() => void triggerScan()}
+            disabled={isScanning || isLoading}
+            className="inline-flex items-center gap-2 rounded-xl bg-indigo-500/20 border border-indigo-400/40 px-4 py-2.5 text-xs font-bold text-indigo-200 hover:bg-indigo-500/30 transition shadow-[0_0_15px_rgba(99,102,241,0.2)] disabled:opacity-50"
+          >
+            {isScanning ? <Loader2 className="h-4 w-4 animate-spin text-indigo-300" /> : <Sparkles className="h-4 w-4 text-indigo-300" />}
+            สแกนหาความเชื่อมโยง (AI & Fuzzy Scan)
+          </button>
           <button
             type="button"
             onClick={() => void load()}
@@ -132,6 +177,28 @@ export default function MatchesPage() {
           </button>
         </div>
       </header>
+
+      {/* Filter Tabs */}
+      <div className="flex flex-wrap items-center gap-2">
+        {(['ALL', 'PENDING', 'VERIFIED', 'EXACT', 'FUZZY'] as const).map((tab) => (
+          <button
+            key={tab}
+            type="button"
+            onClick={() => setFilterType(tab)}
+            className={`rounded-xl px-3.5 py-1.5 text-xs font-bold transition ${
+              filterType === tab
+                ? 'bg-teal-400/20 text-teal-200 border border-teal-400/40 shadow-[0_0_12px_rgba(45,212,191,0.2)]'
+                : 'bg-slate-900/50 text-slate-400 border border-white/[0.06] hover:text-white'
+            }`}
+          >
+            {tab === 'ALL' && `ทั้งหมด (${matches.length})`}
+            {tab === 'PENDING' && `รอตรวจทาน (${matches.filter((m) => m.status === 'PENDING').length})`}
+            {tab === 'VERIFIED' && `ยืนยันแล้ว (${matches.filter((m) => m.status === 'VERIFIED').length})`}
+            {tab === 'EXACT' && 'Exact Match'}
+            {tab === 'FUZZY' && 'Fuzzy Similarity (Trigram/AI)'}
+          </button>
+        ))}
+      </div>
 
       {success && (
         <div role="status" className="rounded-2xl border border-emerald-500/30 bg-emerald-950/30 p-4 text-sm font-semibold text-emerald-300 flex items-center gap-3 shadow-[0_0_20px_rgba(52,211,153,0.1)]">
@@ -159,19 +226,20 @@ export default function MatchesPage() {
             <RefreshCw className="mr-2 h-4 w-4" />ลองใหม่
           </button>
         </div>
-      ) : matches.length === 0 ? (
+      ) : filteredMatches.length === 0 ? (
         <div className="glass-panel rounded-3xl border border-dashed border-slate-800 py-20 text-center">
           <Link2 className="mx-auto h-12 w-12 text-slate-700 mb-3" />
-          <p className="text-sm font-semibold text-slate-400">ยังไม่มีข้อเสนอความเชื่อมโยงที่เข้าถึงได้ในขณะนี้</p>
-          <p className="text-xs text-slate-600 mt-1">ระบบจะประมวลผลสัญญาณ Exact-Match ทันทีเมื่อมีการยืนยันข้อมูลในหน้า AI Review</p>
+          <p className="text-sm font-semibold text-slate-400">ไม่พบรายการความเชื่อมโยงในตัวกรองนี้</p>
+          <p className="text-xs text-slate-600 mt-1">กดปุ่ม &ldquo;สแกนหาความเชื่อมโยง&rdquo; ด้านบนเพื่อทำการวิเคราะห์ข้ามคดี</p>
         </div>
       ) : (
         <div className="space-y-6">
-          {matches.map((item) => {
+          {filteredMatches.map((item) => {
             const sourceCase = cases.find((record) => record.id === item.source_case_id);
             const targetCase = cases.find((record) => record.id === item.target_case_id);
             const pending = item.status === 'PENDING';
             const verified = item.status === 'VERIFIED';
+            const isFuzzy = item.matching_signals && typeof item.matching_signals === 'object' && 'method' in item.matching_signals && item.matching_signals.method === 'TRIGRAM_FUZZY_SIMILARITY';
 
             return (
               <article key={item.id} className="hud-panel rounded-[28px] p-6 sm:p-7 border border-white/[0.08] hover:border-indigo-400/30 transition-all duration-300 shadow-[0_15px_40px_rgba(0,0,0,0.3)]">
@@ -183,9 +251,15 @@ export default function MatchesPage() {
                         <Activity className="h-3 w-3" />
                         {typeLabels[item.entity_type] || item.entity_type}
                       </span>
-                      <span className="cyber-badge border border-indigo-400/30 bg-indigo-500/10 text-indigo-300 font-mono">
-                        MATCH CONFIDENCE: {(item.confidence * 100).toFixed(0)}%
-                      </span>
+                      {isFuzzy ? (
+                        <span className="cyber-badge border border-amber-400/30 bg-amber-500/10 text-amber-300 font-mono">
+                          FUZZY SIMILARITY: {(item.confidence * 100).toFixed(0)}%
+                        </span>
+                      ) : (
+                        <span className="cyber-badge border border-indigo-400/30 bg-indigo-500/10 text-indigo-300 font-mono">
+                          EXACT MATCH: {(item.confidence * 100).toFixed(0)}%
+                        </span>
+                      )}
                       <span className={`cyber-badge font-mono ${verified ? 'cyber-badge-teal' : pending ? 'cyber-badge-amber' : 'cyber-badge-rose'}`}>
                         STATUS: {item.status}
                       </span>

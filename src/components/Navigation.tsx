@@ -24,6 +24,7 @@ import {
   Settings,
   ShieldCheck,
   Sparkles,
+  Network,
   Workflow,
   X,
 } from 'lucide-react';
@@ -53,6 +54,7 @@ const intelligenceNav: NavItem[] = [
   { name: 'ข้อเสนอจาก AI', href: '/review', icon: Sparkles },
   { name: 'ทะเบียนข้อมูล', href: '/entities', icon: Database },
   { name: 'ความเชื่อมโยง', href: '/matches', icon: Link2 },
+  { name: '3D Evidence Universe', href: '/universe', icon: Network },
   { name: 'รายงานตรวจสอบย้อนกลับ', href: '/reports', icon: FileBarChart },
 ];
 
@@ -71,6 +73,7 @@ const sectionMeta = [
   { prefix: '/review', eyebrow: 'Human review', title: 'ข้อเสนอจาก AI' },
   { prefix: '/entities', eyebrow: 'Data registry', title: 'ทะเบียนข้อมูล' },
   { prefix: '/matches', eyebrow: 'Cross-case analysis', title: 'ความเชื่อมโยง' },
+  { prefix: '/universe', eyebrow: '3D Graph Intelligence', title: '3D Evidence Universe' },
   { prefix: '/reports', eyebrow: 'Traceable outputs', title: 'รายงาน' },
   { prefix: '/audit', eyebrow: 'Governance', title: 'บันทึกการตรวจสอบ' },
   { prefix: '/admin', eyebrow: 'Administration', title: 'ตั้งค่าระบบ' },
