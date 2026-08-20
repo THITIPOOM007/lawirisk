@@ -18,6 +18,59 @@ export default function IntakeQueuePage() {
   const [isImporting, setIsImporting] = useState(false);
   const [importMessage, setImportMessage] = useState('');
   const [importError, setImportError] = useState('');
+  const [showManualModal, setShowManualModal] = useState(false);
+  const [isSubmittingManual, setIsSubmittingManual] = useState(false);
+  const [manualError, setManualError] = useState('');
+  const [manualForm, setManualForm] = useState({
+    channel_id: 'ch-walkin',
+    complainant_mode: 'IDENTIFIED' as const,
+    urgency: 'NORMAL' as const,
+    urgency_reason: '',
+    agency: '',
+    region: '',
+  });
+
+  const handleManualSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!manualForm.urgency_reason.trim()) {
+      setManualError('กรุณากรอกสรุปพฤติการณ์เรื่องร้องเรียน');
+      return;
+    }
+    setIsSubmittingManual(true);
+    setManualError('');
+    try {
+      const response = await fetch('/api/v1/intake/manual', {
+        method: 'POST',
+        credentials: 'same-origin',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          channel_id: manualForm.channel_id,
+          complainant_mode: manualForm.complainant_mode,
+          urgency: manualForm.urgency,
+          urgency_reason: manualForm.urgency_reason.trim(),
+          agency: manualForm.agency.trim() || undefined,
+          region: manualForm.region.trim() || undefined,
+        }),
+      });
+      const body = await response.json();
+      if (!response.ok) throw new Error(body.error?.message || 'บันทึกคำร้องไม่สำเร็จ');
+      setShowManualModal(false);
+      setManualForm({
+        channel_id: 'ch-walkin',
+        complainant_mode: 'IDENTIFIED',
+        urgency: 'NORMAL',
+        urgency_reason: '',
+        agency: '',
+        region: '',
+      });
+      setIsLoading(true);
+      setReloadToken(prev => prev + 1);
+    } catch (err: unknown) {
+      setManualError(err instanceof Error ? err.message : 'บันทึกคำร้องไม่สำเร็จ');
+    } finally {
+      setIsSubmittingManual(false);
+    }
+  };
 
   useEffect(() => {
     const controller = new AbortController();
@@ -105,16 +158,130 @@ export default function IntakeQueuePage() {
 
   return (
     <div className="space-y-8">
-      {/* Page Header */}
-      <div>
-        <h1 className="text-3xl font-extrabold text-white tracking-tight flex items-center space-x-3">
-          <Inbox className="h-8 w-8 text-indigo-500 shrink-0" />
-          <span>Omnichannel Intake Triage (กล่องคัดกรองคำร้องระดับประเทศ)</span>
-        </h1>
-        <p className="mt-2 text-slate-400">
-          รับข้อมูลคำร้องและเอกสารเบาะแสจากทุกช่องทาง (Kouprey Plus, API พันธมิตร, อีเมล, Walk-in) เพื่อสแกนความปลอดภัย ค้นเรื่องซ้ำ และคัดแยกสำนวนคดี
-        </p>
+      {/* Page Header with Action Button */}
+      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
+        <div>
+          <h1 className="text-3xl font-extrabold text-white tracking-tight flex items-center space-x-3">
+            <Inbox className="h-8 w-8 text-teal-300 shrink-0" />
+            <span>คัดกรองคำร้อง (Intake & Triage)</span>
+          </h1>
+          <p className="mt-2 text-slate-400 text-sm">
+            รับข้อมูลคำร้องและเอกสารเบาะแสจากทุกช่องทาง เพื่อสแกนความปลอดภัย ค้นเรื่องซ้ำ และคัดแยกสำนวนคดี
+          </p>
+        </div>
+        <button
+          type="button"
+          onClick={() => setShowManualModal(true)}
+          className="primary-action inline-flex items-center justify-center gap-2 rounded-2xl px-5 py-3 text-sm font-bold shadow-[0_0_25px_rgba(66,232,206,0.25)] shrink-0 cursor-pointer"
+        >
+          + บันทึกรับเรื่องใหม่
+        </button>
       </div>
+
+      {/* Manual Intake Modal */}
+      {showManualModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/70 backdrop-blur-md animate-[drawer-enter_300ms_var(--ease-out-expo)]">
+          <div className="hud-panel rounded-3xl p-6 sm:p-8 max-w-lg w-full space-y-5 border border-teal-300/30 shadow-2xl relative">
+            <div className="flex items-center justify-between border-b border-white/[0.08] pb-4">
+              <h2 className="text-lg font-bold text-white flex items-center gap-2">
+                <Inbox className="h-5 w-5 text-teal-300" />
+                บันทึกรับเรื่องร้องเรียนใหม่ (Walk-in / Phone)
+              </h2>
+              <button
+                type="button"
+                onClick={() => setShowManualModal(false)}
+                className="text-slate-400 hover:text-white text-lg font-bold p-1"
+              >
+                ✕
+              </button>
+            </div>
+
+            {manualError && (
+              <div role="alert" className="rounded-xl border border-rose-500/30 bg-rose-950/30 p-3 text-xs font-semibold text-rose-300">
+                {manualError}
+              </div>
+            )}
+
+            <form onSubmit={handleManualSubmit} className="space-y-4">
+              <div>
+                <label className="block text-xs font-semibold text-slate-300 mb-1">
+                  ความเร่งด่วน <span className="text-rose-400">*</span>
+                </label>
+                <select
+                  value={manualForm.urgency}
+                  onChange={(e) => setManualForm(prev => ({ ...prev, urgency: e.target.value as 'CRITICAL' | 'HIGH' | 'NORMAL' | 'LOW' }))}
+                  className="w-full rounded-xl border border-white/[0.1] bg-slate-950 p-2.5 text-xs text-white"
+                >
+                  <option value="NORMAL">ปกติ (NORMAL)</option>
+                  <option value="HIGH">เร่งด่วน (HIGH)</option>
+                  <option value="CRITICAL">วิกฤต (CRITICAL)</option>
+                  <option value="LOW">เฝ้าระวัง (LOW)</option>
+                </select>
+              </div>
+
+              <div>
+                <label className="block text-xs font-semibold text-slate-300 mb-1">
+                  สรุปพฤติการณ์ / หัวข้อเรื่องร้องเรียน <span className="text-rose-400">*</span>
+                </label>
+                <textarea
+                  required
+                  rows={3}
+                  value={manualForm.urgency_reason}
+                  onChange={(e) => setManualForm(prev => ({ ...prev, urgency_reason: e.target.value }))}
+                  placeholder="เช่น ผู้เสียหายถูกหลอกโอนเงินซื้อสินค้าออนไลน์ผ่านเฟซบุ๊ก ยอด 15,000 บาท..."
+                  className="w-full rounded-xl border border-white/[0.1] bg-slate-950 p-2.5 text-xs text-white placeholder:text-slate-600"
+                />
+              </div>
+
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="block text-xs font-semibold text-slate-300 mb-1">
+                    หน่วยงานผู้รับผิดชอบ
+                  </label>
+                  <input
+                    type="text"
+                    value={manualForm.agency}
+                    onChange={(e) => setManualForm(prev => ({ ...prev, agency: e.target.value }))}
+                    placeholder="สภ.เมือง หรือ บช.สอท."
+                    className="w-full rounded-xl border border-white/[0.1] bg-slate-950 p-2.5 text-xs text-white"
+                  />
+                </div>
+                <div>
+                  <label className="block text-xs font-semibold text-slate-300 mb-1">
+                    พื้นที่ / จังหวัด
+                  </label>
+                  <input
+                    type="text"
+                    value={manualForm.region}
+                    onChange={(e) => setManualForm(prev => ({ ...prev, region: e.target.value }))}
+                    placeholder="ภ.จว.ศรีสะเกษ"
+                    className="w-full rounded-xl border border-white/[0.1] bg-slate-950 p-2.5 text-xs text-white"
+                  />
+                </div>
+              </div>
+
+              <div className="pt-3 border-t border-white/[0.08] flex items-center justify-end gap-3">
+                <button
+                  type="button"
+                  disabled={isSubmittingManual}
+                  onClick={() => setShowManualModal(false)}
+                  className="px-4 py-2 text-xs font-semibold text-slate-400 hover:text-white rounded-xl"
+                >
+                  ยกเลิก
+                </button>
+                <button
+                  type="submit"
+                  disabled={isSubmittingManual}
+                  className="primary-action inline-flex items-center gap-1.5 rounded-xl px-5 py-2.5 text-xs font-bold shadow-md cursor-pointer disabled:opacity-50"
+                >
+                  {isSubmittingManual && <Loader2 className="h-4 w-4 animate-spin" />}
+                  บันทึกรับเรื่อง
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
 
       {/* Summary Indicators */}
       <div className="grid grid-cols-1 sm:grid-cols-4 gap-4">
