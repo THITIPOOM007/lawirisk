@@ -20,6 +20,28 @@ interface SearchResultItem {
 
 const MOCK_PUBLIC_KNOWLEDGE: SearchResultItem[] = [
   {
+    id: 'res-fda-1',
+    title: 'ทะเบียนยา 2A 36/61: ยาเม็ดพาราเซตามอล 500 มก. (Paracetamol Tablets 500 mg)',
+    category: 'HEALTH_PRODUCTS',
+    snippet: 'เลขทะเบียนตำรับยา 2A 36/61 สถานะ: ได้รับอนุญาตถูกต้องตามกฎหมาย (ACTIVE) ผลิตโดยโรงงานผลิตยามาตรฐาน GMP ได้รับการรับรองจากสำนักงานคณะกรรมการอาหารและยา (อย.)',
+    source: 'ฐานข้อมูลตรวจสอบการอนุญาต สำนักงานคณะกรรมการอาหารและยา (อย.)',
+    sourceUrl: 'https://fda.moph.go.th/drug/license/2A-36-61',
+    publishedDate: '2026-08-01',
+    confidenceScore: 0.99,
+    status: 'SAFE',
+  },
+  {
+    id: 'res-fda-2',
+    title: 'เลขสารบบอาหาร 10-1-01234-5-0001: ผลิตภัณฑ์เสริมอาหารคอลลาเจนผสมวิตามินซี',
+    category: 'LICENSES',
+    snippet: 'เลขสารบบอาหาร 10-1-01234-5-0001 สถานะ: คงอยู่ (ACTIVE) ผู้รับอนุญาตตั้งอยู่ในพื้นที่เขตสุขภาพที่ 10 ผ่านการตรวจประเมินสถานที่ผลิตตามเกณฑ์ GMP กฎหมาย',
+    source: 'สำนักงานคณะกรรมการอาหารและยา (อย.)',
+    sourceUrl: 'https://fda.moph.go.th/food/license/10-1-01234-5-0001',
+    publishedDate: '2026-07-20',
+    confidenceScore: 0.97,
+    status: 'SAFE',
+  },
+  {
     id: 'res-1',
     title: 'ประกาศเตือนภัย: ตรวจพบสารปนเปื้อนในผลิตภัณฑ์จัดฟันแฟชั่นออนไลน์ (SmilePro/May Dental)',
     category: 'HEALTH_PRODUCTS',
@@ -78,15 +100,20 @@ export async function GET(request: NextRequest) {
     );
   }
 
-  const query = parsed.data.q.toLowerCase();
+  const query = parsed.data.q.toLowerCase().trim();
+  const normalizedQuery = query.replace(/[\s\-\/\.]/g, '');
   const cat = parsed.data.category;
 
   const results = MOCK_PUBLIC_KNOWLEDGE.filter((item) => {
     const matchesCategory = cat === 'ALL' || item.category === cat;
+    const titleNormalized = item.title.toLowerCase().replace(/[\s\-\/\.]/g, '');
+    const snippetNormalized = item.snippet.toLowerCase().replace(/[\s\-\/\.]/g, '');
     const matchesQuery =
       item.title.toLowerCase().includes(query) ||
       item.snippet.toLowerCase().includes(query) ||
-      item.source.toLowerCase().includes(query);
+      item.source.toLowerCase().includes(query) ||
+      (normalizedQuery.length >= 3 &&
+        (titleNormalized.includes(normalizedQuery) || snippetNormalized.includes(normalizedQuery)));
     return matchesCategory && matchesQuery;
   });
 
@@ -94,7 +121,7 @@ export async function GET(request: NextRequest) {
   let aiSummary = '';
   if (results.length > 0) {
     const topItem = results[0];
-    aiSummary = `จากการตรวจสอบฐานข้อมูลสาธารณะและการแจ้งเตือนภัย พบข้อมูลที่เกี่ยวข้องกับ "${parsed.data.q}": ${topItem.snippet} (อ้างอิงจาก: ${topItem.source} ณ วันที่ ${topItem.publishedDate})`;
+    aiSummary = `จากการตรวจสอบฐานข้อมูลสาธารณะและการอนุญาต อย. พบข้อมูลที่เกี่ยวข้องกับ "${parsed.data.q}": ${topItem.snippet} (อ้างอิงจาก: ${topItem.source} ณ วันที่ ${topItem.publishedDate})`;
   } else {
     aiSummary = `ไม่พบประวัติการแจ้งเตือนหรือข้อมูลที่เป็นภัยคุกคามโดยตรงเกี่ยวกับ "${parsed.data.q}" ในฐานข้อมูลเปิดของหน่วยงาน กรุณาตรวจสอบความถูกต้องของชื่อและเอกสารสิทธิ์เพิ่มเติม`;
   }
