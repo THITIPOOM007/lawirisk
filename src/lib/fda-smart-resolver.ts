@@ -2,6 +2,7 @@ export interface SmartSearchResult {
   id: string;
   title: string;
   category: 'HEALTH_PRODUCTS' | 'FRAUD_ALERTS' | 'COMPANIES' | 'LICENSES';
+  productCategoryLabel: string;
   snippet: string;
   source: string;
   sourceUrl: string;
@@ -95,6 +96,7 @@ export const THAI_PROVINCES: Record<string, string> = {
 // Verified Official Registry Database across all Government Portals
 export const VERIFIED_OFFICIAL_REGISTRY: Record<string, {
   category: 'HEALTH_PRODUCTS' | 'FRAUD_ALERTS' | 'COMPANIES' | 'LICENSES';
+  productCategoryLabel: string;
   productNameTh: string;
   productNameEn: string;
   productType: string;
@@ -107,7 +109,8 @@ export const VERIFIED_OFFICIAL_REGISTRY: Record<string, {
   // DRUGS
   '2A972/29': {
     category: 'HEALTH_PRODUCTS',
-    productNameTh: 'ยาแก้ไอเด็ก บี.เอม.',
+    productCategoryLabel: 'ผลิตภัณฑ์ยาสำเร็จรูปแผนปัจจุบัน (DRUG)',
+    productNameTh: '[ผลิตภัณฑ์ยา] ยาแก้ไอเด็ก บี.เอม. (ทะเบียน 2A972/29)',
     productNameEn: 'B.M.BABY COUGH SYRUP',
     productType: 'ยาสำเร็จรูปแผนปัจจุบันสำหรับมนุษย์ (ผลิตในประเทศ)',
     licensee: 'บริษัท บี.เอม.ฟาร์มาซี จำกัด',
@@ -118,7 +121,8 @@ export const VERIFIED_OFFICIAL_REGISTRY: Record<string, {
   },
   '2A36/61': {
     category: 'HEALTH_PRODUCTS',
-    productNameTh: 'ไอ-คอร์ดิล',
+    productCategoryLabel: 'ผลิตภัณฑ์ยาสำเร็จรูปแผนปัจจุบัน (DRUG)',
+    productNameTh: '[ผลิตภัณฑ์ยา] ไอ-คอร์ดิล / I-cordyl (ทะเบียน 2A36/61)',
     productNameEn: 'I-cordyl',
     productType: 'ยาสำเร็จรูปแผนปัจจุบันสำหรับมนุษย์ (ผลิตในประเทศ)',
     licensee: 'บริษัท ฟิฮาแล็บ จำกัด',
@@ -129,7 +133,8 @@ export const VERIFIED_OFFICIAL_REGISTRY: Record<string, {
   },
   '1A1/65': {
     category: 'HEALTH_PRODUCTS',
-    productNameTh: 'พาราเซตามอล เม็ด 500 มก.',
+    productCategoryLabel: 'ผลิตภัณฑ์ยาสามัญประจำบ้าน (DRUG)',
+    productNameTh: '[ผลิตภัณฑ์ยา] พาราเซตามอล เม็ด 500 มก. (ทะเบียน 1A1/65)',
     productNameEn: 'PARACETAMOL TABLETS 500 MG',
     productType: 'ยาสามัญประจำบ้านแผนปัจจุบัน (ผลิตในประเทศ)',
     licensee: 'องค์การเภสัชกรรม (GPO)',
@@ -142,8 +147,9 @@ export const VERIFIED_OFFICIAL_REGISTRY: Record<string, {
   // FOOD & PRODUCTS (Including Prachinburi 25-2-00114-2-20062)
   '25200114220062': {
     category: 'LICENSES',
-    productNameTh: 'ผลิตภัณฑ์อาหารแปรรูป / เครื่องดื่ม (จ.ปราจีนบุรี)',
-    productNameEn: 'Processed Food & Beverage Product (Prachinburi)',
+    productCategoryLabel: 'ผลิตภัณฑ์อาหาร / เครื่องดื่ม (FOOD & BEVERAGE)',
+    productNameTh: '[ผลิตภัณฑ์อาหาร] สารบบอาหาร อย. 14 หลัก: 25-2-00114-2-20062 (จ.ปราจีนบุรี)',
+    productNameEn: 'Processed Food & Beverage (Prachinburi)',
     productType: 'เลขสารบบอาหาร อย. 14 หลัก (25-2-00114-2-20062)',
     licensee: 'สถานที่ผลิตอาหารที่ได้รับอนุญาต จ.ปราจีนบุรี (สสจ.ปราจีนบุรี)',
     newCode: '25200114220062',
@@ -153,7 +159,8 @@ export const VERIFIED_OFFICIAL_REGISTRY: Record<string, {
   },
   '10-1-01234-5-0001': {
     category: 'LICENSES',
-    productNameTh: 'ผลิตภัณฑ์เสริมอาหารคอลลาเจน คอมเพล็กซ์',
+    productCategoryLabel: 'ผลิตภัณฑ์อาหารเสริม (DIETARY SUPPLEMENT)',
+    productNameTh: '[ผลิตภัณฑ์อาหารเสริม] คอลลาเจน คอมเพล็กซ์ (สารบบ 10-1-01234-5-0001)',
     productNameEn: 'Collagen Complex Dietary Supplement',
     productType: 'อาหารเสริม (สารบบอาหาร 13 หลัก)',
     licensee: 'บริษัท สยามเฮลท์แคร์ อินโนเวชั่น จำกัด (กรุงเทพฯ)',
@@ -164,7 +171,8 @@ export const VERIFIED_OFFICIAL_REGISTRY: Record<string, {
   },
   '33-2-00160-2-0001': {
     category: 'LICENSES',
-    productNameTh: 'น้ำดื่มสะอาด ตรา ศรีสะเกษโอเอซิส',
+    productCategoryLabel: 'ผลิตภัณฑ์น้ำดื่มบรรจุขวด (DRINKING WATER)',
+    productNameTh: '[ผลิตภัณฑ์น้ำดื่ม] น้ำดื่มสะอาด ตรา ศรีสะเกษโอเอซิส (สารบบ 33-2-00160-2-0001)',
     productNameEn: 'Sisaket Oasis Drinking Water',
     productType: 'น้ำบริโภคในภาชนะบรรจุปิดสนิท (สสจ.ศรีสะเกษ)',
     licensee: 'หจก. ศรีสะเกษธารา อ.เมือง จ.ศรีสะเกษ',
@@ -177,7 +185,8 @@ export const VERIFIED_OFFICIAL_REGISTRY: Record<string, {
   // COSMETICS
   '10-1-6600012345': {
     category: 'HEALTH_PRODUCTS',
-    productNameTh: 'เซรั่มบำรุงผิวหน้า ไฮยาลูรอนิก พลัส',
+    productCategoryLabel: 'ผลิตภัณฑ์เครื่องสำอาง (COSMETICS)',
+    productNameTh: '[เครื่องสำอาง] เซรั่มบำรุงผิวหน้า ไฮยาลูรอนิก พลัส (ใบรับจดแจ้ง 10-1-6600012345)',
     productNameEn: 'Hyaluronic Plus Facial Serum',
     productType: 'เครื่องสำอาง (ใบรับจดแจ้งเครื่องสำอาง)',
     licensee: 'บริษัท สกินแคร์ แลบอราทอรีส์ จำกัด',
@@ -190,7 +199,8 @@ export const VERIFIED_OFFICIAL_REGISTRY: Record<string, {
   // MEDICAL DEVICES
   'สน.1/2565': {
     category: 'HEALTH_PRODUCTS',
-    productNameTh: 'ชุดตรวจโควิด-19 และไข้หวัดใหญ่แบบตรวจหาแอนติเจน (ATK Combo)',
+    productCategoryLabel: 'ผลิตภัณฑ์เครื่องมือแพทย์ (MEDICAL DEVICE)',
+    productNameTh: '[เครื่องมือแพทย์] ชุดตรวจ ATK Combo ตรวจโควิดและไข้หวัดใหญ่ (ใบรับจดแจ้ง สน. 1/2565)',
     productNameEn: 'COVID-19 & Flu Antigen Rapid Test Kit',
     productType: 'เครื่องมือแพทย์สำหรับการวินิจฉัยภายนอกร่างกาย (IVD)',
     licensee: 'บริษัท เมดิคอล ไบโอเทค จำกัด',
@@ -203,7 +213,8 @@ export const VERIFIED_OFFICIAL_REGISTRY: Record<string, {
   // CLINICS
   '34103001760': {
     category: 'COMPANIES',
-    productNameTh: 'เมย์ทันตกรรมคลินิก (สาขาอุบลราชธานี)',
+    productCategoryLabel: 'สถานพยาบาล / คลินิกเอกชน (CLINIC)',
+    productNameTh: '[สถานพยาบาล] เมย์ทันตกรรมคลินิก (ใบอนุญาต 34 1 03 0017 60)',
     productNameEn: 'May Dental Clinic',
     productType: 'สถานพยาบาลประเภทไม่รับผู้ป่วยไว้ค้างคืน (คลินิกทันตกรรม)',
     licensee: 'ทพญ. ปนัดดา รักษาฟัน (เลขที่ใบอนุญาต 34 1 03 0017 60)',
@@ -216,7 +227,8 @@ export const VERIFIED_OFFICIAL_REGISTRY: Record<string, {
   // FRAUD / MULE ACCOUNTS
   '0892414971': {
     category: 'FRAUD_ALERTS',
-    productNameTh: 'บัญชีธนาคารกสิกรไทย 089-2-41497-1 (นางสาวปนัดดา คำนนท์)',
+    productCategoryLabel: 'เฝ้าระวังภัยอาชญากรรม / บัญชีม้า (FRAUD ALERT)',
+    productNameTh: '[แจ้งเตือนภัย/บัญชีม้า] บัญชีธนาคารกสิกรไทย 0892414971 (นางสาวปนัดดา คำนนท์)',
     productNameEn: 'Kasikornbank 0892414971 (Mule Account Alert)',
     productType: 'บัญชีม้าเฝ้าระวัง / ฉ้อโกงประชาชนผ่านโซเชียลมีเดีย',
     licensee: 'ตรวจพบการร้องทุกข์ดำเนินคดีกว่า 10 สำนวน (สภ.เมือง, สภ.กันทรลักษ์)',
@@ -227,7 +239,8 @@ export const VERIFIED_OFFICIAL_REGISTRY: Record<string, {
   },
   '0624149791': {
     category: 'FRAUD_ALERTS',
-    productNameTh: 'เบอร์โทรศัพท์ / พร้อมเพย์ 062-4149791',
+    productCategoryLabel: 'เฝ้าระวังภัยอาชญากรรม / เบอร์มิจฉาชีพ (FRAUD ALERT)',
+    productNameTh: '[แจ้งเตือนภัย/เบอร์โทร] หมายเลขโทรศัพท์ / พร้อมเพย์ 062-4149791',
     productNameEn: 'PromptPay / Mobile 0624149791 (Fraud Flagged)',
     productType: 'หมายเลขโทรศัพท์และพร้อมเพย์รับโอนเงินหลอกลวง',
     licensee: 'เชื่อมโยงเครือข่ายหลอกโอนเงินซื้อสินค้าและคลินิกเถื่อน',
@@ -249,7 +262,7 @@ export function normalizeQuery(input: string): string {
 
 /**
  * Universal Intelligent Multi-Channel Resolver
- * Always resolves product formats, registration serials, drugs, food, cosmetics, and fraud alerts
+ * Always highlights what category of product it is up front
  */
 export function resolveMultiChannelSearch(rawQuery: string): SmartSearchResult[] {
   const raw = rawQuery.trim();
@@ -274,6 +287,7 @@ export function resolveMultiChannelSearch(rawQuery: string): SmartSearchResult[]
         id: `reg-${keyNorm}`,
         title: item.productNameTh,
         category: item.category,
+        productCategoryLabel: item.productCategoryLabel,
         snippet: `[${item.productType}] ผู้รับอนุญาต/เจ้าของ: ${item.licensee} | รหัสอ้างอิง: ${item.newCode} | สถานะ: ${item.status}`,
         source: item.sourceName,
         sourceUrl: item.sourceUrl,
@@ -304,8 +318,9 @@ export function resolveMultiChannelSearch(rawQuery: string): SmartSearchResult[]
 
     results.push({
       id: `fda-serial-${cleanDigits}`,
-      title: `เลขสารบบผลิตภัณฑ์สุขภาพ อย. (${provName}): ${formattedDigits}`,
+      title: `[ผลิตภัณฑ์อาหาร/สุขภาพ] สารบบอาหาร อย. ${cleanDigits.length} หลัก: ${formattedDigits} (${provName})`,
       category: 'LICENSES',
+      productCategoryLabel: `ผลิตภัณฑ์อาหารและสุขภาพ อย. (${provName})`,
       snippet: `ตรวจพบโครงสร้างเลขสารบบผลิตภัณฑ์/สถานที่ผลิตที่ถูกต้อง ออกโดยหน่วยงานกำกับดูแลพื้นที่ ${provName} (รหัสประจำตัว: ${cleanDigits}) สถานะพร้อมตรวจสอบในฐานข้อมูลระบบสืบค้นแยกรายผลิตภัณฑ์ อย.`,
       source: 'ระบบตรวจสอบการอนุญาต อย. (porta.fda.moph.go.th/fda_search_center_new/)',
       sourceUrl: 'https://porta.fda.moph.go.th/fda_search_center_new/',
@@ -333,8 +348,9 @@ export function resolveMultiChannelSearch(rawQuery: string): SmartSearchResult[]
 
     results.push({
       id: `fda-drug-${prefix}-${number}-${year}`,
-      title: `เลขทะเบียนตำรับยา อย.: ${canonicalNo}`,
+      title: `[ผลิตภัณฑ์ยาแผนปัจจุบัน] เลขทะเบียนตำรับยา อย.: ${canonicalNo}`,
       category: 'HEALTH_PRODUCTS',
+      productCategoryLabel: 'ผลิตภัณฑ์ยาแผนปัจจุบัน (PHARMACEUTICAL)',
       snippet: `ตรวจพบโครงสร้างเลขทะเบียนตำรับยาถูกต้อง หมวด ${prefix} (${drugCategoryDesc}) ลำดับที่ ${number} ประจำปี พ.ศ. 25${year} จากระบบตรวจสอบการอนุญาต อย.`,
       source: 'ระบบตรวจสอบการอนุญาต อย. (porta.fda.moph.go.th)',
       sourceUrl: 'https://porta.fda.moph.go.th/fda_search_center_new/',
@@ -354,8 +370,9 @@ export function resolveMultiChannelSearch(rawQuery: string): SmartSearchResult[]
 
     results.push({
       id: `fda-med-${prefix}-${no}-${year}`,
-      title: `ใบสำคัญ/ใบรับจดแจ้งเครื่องมือแพทย์: ${prefix}. ${no}/${year}`,
+      title: `[ผลิตภัณฑ์เครื่องมือแพทย์] ใบสำคัญ/ใบรับจดแจ้งเครื่องมือแพทย์: ${prefix}. ${no}/${year}`,
       category: 'HEALTH_PRODUCTS',
+      productCategoryLabel: 'เครื่องมือแพทย์และอุปกรณ์ตรวจวินิจฉัย (MEDICAL DEVICE)',
       snippet: `ตรวจพบเลขที่ใบสำคัญเครื่องมือแพทย์ประเภท ${prefix} ลำดับที่ ${no} ประจำปี พ.ศ. ${year} ผ่านเกณฑ์มาตรฐานจากกองควบคุมเครื่องมือแพทย์ อย.`,
       source: 'กองควบคุมเครื่องมือแพทย์ สำนักงานคณะกรรมการอาหารและยา',
       sourceUrl: 'https://porta.fda.moph.go.th/fda_search_center_new/',
@@ -369,8 +386,9 @@ export function resolveMultiChannelSearch(rawQuery: string): SmartSearchResult[]
   if (results.length === 0 && raw.length >= 2) {
     results.push({
       id: `smart-search-${normalized}`,
-      title: `ผลการสืบค้นข้อมูลผลิตภัณฑ์และทะเบียนภาครัฐ: "${raw}"`,
+      title: `[ข้อมูลผลิตภัณฑ์/ทะเบียนภาครัฐ] คำค้นหา: "${raw}"`,
       category: 'HEALTH_PRODUCTS',
+      productCategoryLabel: 'ผลการสืบค้นข้อมูลผลิตภัณฑ์และทะเบียนภาครัฐ',
       snippet: `ระบบได้ทำการสืบค้นคำสำคัญ "${raw}" ข้ามฐานข้อมูล อย., กรมสนับสนุนบริการสุขภาพ (สบส.) และศูนย์ปราบปรามอาชญากรรมไซเบอร์ (AOC 1441) พร้อมตรวจสอบสถานะแบบเรียลไทม์`,
       source: 'ศูนย์ตรวจสอบและสืบค้นข้อมูลผลิตภัณฑ์สุขภาพภาครัฐ (porta.fda.moph.go.th)',
       sourceUrl: 'https://porta.fda.moph.go.th/fda_search_center_new/',

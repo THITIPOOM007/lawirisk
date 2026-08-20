@@ -294,30 +294,47 @@ export default function PublicPortalPage() {
                 {searchResults.map((item) => (
                   <div
                     key={item.id}
-                    className="rounded-2xl border border-white/[0.08] bg-slate-900/40 p-5 space-y-3 hover:border-teal-400/40 transition"
+                    className="rounded-3xl border border-white/[0.1] bg-slate-900/60 p-6 space-y-4 hover:border-teal-400/50 shadow-lg transition"
                   >
-                    <div className="flex items-start justify-between gap-3">
-                      <h4 className="text-sm font-bold text-white leading-snug">{item.title}</h4>
+                    {/* Top Category & Status Header */}
+                    <div className="flex flex-wrap items-center justify-between gap-2 pb-2 border-b border-white/[0.06]">
+                      <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-lg bg-teal-400/10 border border-teal-300/30 text-xs font-bold text-teal-200">
+                        <span>🏷️ หมวดหมู่:</span>
+                        <span className="text-white font-extrabold">{item.title.split(']')[0]?.replace('[', '') || 'ผลิตภัณฑ์สุขภาพ'}</span>
+                      </div>
                       <span
-                        className={`text-[10px] font-bold px-2.5 py-1 rounded-full uppercase tracking-wider ${
+                        className={`text-[11px] font-black px-3 py-1 rounded-full uppercase tracking-wider ${
                           item.status === 'WARNING' || item.status === 'REVOKED'
-                            ? 'bg-rose-500/20 text-rose-300 border border-rose-500/30'
-                            : 'bg-teal-500/20 text-teal-300 border border-teal-500/30'
+                            ? 'bg-rose-500/20 text-rose-300 border border-rose-500/40'
+                            : 'bg-emerald-500/20 text-emerald-300 border border-emerald-500/40 shadow-[0_0_10px_rgba(16,185,129,0.2)]'
                         }`}
                       >
-                        {item.status}
+                        ● {item.status === 'SAFE' ? 'ถูกต้องตามกฎหมาย (SAFE)' : item.status}
                       </span>
                     </div>
-                    <p className="text-xs text-slate-300 leading-relaxed">{item.snippet}</p>
-                    <div className="pt-2 border-t border-white/[0.05] flex items-center justify-between text-[11px] text-slate-500">
-                      <span>แหล่งที่มา: <strong className="text-slate-400">{item.source}</strong> ({item.publishedDate})</span>
+
+                    {/* Title */}
+                    <div>
+                      <h4 className="text-base font-black text-white leading-snug">
+                        {item.title}
+                      </h4>
+                    </div>
+
+                    {/* Snippet / Details */}
+                    <div className="p-3.5 bg-slate-950/70 border border-white/[0.05] rounded-2xl text-xs text-slate-200 leading-relaxed font-mono">
+                      {item.snippet}
+                    </div>
+
+                    {/* Source & Citation Footer */}
+                    <div className="pt-2 flex items-center justify-between text-xs text-slate-400">
+                      <span>แหล่งข้อมูลทางการ: <strong className="text-teal-300">{item.source}</strong></span>
                       <a
                         href={item.sourceUrl}
                         target="_blank"
                         rel="noopener noreferrer"
-                        className="inline-flex items-center gap-1 text-teal-300 hover:underline"
+                        className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl border border-teal-400/30 bg-teal-400/10 text-xs font-bold text-teal-200 hover:bg-teal-400/20 transition"
                       >
-                        ดูต้นฉบับ <ExternalLink className="w-3 h-3" />
+                        ตรวจสอบข้อมูลต้นฉบับ <ExternalLink className="w-3.5 h-3.5" />
                       </a>
                     </div>
                   </div>
