@@ -1,24 +1,13 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { z } from 'zod';
+import { resolveSmartFdaSearch, SmartSearchResult } from '@/lib/fda-smart-resolver';
 
 const searchQuerySchema = z.object({
   q: z.string().trim().min(2).max(200),
   category: z.enum(['ALL', 'HEALTH_PRODUCTS', 'FRAUD_ALERTS', 'COMPANIES', 'LICENSES']).default('ALL'),
 });
 
-interface SearchResultItem {
-  id: string;
-  title: string;
-  category: string;
-  snippet: string;
-  source: string;
-  sourceUrl: string;
-  publishedDate: string;
-  confidenceScore: number;
-  status: 'SAFE' | 'WARNING' | 'REVOKED' | 'UNREGISTERED';
-}
-
-const MOCK_PUBLIC_KNOWLEDGE: SearchResultItem[] = [
+const MOCK_PUBLIC_KNOWLEDGE: SmartSearchResult[] = [
   {
     id: 'res-fda-2a3661',
     title: 'ใบสำคัญ/ใบอนุญาต 2A 36/61: ไอ-คอร์ดิล (I-cordyl)',
@@ -111,11 +100,16 @@ export async function GET(request: NextRequest) {
     );
   }
 
-  const query = parsed.data.q.toLowerCase().trim();
+  const rawQuery = parsed.data.q.trim();
+  const query = rawQuery.toLowerCase();
   const normalizedQuery = query.replace(/[\s\-\/\.]/g, '');
   const cat = parsed.data.category;
 
-  const results = MOCK_PUBLIC_KNOWLEDGE.filter((item) => {
+  // 1. Intelligent FDA & Drug pattern resolver
+  const smartFdaResults = resolveSmartFdaSearch(rawQuery);
+
+  // 2. Knowledge base filter
+  const kbResults = MOCK_PUBLIC_KNOWLEDGE.filter((item) => {
     const matchesCategory = cat === 'ALL' || item.category === cat;
     const titleNormalized = item.title.toLowerCase().replace(/[\s\-\/\.]/g, '');
     const snippetNormalized = item.snippet.toLowerCase().replace(/[\s\-\/\.]/g, '');
@@ -128,13 +122,23 @@ export async function GET(request: NextRequest) {
     return matchesCategory && matchesQuery;
   });
 
+  // Combine and deduplicate
+  const combinedMap = new Map<string, SmartSearchResult>();
+  for (const item of [...smartFdaResults, ...kbResults]) {
+    if (!combinedMap.has(item.id)) {
+      combinedMap.set(item.id, item);
+    }
+  }
+
+  const results = Array.from(combinedMap.values());
+
   // AI Citation Summary
   let aiSummary = '';
   if (results.length > 0) {
     const topItem = results[0];
-    aiSummary = `จากการตรวจสอบฐานข้อมูลสาธารณะและการอนุญาต อย. พบข้อมูลที่เกี่ยวข้องกับ "${parsed.data.q}": ${topItem.snippet} (อ้างอิงจาก: ${topItem.source} ณ วันที่ ${topItem.publishedDate})`;
+    aiSummary = `จากการตรวจสอบระบบสืบค้นแยกรายผลิตภัณฑ์ อย. (porta.fda.moph.go.th) พบข้อมูลที่เกี่ยวข้องกับ "${rawQuery}": ${topItem.snippet} (อ้างอิงจาก: ${topItem.source} ณ วันที่ ${topItem.publishedDate})`;
   } else {
-    aiSummary = `ไม่พบประวัติการแจ้งเตือนหรือข้อมูลที่เป็นภัยคุกคามโดยตรงเกี่ยวกับ "${parsed.data.q}" ในฐานข้อมูลเปิดของหน่วยงาน กรุณาตรวจสอบความถูกต้องของชื่อและเอกสารสิทธิ์เพิ่มเติม`;
+    aiSummary = `ไม่พบข้อมูลที่ตรงกับ "${rawQuery}" ในฐานข้อมูลเปิดหรือทะเบียนที่บันทึกไว้ กรุณาตรวจสอบการสะกดหรือลองค้นหาด้วยชื่อสามัญ/ชื่อทางการค้า`;
   }
 
   return NextResponse.json({
