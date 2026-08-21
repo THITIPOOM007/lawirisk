@@ -35,7 +35,7 @@ export async function POST(request: NextRequest) {
     // Generate Public Tracking Token (e.g. TRK-2026-AB12CD)
     const randomCode = crypto.randomBytes(3).toString('hex').toUpperCase();
     const trackingToken = `TRK-${new Date().getFullYear()}-${randomCode}`;
-    const envelopeId = `env-pub-${crypto.randomUUID()}`;
+    const envelopeId = crypto.randomUUID();
     const now = new Date().toISOString();
     const urgency = category === 'HEALTH_HAZARD' || category === 'ONLINE_FRAUD' ? 'HIGH' : 'NORMAL';
 
@@ -87,12 +87,14 @@ export async function POST(request: NextRequest) {
       let channelId = channelRes.data?.id;
       if (!channelId) {
         channelId = crypto.randomUUID();
-        await supabase.from('intake_channels').insert({
+        const { error: chError } = await supabase.from('intake_channels').insert({
           id: channelId,
           name: 'Public Portal',
           type: 'MANUAL_POST',
-          code: 'PUBLIC_PORTAL_' + Date.now()
         });
+        if (chError) {
+          console.error('Failed to create public intake channel:', chError);
+        }
       }
 
       const { error: envelopeError } = await supabase.from('intake_envelopes').insert({
@@ -111,7 +113,7 @@ export async function POST(request: NextRequest) {
       const { error: msgError } = await supabase.from('intake_messages').insert({
         id: crypto.randomUUID(),
         envelope_id: envelopeId,
-        raw_payload: {
+        raw_payload: JSON.stringify({
           trackingToken,
           topic,
           description,
@@ -120,7 +122,7 @@ export async function POST(request: NextRequest) {
           complainantName: isAnonymous ? 'ไม่ประสงค์ออกนาม' : complainantName,
           complainantContact: isAnonymous ? '-' : complainantContact,
           source: 'CITIZEN_PUBLIC_PORTAL',
-        },
+        }),
         message_id: trackingToken,
       });
       if (msgError) throw msgError;
