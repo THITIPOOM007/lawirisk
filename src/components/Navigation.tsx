@@ -202,13 +202,12 @@ export default function Navigation({ children }: NavigationProps) {
     if (isSigningOut) return;
     setIsSigningOut(true);
     try {
-      if (isSupabaseConfigured()) await createClient().auth.signOut();
+      await fetch('/api/v1/auth/logout', { method: 'POST' }).catch(() => {});
       for (const name of ['mock-auth-logged-in', 'mock-auth-role', 'mock-auth-name']) {
         document.cookie = `${name}=; Max-Age=0; path=/; SameSite=Lax`;
       }
       window.dispatchEvent(new Event('ev-auth-change'));
-      router.replace('/login');
-      router.refresh();
+      window.location.replace('/login');
     } finally {
       setIsSigningOut(false);
     }

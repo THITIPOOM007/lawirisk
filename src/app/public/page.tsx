@@ -14,6 +14,10 @@ import {
   Lock,
   Clock,
   Compass,
+  Paperclip,
+  Upload,
+  X,
+  ImageIcon,
 } from 'lucide-react';
 
 interface SearchResultItem {
@@ -47,43 +51,46 @@ export default function PublicPortalPage() {
   const [complainantName, setComplainantName] = useState('');
   const [complainantContact, setComplainantContact] = useState('');
   const [isAnonymous, setIsAnonymous] = useState(false);
+  const [selectedFile, setSelectedFile] = useState<File | null>(null);
+  const [filePreview, setFilePreview] = useState<string | null>(null);
+  const [fileError, setFileError] = useState('');
   const [isSubmittingComplaint, setIsSubmittingComplaint] = useState(false);
   const [complaintSuccessToken, setComplaintSuccessToken] = useState('');
   const [complaintError, setComplaintError] = useState('');
 
-  // Tracking State
-  const [trackTokenInput, setTrackTokenInput] = useState('');
-  const [isTracking, setIsTracking] = useState(false);
-  const [trackError, setTrackError] = useState('');
-  const [trackingResult, setTrackingResult] = useState<{
-    trackingToken: string;
-    receivedAt: string;
-    statusLabel: string;
-    progressStep: number;
-    jurisdiction: string;
-  } | null>(null);
+  const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    setFileError('');
+    if (!file) return;
 
-  const handleSearch = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (searchQuery.trim().length < 2) {
-      setSearchError('กรุณากรอกคำค้นหาอย่างน้อย 2 ตัวอักษร');
+    if (file.size > 20 * 1024 * 1024) {
+      setFileError('ขนาดไฟล์เกินกำหนด (สูงสุด 20 MB)');
       return;
     }
-    setIsSearching(true);
-    setSearchError('');
-    try {
-      const res = await fetch(
-        `/api/v1/public/search?q=${encodeURIComponent(searchQuery.trim())}&category=${encodeURIComponent(category)}`,
-      );
-      const body = await res.json();
-      if (!res.ok) throw new Error(body.error || 'ค้นหาข้อมูลไม่สำเร็จ');
-      setSearchResults(body.data.results);
-      setAiSummary(body.data.aiSummary);
-    } catch (err: unknown) {
-      setSearchError(err instanceof Error ? err.message : 'ค้นหาข้อมูลไม่สำเร็จ');
-    } finally {
-      setIsSearching(false);
+
+    const validExtensions = ['pdf', 'png', 'jpg', 'jpeg'];
+    const ext = file.name.split('.').pop()?.toLowerCase();
+    if (!ext || !validExtensions.includes(ext)) {
+      setFileError('รองรับเฉพาะไฟล์รูปภาพ (PNG, JPG) หรือเอกสาร PDF');
+      return;
     }
+
+    setSelectedFile(file);
+    if (file.type.startsWith('image/')) {
+      const url = URL.createObjectURL(file);
+      setFilePreview(url);
+    } else {
+      setFilePreview(null);
+    }
+  };
+
+  const handleRemoveFile = () => {
+    if (filePreview) {
+      URL.revokeObjectURL(filePreview);
+    }
+    setSelectedFile(null);
+    setFilePreview(null);
+    setFileError('');
   };
 
   const handleComplaintSubmit = async (e: React.FormEvent) => {
@@ -91,18 +98,21 @@ export default function PublicPortalPage() {
     setIsSubmittingComplaint(true);
     setComplaintError('');
     try {
+      const formData = new FormData();
+      formData.set('topic', topic.trim());
+      formData.set('description', description.trim());
+      formData.set('category', complaintCategory);
+      if (region.trim()) formData.set('region', region.trim());
+      if (!isAnonymous && complainantName.trim()) formData.set('complainantName', complainantName.trim());
+      if (!isAnonymous && complainantContact.trim()) formData.set('complainantContact', complainantContact.trim());
+      formData.set('isAnonymous', String(isAnonymous));
+      if (selectedFile) {
+        formData.set('file', selectedFile, selectedFile.name);
+      }
+
       const res = await fetch('/api/v1/public/complaints', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          topic: topic.trim(),
-          description: description.trim(),
-          category: complaintCategory,
-          region: region.trim() || undefined,
-          complainantName: isAnonymous ? undefined : complainantName.trim() || undefined,
-          complainantContact: isAnonymous ? undefined : complainantContact.trim() || undefined,
-          isAnonymous,
-        }),
+        body: formData,
       });
       const body = await res.json();
       if (!res.ok) throw new Error(body.error || 'บันทึกคำร้องไม่สำเร็จ');
@@ -111,6 +121,7 @@ export default function PublicPortalPage() {
       setDescription('');
       setComplainantName('');
       setComplainantContact('');
+      handleRemoveFile();
     } catch (err: unknown) {
       setComplaintError(err instanceof Error ? err.message : 'บันทึกคำร้องไม่สำเร็จ');
     } finally {
@@ -492,6 +503,71 @@ export default function PublicPortalPage() {
                       </div>
                     </div>
                   )}
+
+                  {/* File Attachment Section */}
+                  <div className="pt-3 border-t border-white/[0.05]">
+                    <label className="block text-xs font-semibold text-slate-300 mb-1.5 flex items-center gap-1.5">
+                      <Paperclip className="w-3.5 h-3.5 text-teal-300" />
+                      <span>แนบไฟล์หลักฐาน (ภาพแคปหน้าจอ / สลิปโอนเงิน / เอกสาร PDF)</span>
+                      <span className="text-[10px] text-slate-500 font-normal ml-auto">รองรับ PNG, JPG, PDF ไม่เกิน 20 MB</span>
+                    </label>
+
+                    {fileError && (
+                      <div className="mb-2 p-2.5 bg-rose-950/40 border border-rose-500/30 rounded-xl text-xs text-rose-300">
+                        {fileError}
+                      </div>
+                    )}
+
+                    {!selectedFile ? (
+                      <label className="group relative flex flex-col items-center justify-center p-5 border-2 border-dashed border-white/[0.1] hover:border-teal-400/50 rounded-2xl bg-slate-950/60 hover:bg-teal-950/10 cursor-pointer transition">
+                        <input
+                          type="file"
+                          accept=".png,.jpg,.jpeg,.pdf"
+                          onChange={handleFileChange}
+                          className="absolute inset-0 w-full h-full opacity-0 cursor-pointer"
+                        />
+                        <div className="w-10 h-10 rounded-xl bg-teal-400/10 flex items-center justify-center text-teal-300 mb-2 group-hover:scale-110 transition">
+                          <Upload className="w-5 h-5" />
+                        </div>
+                        <p className="text-xs font-medium text-slate-300 text-center">
+                          คลิกเพื่อเลือกไฟล์ หรือลากไฟล์มาวางที่นี่
+                        </p>
+                        <p className="text-[10px] text-slate-500 mt-0.5">
+                          ภาพถ่ายสินค้า, แคปหน้าจอแชต, ซองยา, หรือสลิปธนาคาร
+                        </p>
+                      </label>
+                    ) : (
+                      <div className="flex items-center justify-between p-3.5 rounded-2xl border border-teal-500/30 bg-teal-950/20">
+                        <div className="flex items-center gap-3 min-w-0">
+                          {filePreview ? (
+                            <img
+                              src={filePreview}
+                              alt="Preview"
+                              className="w-12 h-12 rounded-xl object-cover border border-white/[0.1] shrink-0"
+                            />
+                          ) : (
+                            <div className="w-12 h-12 rounded-xl bg-teal-400/20 border border-teal-400/30 flex items-center justify-center text-teal-300 shrink-0">
+                              <FileText className="w-6 h-6" />
+                            </div>
+                          )}
+                          <div className="min-w-0">
+                            <p className="text-xs font-semibold text-white truncate">{selectedFile.name}</p>
+                            <p className="text-[10px] text-teal-300/80 mt-0.5 font-mono">
+                              {(selectedFile.size / (1024 * 1024)).toFixed(2)} MB • {selectedFile.type || 'เอกสาร'}
+                            </p>
+                          </div>
+                        </div>
+                        <button
+                          type="button"
+                          onClick={handleRemoveFile}
+                          className="p-1.5 rounded-xl border border-white/[0.1] bg-slate-900 text-slate-400 hover:text-rose-300 hover:border-rose-500/40 transition shrink-0 cursor-pointer ml-2"
+                          title="ลบไฟล์"
+                        >
+                          <X className="w-4 h-4" />
+                        </button>
+                      </div>
+                    )}
+                  </div>
                 </div>
 
                 <div className="pt-4 border-t border-white/[0.08] flex justify-end">
