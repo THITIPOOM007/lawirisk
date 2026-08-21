@@ -1,16 +1,28 @@
 'use client';
 
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useState, useMemo } from 'react';
 import { useParams, useRouter } from 'next/navigation';
 import Link from 'next/link';
-import { ArrowLeft, ShieldCheck, ShieldAlert, AlertTriangle, Settings, Save, FileText, Loader2 } from 'lucide-react';
+import { 
+  ArrowLeft, 
+  ShieldCheck, 
+  ShieldAlert, 
+  AlertTriangle, 
+  Settings, 
+  Save, 
+  FileText, 
+  Loader2, 
+  User, 
+  Phone, 
+  MapPin, 
+  Tag, 
+  Key, 
+  FileCheck, 
+  CheckCircle2, 
+  Code2, 
+  ExternalLink 
+} from 'lucide-react';
 import {
-  getIntakeEnvelopes,
-  getIntakeMessages,
-  getIntakeParticipants,
-  getIntakeAttachments,
-  getDuplicateCandidates,
-  getCases,
   type Case,
   type IntakeAttachment,
   type IntakeDuplicateCandidate,
@@ -26,12 +38,13 @@ export default function IntakeDetailPage() {
   const router = useRouter();
   const intakeId = params.id as string;
 
-  const [envelope, setEnvelope] = useState<IntakeEnvelope | null>(() => getIntakeEnvelopes().find((item) => item.id === intakeId) || null);
-  const [message, setMessage] = useState<IntakeMessage | null>(() => getIntakeMessages().find((item) => item.envelope_id === intakeId) || null);
-  const [participants, setParticipants] = useState<IntakeParticipant[]>(() => getIntakeParticipants().filter((item) => item.envelope_id === intakeId));
-  const [attachments, setAttachments] = useState<IntakeAttachment[]>(() => getIntakeAttachments().filter((item) => item.envelope_id === intakeId));
-  const [duplicates, setDuplicates] = useState<IntakeDuplicateCandidate[]>(() => getDuplicateCandidates().filter((item) => item.source_envelope_id === intakeId));
-  const [casesList, setCasesList] = useState<Case[]>(() => getCases());
+  const [mounted, setMounted] = useState(false);
+  const [envelope, setEnvelope] = useState<IntakeEnvelope | null>(null);
+  const [message, setMessage] = useState<IntakeMessage | null>(null);
+  const [participants, setParticipants] = useState<IntakeParticipant[]>([]);
+  const [attachments, setAttachments] = useState<IntakeAttachment[]>([]);
+  const [duplicates, setDuplicates] = useState<IntakeDuplicateCandidate[]>([]);
+  const [casesList, setCasesList] = useState<Case[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [loadError, setLoadError] = useState('');
 
@@ -53,6 +66,44 @@ export default function IntakeDetailPage() {
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [successMessage, setSuccessMessage] = useState('');
   const [submitError, setSubmitError] = useState('');
+  const [showRawJson, setShowRawJson] = useState(false);
+
+  useEffect(() => {
+    setMounted(true);
+  }, []);
+
+  // Parse structured payload if the message contains JSON
+  const parsedData = useMemo(() => {
+    if (!message?.raw_payload) return null;
+    try {
+      const obj = JSON.parse(message.raw_payload);
+      if (typeof obj === 'object' && obj !== null) {
+        return obj as {
+          trackingToken?: string;
+          topic?: string;
+          description?: string;
+          category?: string;
+          region?: string;
+          complainantName?: string;
+          complainantContact?: string;
+          source?: string;
+          [key: string]: unknown;
+        };
+      }
+    } catch {
+      // not JSON
+    }
+    return null;
+  }, [message?.raw_payload]);
+
+  // Set default case title when parsedData or envelope arrives
+  useEffect(() => {
+    if (parsedData?.topic && !newCaseTitle) {
+      setNewCaseTitle(parsedData.topic);
+    } else if (envelope?.urgency_reason && !newCaseTitle) {
+      setNewCaseTitle(envelope.urgency_reason);
+    }
+  }, [parsedData, envelope, newCaseTitle]);
 
   const handleFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
@@ -85,7 +136,6 @@ export default function IntakeDetailPage() {
       }
 
       setUploadStatus('');
-      // Add attachment to list
       if (body.data) {
         setAttachments((prev) => [...prev, body.data as IntakeAttachment]);
       }
@@ -141,7 +191,7 @@ export default function IntakeDetailPage() {
       });
       const body = await response.json();
       if (!response.ok) throw new Error(body.error?.message || 'บันทึกผลคัดกรองไม่สำเร็จ');
-      setSuccessMessage('บันทึกผลคัดกรองและ Audit log เรียบร้อยแล้ว');
+      setSuccessMessage('บันทึกผลการคัดกรองและประวัติการตรวจสอบ (Audit Log) เรียบร้อยแล้ว');
       window.setTimeout(() => router.push('/intake'), 900);
     } catch (error: unknown) {
       setSubmitError(error instanceof Error ? error.message : 'บันทึกผลคัดกรองไม่สำเร็จ');
@@ -150,11 +200,11 @@ export default function IntakeDetailPage() {
     }
   };
 
-  if (isLoading && !envelope) {
-    return <div className="flex items-center p-8 text-slate-400" role="status"><Loader2 className="mr-2 h-5 w-5 animate-spin" />กำลังดึงข้อมูลสารบบคำร้อง...</div>;
+  if (!mounted || (isLoading && !envelope)) {
+    return <div className="flex items-center justify-center p-16 text-slate-400 text-sm" role="status"><Loader2 className="mr-2 h-5 w-5 animate-spin text-teal-300" />กำลังโหลดข้อมูลรายละเอียดคำร้องและพยานหลักฐาน...</div>;
   }
   if (loadError || !envelope) {
-    return <div className="rounded-2xl border border-rose-500/20 bg-rose-500/5 p-8 text-rose-300" role="alert">{loadError || 'ไม่พบคำร้อง'}</div>;
+    return <div className="rounded-2xl border border-rose-500/20 bg-rose-500/5 p-8 text-rose-300 text-center" role="alert">{loadError || 'ไม่พบรายการคำร้อง'}</div>;
   }
 
   const complainant = participants.find(p => p.role === 'COMPLAINANT');
@@ -164,17 +214,27 @@ export default function IntakeDetailPage() {
     <div className="space-y-8">
       {/* Navigation breadcrumb */}
       <div>
-        <Link href="/intake" className="inline-flex items-center text-xs text-indigo-400 hover:text-indigo-300 font-semibold mb-4">
-          <ArrowLeft className="h-4 w-4 mr-1" /> กลับไปหน้ากล่องคัดกรอง
+        <Link href="/intake" className="inline-flex items-center text-xs text-indigo-400 hover:text-indigo-300 font-semibold mb-4 transition-colors">
+          <ArrowLeft className="h-4 w-4 mr-1" /> กลับสู่ระบบรับเรื่องและคัดกรองเบาะแส
         </Link>
-        <h1 className="text-3xl font-extrabold text-white tracking-tight flex items-center space-x-3">
-          <span>รายละเอียดพยานหลักฐานนำเข้า #{envelope.id}</span>
-        </h1>
+        <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
+          <h1 className="text-2xl sm:text-3xl font-black text-white tracking-tight flex items-center space-x-3">
+            <FileText className="h-7 w-7 text-teal-300 shrink-0" />
+            <span>รายละเอียดคำร้องและเบาะแส #{envelope.id.slice(0, 8)}</span>
+          </h1>
+          {parsedData?.trackingToken && (
+            <div className="inline-flex items-center gap-2 bg-indigo-950/60 border border-indigo-500/30 px-3.5 py-1.5 rounded-full text-xs font-mono text-indigo-300">
+              <Key className="h-3.5 w-3.5" />
+              <span>รหัสติดตาม: {parsedData.trackingToken}</span>
+            </div>
+          )}
+        </div>
       </div>
 
       {successMessage && (
-        <div className="bg-emerald-950/40 border border-emerald-900/50 p-4 rounded-2xl text-emerald-300 text-sm">
-          {successMessage}
+        <div className="bg-emerald-950/40 border border-emerald-900/50 p-4 rounded-2xl text-emerald-300 text-sm flex items-center gap-2">
+          <CheckCircle2 className="h-5 w-5 text-emerald-400 shrink-0" />
+          <span>{successMessage}</span>
         </div>
       )}
       {submitError && <div className="rounded-2xl border border-rose-500/20 bg-rose-500/5 p-4 text-sm text-rose-300" role="alert">{submitError}</div>}
@@ -183,77 +243,138 @@ export default function IntakeDetailPage() {
         
         {/* Left column: Original payload and details (3/5) */}
         <div className="lg:col-span-3 space-y-6">
-          <div className="bg-slate-900/40 border border-slate-900 rounded-3xl p-6 space-y-6">
-            <h3 className="text-base font-bold text-white flex items-center pb-3 border-b border-slate-950">
-              <FileText className="h-5 w-5 mr-2 text-indigo-500" />
-              ต้นฉบับข้อมูลคำร้องและพยานหลักฐานแนบ (Immutable Payload)
+          <div className="bg-slate-900/40 border border-slate-900 rounded-3xl p-6 sm:p-7 space-y-6">
+            <h3 className="text-base font-bold text-white flex items-center pb-3 border-b border-white/[0.08]">
+              <FileCheck className="h-5 w-5 mr-2 text-teal-300" />
+              ข้อมูลคำร้องและพยานหลักฐานนำเข้า (Evidence Payload)
             </h3>
+
+            {/* Structured Topic & Description */}
+            {parsedData?.topic && (
+              <div className="p-4 bg-slate-950/70 border border-slate-800/80 rounded-2xl space-y-3">
+                <div className="flex items-center gap-2">
+                  <Tag className="h-4 w-4 text-teal-300 shrink-0" />
+                  <h4 className="text-xs font-bold text-teal-200 uppercase tracking-wide">หัวข้อเรื่องร้องเรียน</h4>
+                </div>
+                <p className="text-sm font-bold text-white leading-relaxed">
+                  {parsedData.topic}
+                </p>
+                {parsedData.description && (
+                  <div className="pt-2 border-t border-slate-900 space-y-1.5">
+                    <span className="text-[11px] font-semibold text-slate-400 block">พฤติการณ์ / สรุปสาระสำคัญ:</span>
+                    <p className="text-xs text-slate-300 leading-relaxed whitespace-pre-wrap">
+                      {parsedData.description}
+                    </p>
+                  </div>
+                )}
+                <div className="pt-2 border-t border-slate-900 flex flex-wrap gap-3 text-xs">
+                  {parsedData.category && (
+                    <div className="inline-flex items-center gap-1.5 px-2.5 py-1 bg-indigo-500/10 border border-indigo-500/20 rounded-lg text-indigo-300 text-[11px]">
+                      <Tag className="h-3 w-3" />
+                      <span>หมวดหมู่: {parsedData.category}</span>
+                    </div>
+                  )}
+                  {parsedData.region && (
+                    <div className="inline-flex items-center gap-1.5 px-2.5 py-1 bg-teal-500/10 border border-teal-500/20 rounded-lg text-teal-300 text-[11px]">
+                      <MapPin className="h-3 w-3" />
+                      <span>พื้นที่: {parsedData.region}</span>
+                    </div>
+                  )}
+                </div>
+              </div>
+            )}
 
             {/* Complainant metadata Box */}
             <div className="p-4 bg-slate-950/60 border border-slate-900 rounded-2xl space-y-3">
-              <h4 className="text-xs font-bold text-slate-500 uppercase tracking-wide">ผู้แจ้งเบาะแส / Complainant</h4>
+              <h4 className="text-xs font-bold text-slate-400 uppercase tracking-wide flex items-center gap-2">
+                <User className="h-4 w-4 text-indigo-400" />
+                ข้อมูลผู้แจ้งเรื่องร้องเรียน / เบาะแส (Complainant)
+              </h4>
               {envelope.complainant_mode === 'ANONYMOUS' ? (
-                <div className="p-3 bg-slate-900/40 rounded-xl text-xs text-slate-400 border border-slate-800 border-dashed">
-                  ⚠️ ผู้ร้องเรียนเลือก **ไม่ระบุตัวตน (ANONYMOUS Complainant)**:
-                  <p className="mt-1 text-[11px] text-slate-500">
-                    ระบบดำเนินการคัดแยกข้อมูลและจะไม่สร้างประวัติหรือชื่อจำลองในระบบ เพื่อความปลอดภัยสูงสุดของผู้ให้เบาะแส
+                <div className="p-3.5 bg-amber-950/20 rounded-xl text-xs text-amber-300 border border-amber-800/40">
+                  <span className="font-bold">⚠️ ผู้ร้องเรียนเลือก "ไม่ระบุตัวตน" (Anonymous Mode)</span>
+                  <p className="mt-1 text-[11px] text-slate-400 leading-relaxed">
+                    ระบบได้แยกการจัดเก็บข้อมูลและไม่บันทึกชื่อหรือเบอร์ติดต่อ เพื่อคุ้มครองความปลอดภัยสูงสุดของผู้แจ้งเบาะแส
                   </p>
                 </div>
               ) : complainant ? (
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 text-xs">
                   <div>
-                    <span className="text-slate-500 block">ชื่อ-นามสกุล:</span>
+                    <span className="text-slate-500 block text-[11px]">ชื่อ-นามสกุล / หน่วยงาน:</span>
                     <span className="text-white font-semibold">{complainant.name || '-'}</span>
                   </div>
                   <div>
-                    <span className="text-slate-500 block">เบอร์โทรศัพท์:</span>
-                    <span className="text-white font-semibold">{complainant.phone || '-'}</span>
+                    <span className="text-slate-500 block text-[11px]">เบอร์โทรศัพท์ติดต่อ:</span>
+                    <span className="text-white font-semibold font-mono">{complainant.phone || '-'}</span>
                   </div>
                   <div>
-                    <span className="text-slate-500 block">อีเมล:</span>
+                    <span className="text-slate-500 block text-[11px]">อีเมล:</span>
                     <span className="text-white font-semibold">{complainant.email || '-'}</span>
                   </div>
                 </div>
+              ) : parsedData?.complainantName || parsedData?.complainantContact ? (
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 text-xs">
+                  <div>
+                    <span className="text-slate-500 block text-[11px]">ชื่อผู้แจ้ง:</span>
+                    <span className="text-white font-semibold">{parsedData.complainantName || '-'}</span>
+                  </div>
+                  <div>
+                    <span className="text-slate-500 block text-[11px]">ช่องทางติดต่อ:</span>
+                    <span className="text-white font-semibold font-mono">{parsedData.complainantContact || '-'}</span>
+                  </div>
+                </div>
               ) : (
-                <span className="text-slate-500 text-xs italic">ไม่ระบุข้อมูลการติดต่อ</span>
+                <span className="text-slate-500 text-xs italic">ไม่ระบุข้อมูลการติดต่อส่วนบุคคล</span>
               )}
             </div>
 
             {/* Accused metadata Box */}
             <div className="p-4 bg-slate-950/60 border border-slate-900 rounded-2xl space-y-3">
-              <h4 className="text-xs font-bold text-slate-500 uppercase tracking-wide">ผู้ถูกกล่าวหา / Accused Entity</h4>
+              <h4 className="text-xs font-bold text-slate-400 uppercase tracking-wide flex items-center gap-2">
+                <ShieldAlert className="h-4 w-4 text-rose-400" />
+                ข้อมูลผู้ถูกกล่าวหา / เป้าหมายเบาะแส (Accused Entity)
+              </h4>
               {accused ? (
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 text-xs">
                   <div>
-                    <span className="text-slate-500 block">ชื่อบุคคล/ห้างร้าน:</span>
+                    <span className="text-slate-500 block text-[11px]">ชื่อบุคคล/เพจ/ห้างร้าน:</span>
                     <span className="text-white font-semibold">{accused.name || '-'}</span>
                   </div>
                   <div>
-                    <span className="text-slate-500 block">เบอร์ติดต่อที่ระบุ:</span>
+                    <span className="text-slate-500 block text-[11px]">เบอร์ติดต่อที่ระบุ:</span>
                     <span className="text-white font-semibold font-mono">{accused.phone || '-'}</span>
                   </div>
                   <div className="sm:col-span-2">
-                    <span className="text-slate-500 block">ที่อยู่/พิกัด:</span>
+                    <span className="text-slate-500 block text-[11px]">ที่อยู่ / พิกัดสถานที่เกิดเหตุ:</span>
                     <span className="text-white font-semibold">{accused.address || '-'}</span>
                   </div>
                 </div>
               ) : (
-                <span className="text-slate-500 text-xs italic">ไม่ระบุรายละเอียดผู้กระทำความผิด</span>
+                <span className="text-slate-500 text-xs italic">ระบุในรายละเอียดพฤติการณ์ของเรื่องร้องเรียน</span>
               )}
             </div>
 
-            {/* Raw Message Box */}
+            {/* Raw Message Box (Collapsible) */}
             <div className="space-y-2">
-              <span className="block text-xs font-semibold text-slate-400 uppercase tracking-wider">เนื้อหาข้อมูลดิบ (Raw Message Body)</span>
-              <pre className="p-4 bg-slate-950 border border-slate-900/60 rounded-2xl text-xs font-mono text-slate-300 overflow-x-auto whitespace-pre-wrap leading-relaxed">
-                {message?.raw_payload || 'ไม่มีข้อมูลนำเข้า'}
-              </pre>
+              <button 
+                type="button" 
+                onClick={() => setShowRawJson(!showRawJson)} 
+                className="text-xs font-semibold text-slate-400 hover:text-white uppercase tracking-wider flex items-center gap-2 cursor-pointer transition-colors"
+              >
+                <Code2 className="h-3.5 w-3.5 text-indigo-400" />
+                <span>{showRawJson ? 'ซ่อนข้อมูลดิบ (Hide Raw Payload)' : 'ดูข้อมูลดิบ (View Raw JSON Payload)'}</span>
+              </button>
+              {showRawJson && (
+                <pre className="p-4 bg-slate-950 border border-slate-900/80 rounded-2xl text-xs font-mono text-slate-300 overflow-x-auto whitespace-pre-wrap leading-relaxed">
+                  {message?.raw_payload || 'ไม่มีข้อมูลนำเข้า'}
+                </pre>
+              )}
             </div>
 
             {/* Attachments Section */}
             <div className="space-y-4">
               <div className="flex items-center justify-between">
-                <span className="block text-xs font-semibold text-slate-400 uppercase tracking-wider">เอกสารหลักฐานที่แนบมา ({attachments.length})</span>
+                <span className="block text-xs font-semibold text-slate-400 uppercase tracking-wider">เอกสารและพยานหลักฐานที่แนบมา ({attachments.length})</span>
               </div>
 
               {/* Upload Dropzone / Form */}
@@ -286,24 +407,24 @@ export default function IntakeDetailPage() {
               {attachments.length > 0 ? (
                 <div className="space-y-3">
                   {attachments.map(att => (
-                    <div key={att.id} className="p-4 bg-slate-950/60 border border-slate-900 rounded-2xl flex items-center justify-between">
-                      <div className="space-y-1">
-                        <p className="text-xs font-bold text-white truncate max-w-[200px] sm:max-w-xs">{att.filename}</p>
-                        <span className="text-[10px] text-slate-500 block">ขนาด: {(att.file_size / (1024 * 1024)).toFixed(2)} MB | SHA-256: {att.sha256.substring(0, 16)}...</span>
+                    <div key={att.id} className="p-4 bg-slate-950/60 border border-slate-900 rounded-2xl flex items-center justify-between gap-3">
+                      <div className="space-y-1 min-w-0">
+                        <p className="text-xs font-bold text-white truncate">{att.filename}</p>
+                        <span className="text-[10px] text-slate-500 block truncate">ขนาด: {(att.file_size / (1024 * 1024)).toFixed(2)} MB | SHA-256: {att.sha256.substring(0, 16)}...</span>
                       </div>
-                      <div>
+                      <div className="shrink-0 flex items-center gap-2">
                         {att.malware_scan_status === 'INFECTED' ? (
-                          <span className="inline-flex items-center px-2 py-0.5 border border-rose-500/35 bg-rose-500/10 text-rose-400 rounded text-[10px] font-semibold animate-pulse">
+                          <span className="inline-flex items-center px-2.5 py-1 border border-rose-500/35 bg-rose-500/10 text-rose-400 rounded-xl text-[10px] font-semibold animate-pulse">
                             <ShieldAlert className="h-3.5 w-3.5 mr-1" />
-                            ไฟล์อันตราย
+                            ไฟล์ไม่ปลอดภัย
                           </span>
                         ) : att.malware_scan_status === 'CLEAN' ? (
-                          <span className="inline-flex items-center px-2 py-0.5 border border-emerald-500/20 bg-emerald-500/5 text-emerald-400 rounded text-[10px] font-semibold">
+                          <span className="inline-flex items-center px-2.5 py-1 border border-emerald-500/20 bg-emerald-500/5 text-emerald-400 rounded-xl text-[10px] font-semibold">
                             <ShieldCheck className="h-3.5 w-3.5 mr-1" />
-                            ตรวจแล้ว
+                            ปลอดภัย (Clean)
                           </span>
                         ) : (
-                          <span className="inline-flex items-center px-2 py-0.5 border border-amber-500/25 bg-amber-500/10 text-amber-300 rounded text-[10px] font-semibold">
+                          <span className="inline-flex items-center px-2.5 py-1 border border-amber-500/25 bg-amber-500/10 text-amber-300 rounded-xl text-[10px] font-semibold">
                             <Loader2 className="h-3.5 w-3.5 mr-1 animate-spin" />
                             รอผลสแกน
                           </span>
@@ -326,8 +447,8 @@ export default function IntakeDetailPage() {
           {/* Duplicate warnings panel */}
           <div className="bg-slate-900/40 border border-slate-900 rounded-3xl p-6 space-y-4">
             <h3 className="text-base font-bold text-white flex items-center">
-              <AlertTriangle className="h-5 w-5 mr-2 text-amber-500" />
-              การวิเคราะห์เรื่องซ้ำโดย AI
+              <AlertTriangle className="h-5 w-5 mr-2 text-amber-400" />
+              การวิเคราะห์เรื่องซ้ำซ้อนโดยระบบ
             </h3>
 
             {duplicates.length > 0 ? (
@@ -337,17 +458,17 @@ export default function IntakeDetailPage() {
                   return (
                     <div key={dup.id} className="p-4 bg-amber-950/10 border border-amber-900/30 rounded-2xl space-y-2 text-xs">
                       <div className="flex items-center justify-between">
-                        <span className="font-bold text-amber-400">พบคดีที่สอดคล้องระดับสูง ({Math.floor(dup.duplicate_score * 100)}%)</span>
+                        <span className="font-bold text-amber-400">พบสำนวนคดีที่มีความสอดคล้อง ({Math.floor(dup.duplicate_score * 100)}%)</span>
                       </div>
                       <p className="text-slate-300 font-medium">
-                        คดีเดิม: {targetCase ? `${targetCase.number} - ${targetCase.title}` : 'คดีเดิมหมายเลข 1'}
+                        สำนวนคดีเดิม: {targetCase ? `${targetCase.number} - ${targetCase.title}` : 'สำนวนคดีที่เกี่ยวข้อง'}
                       </p>
                       <div className="pt-2 border-t border-amber-900/30 flex flex-wrap gap-2 text-[10px] text-slate-400">
-                        {dup.matching_signals.phone && <span className="bg-slate-900 px-2 py-0.5 rounded">เบอร์โทรตรงกัน</span>}
+                        {dup.matching_signals.phone && <span className="bg-slate-900 px-2 py-0.5 rounded">เบอร์โทรศัพท์ตรงกัน</span>}
                         {dup.matching_signals.name_similarity && <span className="bg-slate-900 px-2 py-0.5 rounded">ชื่อเป้าหมายคล้ายคลึงกัน</span>}
                       </div>
                       <p className="text-[10px] text-slate-500 leading-relaxed italic">
-                        **นโยบายความถูกต้อง:** ระบบไม่อนุญาตให้ทำการรวมสำนวนคดีโดยอัตโนมัติ เจ้าหน้าที่ต้องตรวจสอบและตัดสินใจด้วยตนเองเท่านั้น
+                        **นโยบายความถูกต้อง:** ระบบไม่อนุญาตให้รวมสำนวนคดีโดยอัตโนมัติ เจ้าหน้าที่ต้องตรวจสอบและตัดสินใจด้วยตนเองเท่านั้น
                       </p>
                     </div>
                   );
@@ -356,7 +477,7 @@ export default function IntakeDetailPage() {
             ) : (
               <div className="p-4 bg-slate-950/60 border border-slate-900 rounded-2xl text-center py-6">
                 <ShieldCheck className="h-8 w-8 text-emerald-500 mx-auto" />
-                <p className="mt-2 text-xs text-slate-400">ไม่พบคำร้องที่ซ้ำซ้อนระดับสูงในสำนวนคดีอื่น</p>
+                <p className="mt-2 text-xs text-slate-400">ไม่พบคำร้องที่ซ้ำซ้อนในสำนวนคดีอื่น</p>
               </div>
             )}
           </div>
@@ -364,13 +485,13 @@ export default function IntakeDetailPage() {
           {/* Triage action workspace */}
           <div className="bg-slate-900/40 border border-slate-900 rounded-3xl p-6 space-y-6">
             <h3 className="text-base font-bold text-white flex items-center">
-              <Settings className="h-5 w-5 mr-2 text-indigo-500" />
-              การตัดสินใจและส่งคดี (Triage Workspace)
+              <Settings className="h-5 w-5 mr-2 text-indigo-400" />
+              การพิจารณาและสั่งการคัดกรอง
             </h3>
 
             <form onSubmit={handleTriageSubmit} className="space-y-4 text-xs">
               <div>
-                <label className="block text-slate-400 font-semibold mb-2">เลือกดำเนินการคัดกรอง</label>
+                <label className="block text-slate-400 font-semibold mb-2">เลือกผลการพิจารณาคัดกรอง</label>
                 <div className="space-y-2">
                   <label className="flex items-center space-x-2.5 p-3.5 bg-slate-950 rounded-2xl border border-slate-900 hover:border-slate-800 cursor-pointer">
                     <input
@@ -381,8 +502,8 @@ export default function IntakeDetailPage() {
                       className="text-indigo-600 focus:ring-indigo-500 bg-slate-900"
                     />
                     <div>
-                      <span className="font-bold text-white block">CREATE_CASE (เปิดสำนวนคดีใหม่)</span>
-                      <span className="text-[10px] text-slate-500">อนุมัติขึ้นทะเบียนสำนวนใหม่ของหน่วยงาน</span>
+                      <span className="font-bold text-white block">อนุมัติเปิดสำนวนคดีใหม่ (CREATE_CASE)</span>
+                      <span className="text-[10px] text-slate-500">ขึ้นทะเบียนเป็นสำนวนคดีสืบสวนใหม่ของหน่วยงาน</span>
                     </div>
                   </label>
 
@@ -395,8 +516,8 @@ export default function IntakeDetailPage() {
                       className="text-indigo-600 focus:ring-indigo-500 bg-slate-900"
                     />
                     <div>
-                      <span className="font-bold text-white block">MERGE_INTAKE (ผนวกเข้ากับคดีเดิม)</span>
-                      <span className="text-[10px] text-slate-500">จัดเก็บพยานหลักฐานพ่วงเข้าไปในสำนวนที่มีอยู่แล้ว</span>
+                      <span className="font-bold text-white block">ผนวกเข้ากับสำนวนคดีเดิม (MERGE_INTAKE)</span>
+                      <span className="text-[10px] text-slate-500">นำข้อมูลและพยานหลักฐานรวมเข้ากับสำนวนคดีที่มีอยู่แล้ว</span>
                     </div>
                   </label>
 
@@ -409,8 +530,8 @@ export default function IntakeDetailPage() {
                       className="text-indigo-600 focus:ring-indigo-500 bg-slate-900"
                     />
                     <div>
-                      <span className="font-bold text-white block">REQUEST_MORE_INFO (ขอข้อมูลเพิ่มเติม)</span>
-                      <span className="text-[10px] text-slate-500">ส่งคำของข้อมูลชี้แจงกลับไปยังผู้ร้องเรียน</span>
+                      <span className="font-bold text-white block">ขอข้อมูลและพยานหลักฐานเพิ่มเติม (REQUEST_MORE_INFO)</span>
+                      <span className="text-[10px] text-slate-500">ประสานงานผู้ร้องเรียนเพื่อขอรายละเอียดเอกสารเพิ่มเติม</span>
                     </div>
                   </label>
 
@@ -423,8 +544,8 @@ export default function IntakeDetailPage() {
                       className="text-indigo-600 focus:ring-indigo-500 bg-slate-900"
                     />
                     <div>
-                      <span className="font-bold text-white block">REJECT_SPAM (ปฏิเสธคำร้อง)</span>
-                      <span className="text-[10px] text-slate-500">กรณีสแปม ข้อมูลเท็จ หรือไม่อยู่ในขอบข่ายกฎหมาย</span>
+                      <span className="font-bold text-white block">ปฏิเสธคำร้อง / ไม่เข้าข่าย (REJECT_SPAM)</span>
+                      <span className="text-[10px] text-slate-500">กรณีข้อมูลเท็จ สแปม หรือไม่อยู่ในขอบข่ายอำนาจหน้าที่</span>
                     </div>
                   </label>
                 </div>
@@ -433,9 +554,9 @@ export default function IntakeDetailPage() {
               {/* Dynamic input sections */}
               {triageAction === 'CREATE_CASE' && (
                 <div className="space-y-3 p-4 bg-slate-950 border border-slate-900 rounded-2xl">
-                  <h4 className="font-bold text-white block mb-1">ระบุรายละเอียดคดีใหม่</h4>
+                  <h4 className="font-bold text-white block mb-1">ระบุรายละเอียดสำนวนคดีใหม่</h4>
                   <div>
-                    <label className="text-slate-400 block mb-1">เลขรหัสคดี</label>
+                    <label className="text-slate-400 block mb-1">เลขที่สำนวนคดี</label>
                     <input
                       type="text"
                       required
@@ -445,7 +566,7 @@ export default function IntakeDetailPage() {
                     />
                   </div>
                   <div>
-                    <label className="text-slate-400 block mb-1">ชื่อคดีสืบสวน</label>
+                    <label className="text-slate-400 block mb-1">ชื่อสำนวนคดีสืบสวน</label>
                     <input
                       type="text"
                       required
@@ -467,7 +588,7 @@ export default function IntakeDetailPage() {
                     onChange={(e) => setMergeCaseId(e.target.value)}
                     className="w-full bg-slate-900 border-0 rounded-xl py-2.5 px-3 text-white ring-1 ring-slate-800 focus:ring-2 focus:ring-indigo-500 text-xs"
                   >
-                    <option value="">-- กรุณาเลือกคดีเดิม --</option>
+                    <option value="">-- กรุณาเลือกสำนวนคดีเดิม --</option>
                     {casesList.map(c => (
                       <option key={c.id} value={c.id}>{c.number} - {c.title}</option>
                     ))}
@@ -476,11 +597,11 @@ export default function IntakeDetailPage() {
               )}
 
               <div>
-                <label className="block text-slate-400 font-semibold mb-1">บันทึกความเห็นของเจ้าหน้าที่คัดแยก</label>
+                <label className="block text-slate-400 font-semibold mb-1">บันทึกความเห็นของเจ้าหน้าที่ผู้คัดกรอง</label>
                 <textarea
                   required
                   rows={4}
-                  placeholder="กรุณาระบุรายละเอียดการตรวจคัดกรอง หรือพฤติการณ์ประกอบความคิดเห็น..."
+                  placeholder="ระบุเหตุผลการพิจารณาคัดกรอง และข้อสั่งการประกอบ..."
                   value={triageReason}
                   onChange={(e) => setTriageReason(e.target.value)}
                   className="w-full bg-slate-950 border-0 rounded-2xl py-3 px-4 text-white ring-1 ring-slate-800 focus:ring-2 focus:ring-indigo-500 text-xs"
@@ -495,12 +616,12 @@ export default function IntakeDetailPage() {
                 {isSubmitting ? (
                   <>
                     <Loader2 className="h-5 w-5 mr-2 animate-spin" />
-                    กำลังประมวลผลการคัดแยก...
+                    กำลังบันทึกและส่งต่อสำนวนคดี...
                   </>
                 ) : (
                   <>
                     <Save className="h-5 w-5 mr-2" />
-                    บันทึกและดำเนินการคัดกรอง
+                    บันทึกผลการพิจารณาคัดกรอง
                   </>
                 )}
               </button>
@@ -513,3 +634,4 @@ export default function IntakeDetailPage() {
     </div>
   );
 }
+

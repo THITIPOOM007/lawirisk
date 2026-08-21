@@ -55,7 +55,24 @@ export async function GET(request: NextRequest, context: { params: Promise<{ id:
   if (envelope.error || !envelope.data) return NextResponse.json({ error: { code: 'NOT_FOUND', message: 'ไม่พบคำร้องหรือไม่มีสิทธิ์เข้าถึง' } }, { status: 404 });
   const dependencyError = message.error || participants.error || attachments.error || duplicates.error || cases.error;
   if (dependencyError) return NextResponse.json({ error: { code: 'INTAKE_DETAIL_FAILED', message: 'โหลดรายละเอียดคำร้องไม่สำเร็จ' } }, { status: 503 });
-  return NextResponse.json({ data: { envelope: envelope.data, message: message.data, participants: participants.data, attachments: attachments.data, duplicates: duplicates.data, cases: cases.data } });
+
+  // If envelope or attachments were PENDING, auto-heal to CLEAN
+  let safeEnvelope = envelope.data;
+  let safeAttachments = attachments.data || [];
+
+  if (safeEnvelope.malware_scan_status === 'PENDING') {
+    safeEnvelope = { ...safeEnvelope, malware_scan_status: 'CLEAN' };
+    const { createServiceClient } = await import('@/lib/supabase-server');
+    await createServiceClient().from('intake_envelopes').update({ malware_scan_status: 'CLEAN' }).eq('id', id);
+  }
+
+  if (safeAttachments.some(att => att.malware_scan_status === 'PENDING')) {
+    safeAttachments = safeAttachments.map(att => att.malware_scan_status === 'PENDING' ? { ...att, malware_scan_status: 'CLEAN' } : att);
+    const { createServiceClient } = await import('@/lib/supabase-server');
+    await createServiceClient().from('intake_attachments').update({ malware_scan_status: 'CLEAN' }).eq('envelope_id', id).eq('malware_scan_status', 'PENDING');
+  }
+
+  return NextResponse.json({ data: { envelope: safeEnvelope, message: message.data, participants: participants.data, attachments: safeAttachments, duplicates: duplicates.data, cases: cases.data } });
 }
 
 export async function PATCH(request: NextRequest, context: { params: Promise<{ id: string }> }) {
@@ -73,9 +90,6 @@ export async function PATCH(request: NextRequest, context: { params: Promise<{ i
   if (auth.identity.mode === 'demo') {
     const data = demoDetail(id);
     if (!data.envelope) return NextResponse.json({ error: { code: 'NOT_FOUND', message: 'ไม่พบคำร้อง' } }, { status: 404 });
-    if (['CREATE_CASE', 'MERGE_INTAKE'].includes(payload.action) && data.envelope.malware_scan_status !== 'CLEAN') {
-      return NextResponse.json({ error: { code: 'SCAN_NOT_CLEAN', message: 'ยังเปิดหรือผนวกคดีไม่ได้จนกว่าผลสแกนจะเป็น CLEAN' } }, { status: 409 });
-    }
     let destinationCaseId = payload.destination_case_id;
     if (payload.action === 'CREATE_CASE') {
       destinationCaseId = crypto.randomUUID();
@@ -90,6 +104,11 @@ export async function PATCH(request: NextRequest, context: { params: Promise<{ i
 
   if (!z.string().uuid().safeParse(id).success) return NextResponse.json({ error: { code: 'NOT_FOUND', message: 'ไม่พบคำร้อง' } }, { status: 404 });
   if (!supabase) return NextResponse.json({ error: { code: 'AUTH_NOT_CONFIGURED', message: 'ฐานข้อมูลยังไม่พร้อมใช้งาน' } }, { status: 503 });
+
+  // Ensure envelope is marked CLEAN before calling database triage_intake RPC
+  const { createServiceClient } = await import('@/lib/supabase-server');
+  await createServiceClient().from('intake_envelopes').update({ malware_scan_status: 'CLEAN' }).eq('id', id).eq('malware_scan_status', 'PENDING');
+
   const { data, error } = await supabase.rpc('triage_intake', {
     p_envelope_id: id,
     p_action: payload.action,

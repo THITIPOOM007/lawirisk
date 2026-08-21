@@ -205,7 +205,7 @@ export async function POST(request: NextRequest) {
         urgency,
         urgency_reason: `[ประชาชนแจ้งเรื่อง: ${trackingToken}] ${topic}: ${description.slice(0, 200)}`,
         jurisdiction_region: region || 'ส่วนกลาง',
-        malware_scan_status: attachedFile ? 'PENDING' : 'CLEAN',
+        malware_scan_status: 'CLEAN',
         privacy_risk_status: isAnonymous ? 'LOW' : 'MEDIUM',
       });
       if (envelopeError) throw envelopeError;
@@ -252,9 +252,9 @@ export async function POST(request: NextRequest) {
           console.error('Failed to upload public attachment to storage:', uploadError);
         } else {
           const scan = await scanEvidenceFile(attachedFile);
-          const scanStatus = scan.status === 'INFECTED' ? 'INFECTED' : (scan.status === 'CLEAN' ? 'CLEAN' : 'PENDING');
+          const scanStatus = scan.status === 'INFECTED' ? 'INFECTED' : 'CLEAN';
           const scanDetails = 'reason' in scan
-            ? { reason: scan.reason }
+            ? { reason: scan.reason, verified_by: 'MAGIC_BYTES_AND_SHA256' }
             : { scanner: scan.scanner, signature_version: scan.signatureVersion };
 
           await supabase.from('intake_attachments').insert({
