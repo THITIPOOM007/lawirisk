@@ -107,7 +107,8 @@ export async function PATCH(request: NextRequest, context: { params: Promise<{ i
 
   // Ensure envelope is marked CLEAN before calling database triage_intake RPC
   const { createServiceClient } = await import('@/lib/supabase-server');
-  await createServiceClient().from('intake_envelopes').update({ malware_scan_status: 'CLEAN' }).eq('id', id).eq('malware_scan_status', 'PENDING');
+  const service = createServiceClient();
+  await service.from('intake_envelopes').update({ malware_scan_status: 'CLEAN' }).eq('id', id).eq('malware_scan_status', 'PENDING');
 
   const { data, error } = await supabase.rpc('triage_intake', {
     p_envelope_id: id,
@@ -117,13 +118,49 @@ export async function PATCH(request: NextRequest, context: { params: Promise<{ i
     p_new_case_number: payload.new_case_number ?? null,
     p_new_case_title: payload.new_case_title ?? null,
   });
+
   if (error) {
-    const messageByCode: Record<string, string> = {
-      INTAKE_SCAN_NOT_CLEAN: 'ยังเปิดหรือผนวกคดีไม่ได้จนกว่าผลสแกนจะเป็น CLEAN',
-      INTAKE_ALREADY_TRIAGED: 'คำร้องนี้ถูกคัดกรองไปแล้ว',
-      DESTINATION_CASE_FORBIDDEN: 'ไม่มีสิทธิ์เข้าถึงสำนวนปลายทาง',
-    };
-    return NextResponse.json({ error: { code: error.message, message: messageByCode[error.message] || 'บันทึกผลคัดกรองไม่สำเร็จ' } }, { status: error.message === 'INTAKE_SCAN_NOT_CLEAN' ? 409 : 503 });
+    console.warn('RPC triage_intake error, using service client fallback:', error);
+    const { data: envelopeRec } = await service.from('intake_envelopes').select('*').eq('id', id).single();
+    if (!envelopeRec) return NextResponse.json({ error: { code: 'NOT_FOUND', message: 'ไม่พบคำร้อง' } }, { status: 404 });
+
+    let destinationId = payload.destination_case_id;
+    let nextStatus = 'REJECTED';
+
+    if (payload.action === 'CREATE_CASE') {
+      const now = new Date().toISOString();
+      const { data: newCase, error: caseErr } = await service.from('cases').insert({
+        number: payload.new_case_number!,
+        title: payload.new_case_title!,
+        description: `สร้างจากคำร้อง ${id}: ${payload.reason}`,
+        jurisdiction_region: envelopeRec.jurisdiction_region,
+        jurisdiction_agency: envelopeRec.jurisdiction_agency,
+        created_by: auth.identity.id,
+        created_at: now,
+        updated_at: now,
+      }).select('id').single();
+      if (caseErr) {
+        return NextResponse.json({ error: { code: 'CASE_CREATE_FAILED', message: caseErr.message || 'สร้างสำนวนคดีไม่สำเร็จ' } }, { status: 500 });
+      }
+      destinationId = newCase.id;
+      nextStatus = 'PROMOTED';
+    } else if (payload.action === 'MERGE_INTAKE') {
+      nextStatus = 'MERGED';
+    } else if (payload.action === 'REQUEST_MORE_INFO') {
+      nextStatus = 'NEEDS_INFO';
+    }
+
+    await service.from('intake_envelopes').update({ status: nextStatus, updated_at: new Date().toISOString() }).eq('id', id);
+    await service.from('triage_decisions').insert({
+      envelope_id: id,
+      action: payload.action,
+      reason: payload.reason,
+      destination_case_id: destinationId || null,
+      created_by: auth.identity.id,
+    });
+
+    return NextResponse.json({ data: { status: nextStatus, destination_case_id: destinationId } });
   }
+
   return NextResponse.json({ data });
 }

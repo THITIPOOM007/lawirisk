@@ -91,13 +91,13 @@ const readCookie = (name: string) => {
 };
 
 const getAuthSnapshot = () => {
-  const role = readCookie('mock-auth-role') || 'VIEWER';
+  const role = readCookie('mock-auth-role') || 'INVESTIGATOR';
   const encodedName = readCookie('mock-auth-name');
-  const name = encodedName ? decodeURIComponent(encodedName) : 'เจ้าหน้าที่ตรวจสอบ';
+  const name = encodedName ? decodeURIComponent(encodedName) : 'ร.ต.อ. สมชาย (พนักงานสืบสวน)';
   return `${role}\u0000${name}`;
 };
 
-const getServerAuthSnapshot = () => 'VIEWER\u0000เจ้าหน้าที่ตรวจสอบ';
+const getServerAuthSnapshot = () => 'INVESTIGATOR\u0000ร.ต.อ. สมชาย (พนักงานสืบสวน)';
 const subscribeToHydration = () => () => {};
 
 function NavLink({ item, active, collapsed, onNavigate }: {
