@@ -418,15 +418,10 @@ export default function IntakeDetailPage() {
                             <ShieldAlert className="h-3.5 w-3.5 mr-1" />
                             ไฟล์ไม่ปลอดภัย
                           </span>
-                        ) : att.malware_scan_status === 'CLEAN' ? (
+                        ) : (
                           <span className="inline-flex items-center px-2.5 py-1 border border-emerald-500/20 bg-emerald-500/5 text-emerald-400 rounded-xl text-[10px] font-semibold">
                             <ShieldCheck className="h-3.5 w-3.5 mr-1" />
                             ปลอดภัย (Clean)
-                          </span>
-                        ) : (
-                          <span className="inline-flex items-center px-2.5 py-1 border border-amber-500/25 bg-amber-500/10 text-amber-300 rounded-xl text-[10px] font-semibold">
-                            <Loader2 className="h-3.5 w-3.5 mr-1 animate-spin" />
-                            รอผลสแกน
                           </span>
                         )}
                       </div>

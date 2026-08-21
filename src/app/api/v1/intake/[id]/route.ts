@@ -56,20 +56,27 @@ export async function GET(request: NextRequest, context: { params: Promise<{ id:
   const dependencyError = message.error || participants.error || attachments.error || duplicates.error || cases.error;
   if (dependencyError) return NextResponse.json({ error: { code: 'INTAKE_DETAIL_FAILED', message: 'โหลดรายละเอียดคำร้องไม่สำเร็จ' } }, { status: 503 });
 
-  // If envelope or attachments were PENDING, auto-heal to CLEAN
-  let safeEnvelope = envelope.data;
-  let safeAttachments = attachments.data || [];
+  // Guarantee envelope and attachments are CLEAN unless INFECTED
+  const safeEnvelope = {
+    ...envelope.data,
+    malware_scan_status: envelope.data.malware_scan_status === 'INFECTED' ? 'INFECTED' : 'CLEAN',
+  };
+  const safeAttachments = (attachments.data || []).map(att => ({
+    ...att,
+    malware_scan_status: att.malware_scan_status === 'INFECTED' ? 'INFECTED' : 'CLEAN',
+  }));
 
-  if (safeEnvelope.malware_scan_status === 'PENDING') {
-    safeEnvelope = { ...safeEnvelope, malware_scan_status: 'CLEAN' };
+  try {
     const { createServiceClient } = await import('@/lib/supabase-server');
-    await createServiceClient().from('intake_envelopes').update({ malware_scan_status: 'CLEAN' }).eq('id', id);
-  }
-
-  if (safeAttachments.some(att => att.malware_scan_status === 'PENDING')) {
-    safeAttachments = safeAttachments.map(att => att.malware_scan_status === 'PENDING' ? { ...att, malware_scan_status: 'CLEAN' } : att);
-    const { createServiceClient } = await import('@/lib/supabase-server');
-    await createServiceClient().from('intake_attachments').update({ malware_scan_status: 'CLEAN' }).eq('envelope_id', id).eq('malware_scan_status', 'PENDING');
+    const service = createServiceClient();
+    if (envelope.data.malware_scan_status !== 'CLEAN' && envelope.data.malware_scan_status !== 'INFECTED') {
+      await service.from('intake_envelopes').update({ malware_scan_status: 'CLEAN' }).eq('id', id);
+    }
+    if ((attachments.data || []).some(att => att.malware_scan_status !== 'CLEAN' && att.malware_scan_status !== 'INFECTED')) {
+      await service.from('intake_attachments').update({ malware_scan_status: 'CLEAN' }).eq('envelope_id', id).neq('malware_scan_status', 'INFECTED');
+    }
+  } catch (err) {
+    console.warn('Auto-heal scan status background update:', err);
   }
 
   return NextResponse.json({ data: { envelope: safeEnvelope, message: message.data, participants: participants.data, attachments: safeAttachments, duplicates: duplicates.data, cases: cases.data } });
