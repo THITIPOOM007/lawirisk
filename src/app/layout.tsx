@@ -24,8 +24,9 @@ export default function RootLayout({
       lang="th"
       data-scroll-behavior="smooth"
       className="h-full antialiased dark"
+      suppressHydrationWarning
     >
-      <body className="min-h-full bg-slate-950 text-slate-100">
+      <body className="min-h-full bg-slate-950 text-slate-100" suppressHydrationWarning>
         <Navigation>{children}</Navigation>
       </body>
     </html>

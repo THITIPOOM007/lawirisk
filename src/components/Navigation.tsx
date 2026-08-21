@@ -250,7 +250,7 @@ export default function Navigation({ children }: NavigationProps) {
       <div className="border-t border-white/[0.06] p-3">
         <div className={`mb-2 flex items-center rounded-xl border border-white/[0.07] bg-gradient-to-br from-white/[0.045] to-transparent p-2.5 shadow-[inset_0_1px_rgba(255,255,255,0.025)] ${collapsed ? 'justify-center' : 'gap-2.5'}`}>
           <span className="grid h-9 w-9 shrink-0 place-items-center rounded-lg border border-white/[0.06] bg-slate-800/80 text-slate-300"><CircleUserRound className="h-[18px] w-[18px]" /></span>
-          {!collapsed && <span className="min-w-0 flex-1"><span className="block truncate text-xs font-semibold text-slate-100">{userName}</span><span className="block truncate text-[10px] text-slate-500">{roleLabel(userRole)}</span></span>}
+          {!collapsed && <span className="min-w-0 flex-1"><span className="block truncate text-xs font-semibold text-slate-100" suppressHydrationWarning>{userName}</span><span className="block truncate text-[10px] text-slate-500" suppressHydrationWarning>{roleLabel(userRole)}</span></span>}
         </div>
         <button type="button" onClick={handleLogout} disabled={isSigningOut} title={collapsed ? 'ออกจากระบบ' : undefined} className={`flex min-h-10 w-full items-center rounded-xl px-3 text-xs font-medium text-slate-500 transition-colors hover:bg-rose-400/[0.07] hover:text-rose-300 disabled:opacity-50 ${collapsed ? 'justify-center' : ''}`}>
           <LogOut className="h-4 w-4 shrink-0" />
