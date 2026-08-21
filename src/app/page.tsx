@@ -61,10 +61,10 @@ export default function NationalCommandCenter() {
   }, []);
 
   const stats = [
-    { label: 'รายการรับเรื่อง', value: counts.intake, unit: 'เรื่อง', hint: 'ตามสิทธิ์ที่เข้าถึงได้', href: '/intake', icon: Inbox, tone: 'text-teal-300', surface: 'bg-teal-300/[0.1] border-teal-300/20' },
-    { label: 'สำนวนที่ติดตาม', value: counts.cases, unit: 'สำนวน', hint: 'พื้นที่รับผิดชอบของคุณ', href: '/cases', icon: BriefcaseBusiness, tone: 'text-sky-300', surface: 'bg-sky-300/[0.1] border-sky-300/20' },
-    { label: 'หลักฐานต้นฉบับ', value: counts.evidence, unit: 'ไฟล์', hint: 'จัดเก็บสำเร็จตาม RLS', href: '/evidence', icon: Fingerprint, tone: 'text-amber-200', surface: 'bg-amber-300/[0.1] border-amber-300/20' },
-    { label: 'ข้อมูลที่จัดระเบียบ', value: counts.entities, unit: 'รายการ', hint: `${counts.audit} เหตุการณ์ตรวจสอบ`, href: '/entities', icon: Database, tone: 'text-violet-300', surface: 'bg-violet-300/[0.1] border-violet-300/20' },
+    { label: 'เรื่องร้องเรียนและเบาะแส', value: counts.intake, unit: 'เรื่อง', hint: 'รอการคัดกรองความปลอดภัย', href: '/intake', icon: Inbox, tone: 'text-teal-300', surface: 'bg-teal-300/[0.1] border-teal-300/20' },
+    { label: 'สำนวนคดีที่ดำเนินการ', value: counts.cases, unit: 'สำนวน', hint: 'สำนวนในความรับผิดชอบ', href: '/cases', icon: BriefcaseBusiness, tone: 'text-sky-300', surface: 'bg-sky-300/[0.1] border-sky-300/20' },
+    { label: 'หลักฐานดิจิทัลในคลัง', value: counts.evidence, unit: 'ไฟล์', hint: 'เข้ารหัส SHA-256 ครบถ้วน', href: '/evidence', icon: Fingerprint, tone: 'text-amber-200', surface: 'bg-amber-300/[0.1] border-amber-300/20' },
+    { label: 'ข้อมูลบุคคลและนิติบุคคล', value: counts.entities, unit: 'รายการ', hint: `${counts.audit} รายการประวัติการใช้งาน`, href: '/entities', icon: Database, tone: 'text-violet-300', surface: 'bg-violet-300/[0.1] border-violet-300/20' },
   ];
 
   return (
@@ -73,9 +73,9 @@ export default function NationalCommandCenter() {
       <div className="hud-panel flex flex-wrap items-center justify-between gap-3 rounded-2xl px-4 py-2.5 text-xs">
         <div className="flex items-center gap-3">
           <span className="flex h-2 w-2 rounded-full bg-emerald-400 shadow-[0_0_10px_rgba(52,211,153,0.8)] animate-pulse" />
-          <span className="font-mono font-bold tracking-wider text-emerald-300">LIVE SYSTEM INTELLIGENCE</span>
+          <span className="font-mono font-bold tracking-wider text-emerald-300">SYSTEM STATUS: ONLINE</span>
           <span className="hidden h-3 w-px bg-slate-700 sm:inline-block" />
-          <span className="text-slate-400">ระบบตรวจสอบความสมบูรณ์และเข้ารหัสหลักฐาน SHA-256 ทำงานปกติ</span>
+          <span className="text-slate-400">ระบบรักษาความมั่นคงปลอดภัยและตรวจสอบความถูกต้องของหลักฐานดิจิทัลพร้อมใช้งาน</span>
         </div>
         <div className="flex items-center gap-2 font-mono text-[11px] text-slate-500">
           <Activity className="h-3.5 w-3.5 text-teal-400" />
@@ -115,24 +115,24 @@ export default function NationalCommandCenter() {
         <div className="relative z-10 max-w-3xl lg:max-w-[60%]">
           <div className="mb-6 inline-flex items-center gap-2.5 rounded-full border border-teal-300/20 bg-teal-300/[0.08] px-4 py-1.5 text-[10px] font-bold uppercase tracking-[0.2em] text-teal-200 shadow-[0_0_20px_rgba(66,232,206,0.1),inset_0_1px_rgba(255,255,255,0.1)]">
             <ShieldCheck className="h-4 w-4 text-teal-300" />
-            <span>Evidence-assisted · Human-confirmed</span>
+            <span>ความสมบูรณ์ของหลักฐานดิจิทัล (Evidence Integrity)</span>
           </div>
           <h1 className="text-balance text-3xl font-black leading-[1.15] tracking-[-0.04em] text-white sm:text-4xl lg:text-[46px] xl:text-[50px]">
-            เห็นภาพรวมเร็วขึ้น<br />
-            <span className="bg-gradient-to-r from-teal-200 via-cyan-100 to-amber-200 bg-clip-text text-transparent">โดยไม่เสียร่องรอยของหลักฐาน</span>
+            ระบบสืบสวนและเชื่อมโยง<br />
+            <span className="bg-gradient-to-r from-teal-200 via-cyan-100 to-amber-200 bg-clip-text text-transparent">พยานหลักฐานดิจิทัลคดีความมั่นคง</span>
           </h1>
           <p className="mt-5 max-w-2xl text-sm leading-7 text-slate-400 sm:text-[15px]">
-            จัดลำดับคำร้อง คัดกรองมัลแวร์ สกัดข้อมูลด้วย AI และสร้างความเชื่อมโยงข้ามคดีบนโครงสร้างหลักฐานที่ไม่สามารถแก้ไขย้อนหลังได้
+            ระบบช่วยจัดระเบียบสำนวนคดี ตรวจจับความซ้ำซ้อน สกัดข้อมูลความสัมพันธ์ และตรวจสอบความเชื่อมโยงข้ามพื้นที่ โดยข้อสรุปทุกรายการต้องสามารถตรวจสอบย้อนกลับถึงหลักฐานต้นฉบับได้
           </p>
           <div className="mt-8 flex flex-wrap gap-3">
             <Link href="/intake" className="primary-action inline-flex min-h-12 items-center justify-center gap-2 rounded-2xl px-6 text-sm font-bold shadow-[0_0_25px_rgba(66,232,206,0.25)]">
-              <Zap className="h-4 w-4" /> เปิดคิวคัดกรองคำร้อง <ArrowUpRight className="h-4 w-4" />
+              <Zap className="h-4 w-4" /> รายการรับเรื่องและคัดกรอง <ArrowUpRight className="h-4 w-4" />
             </Link>
             <Link href="/review" className="secondary-action inline-flex min-h-12 items-center justify-center gap-2 rounded-2xl px-6 text-sm font-semibold border border-white/[0.1] hover:border-amber-400/30">
-              <Sparkles className="h-4 w-4 text-amber-300" /> ตรวจข้อเสนอจาก AI
+              <Sparkles className="h-4 w-4 text-amber-300" /> ผลการวิเคราะห์และตรวจทาน
             </Link>
             <Link href="/matches" className="secondary-action inline-flex min-h-12 items-center justify-center gap-2 rounded-2xl px-5 text-sm font-semibold border border-white/[0.08] hover:border-indigo-400/30">
-              <Cpu className="h-4 w-4 text-indigo-300" /> วิเคราะห์ความเชื่อมโยง
+              <Cpu className="h-4 w-4 text-indigo-300" /> การวิเคราะห์ความเชื่อมโยง
             </Link>
           </div>
         </div>

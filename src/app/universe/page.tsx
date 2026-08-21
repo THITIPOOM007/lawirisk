@@ -23,9 +23,9 @@ export default function UniversePage() {
   return (
     <main className="p-6 h-[calc(100vh-64px)] flex flex-col">
       <div className="mb-4">
-        <h1 className="text-2xl font-bold text-[var(--brand)]">3D Evidence Universe</h1>
-        <p className="text-sm text-[var(--foreground)] opacity-70">
-          Visualize cases and entities connections across the entire system.
+        <h1 className="text-2xl font-bold text-white">ผังความเชื่อมโยงพยานหลักฐาน 3 มิติ (3D Evidence Graph)</h1>
+        <p className="text-sm text-slate-400 mt-1">
+          แสดงภาพรวมความสัมพันธ์ระหว่างสำนวนคดี บุคคล บัญชีธนาคาร และพยานหลักฐานดิจิทัลทั้งระบบในรูปแบบโครงข่าย 3 มิติ
         </p>
       </div>
 

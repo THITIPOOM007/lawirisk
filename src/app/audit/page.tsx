@@ -81,10 +81,10 @@ export default function AuditPage() {
         <div>
           <h1 className="text-3xl font-extrabold text-white tracking-tight flex items-center space-x-3">
             <History className="h-8 w-8 text-indigo-500 shrink-0 animate-pulse" />
-            <span>Audit Trail Ledger (บันทึกกิจกรรมระบบ)</span>
+            <span>บันทึกประวัติการใช้งานระบบ (Audit Trail Ledger)</span>
           </h1>
           <p className="mt-2 text-slate-400">
-            ระบบตรวจสอบย้อนกลับบันทึกการใช้งานของเจ้าหน้าที่ (Immutable Append-only Ledger) ป้องกันการแก้ไขหรือลบประวัติหลักฐาน
+            บันทึกประวัติการปฏิบัติงานของเจ้าหน้าที่แบบไม่สามารถแก้ไขย้อนหลังได้ (Immutable Audit Log) เพื่อการกำกับดูแล ความโปร่งใส และความมั่นคงปลอดภัยของข้อมูลคดี
           </p>
         </div>
 

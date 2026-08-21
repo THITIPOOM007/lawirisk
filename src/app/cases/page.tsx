@@ -55,10 +55,10 @@ export default function CasesPage() {
         <div>
           <h1 className="text-3xl font-extrabold text-white tracking-tight flex items-center space-x-3">
             <Briefcase className="h-8 w-8 text-indigo-500 shrink-0" />
-            <span>คดีสืบสวนทั้งหมด</span>
+            <span>ทะเบียนสำนวนคดีสืบสวน</span>
           </h1>
           <p className="mt-2 text-slate-400">
-            ระบบจัดการสำนวนคดี ค้นหาข้อมูล และการเชื่อมโยงข้ามคดีอาชญากรรมทางเทคโนโลยี
+            ระบบบริหารจัดการสำนวนคดี คลังพยานหลักฐานดิจิทัล และการเชื่อมโยงความสัมพันธ์ข้ามคดี
           </p>
         </div>
         <Link
@@ -66,7 +66,7 @@ export default function CasesPage() {
           className="inline-flex items-center justify-center px-4 py-3 border border-transparent rounded-2xl shadow-lg text-sm font-semibold text-white bg-indigo-600 hover:bg-indigo-500 hover:shadow-indigo-500/20 transition-all duration-200 cursor-pointer"
         >
           <Plus className="h-5 w-5 mr-2 shrink-0" />
-          สร้างคดีใหม่
+          ลงทะเบียนสำนวนคดีใหม่
         </Link>
       </div>
 
@@ -76,7 +76,7 @@ export default function CasesPage() {
           <Search className="absolute left-4 top-3.5 h-5 w-5 text-slate-500" />
           <input
             type="text"
-            placeholder="ค้นหาชื่อคดี เลขคดี หรือรายละเอียด..."
+            placeholder="ค้นหาชื่อสำนวนคดี, เลขที่คดี, หรือรายละเอียดพฤติการณ์..."
             value={searchQuery}
             onChange={(e) => setSearchQuery(e.target.value)}
             className="w-full bg-slate-950/70 border border-slate-800/80 rounded-2xl py-3 pl-12 pr-4 text-white text-sm placeholder:text-slate-600 focus:outline-none focus:ring-2 focus:ring-indigo-500 transition-all"
@@ -84,7 +84,7 @@ export default function CasesPage() {
         </div>
         
         <div className="flex items-center space-x-2 shrink-0">
-          <span className="text-xs text-slate-500 mr-2 uppercase tracking-wide font-medium">กรองสถานะ:</span>
+          <span className="text-xs text-slate-500 mr-2 uppercase tracking-wide font-medium">สถานะสำนวนคดี:</span>
           {(['ALL', 'ACTIVE', 'ARCHIVED', 'CLOSED'] as const).map((filter) => (
             <button
               key={filter}
@@ -95,7 +95,7 @@ export default function CasesPage() {
                   : 'bg-slate-950 border-slate-800 text-slate-400 hover:text-white hover:border-slate-700'
               }`}
             >
-              {filter === 'ALL' ? 'ทั้งหมด' : filter === 'ACTIVE' ? 'กำลังสืบสวน' : filter === 'ARCHIVED' ? 'เก็บถาวร' : 'ปิดคดีแล้ว'}
+              {filter === 'ALL' ? 'ทุกสถานะ' : filter === 'ACTIVE' ? 'อยู่ระหว่างสืบสวน' : filter === 'ARCHIVED' ? 'เก็บถาวร' : 'เสร็จสิ้นการสืบสวน'}
             </button>
           ))}
         </div>

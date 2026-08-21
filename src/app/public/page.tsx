@@ -187,13 +187,13 @@ export default function PublicPortalPage() {
         <div className="max-w-4xl mx-auto px-4 text-center space-y-4 relative z-10">
           <div className="inline-flex items-center gap-2 rounded-full border border-teal-300/30 bg-teal-400/10 px-3.5 py-1 text-xs font-bold text-teal-200">
             <Sparkles className="w-3.5 h-3.5 text-teal-300" />
-            <span>Open Data & AI-Assisted Citizen Service</span>
+            <span>ระบบบริการข้อมูลและรับแจ้งเบาะแสประชาชน (Public Service Portal)</span>
           </div>
           <h1 className="text-3xl sm:text-4xl font-black text-white tracking-tight">
-            ตรวจสอบข้อมูลเตือนภัย & แจ้งเบาะแสอาชญากรรม
+            ตรวจสอบข้อมูลความปลอดภัยและแจ้งเบาะแสดิจิทัล
           </h1>
           <p className="text-sm text-slate-400 max-w-2xl mx-auto leading-relaxed">
-            ค้นหาข้อมูลผลิตภัณฑ์ที่ไม่ปลอดภัย บัญชีม้า และยื่นเบาะแสคำร้องทุกข์ออนไลน์โดยตรง พร้อมติดตามสถานะด้วยระบบความปลอดภัย
+            สืบค้นข้อมูลผลิตภัณฑ์สุขภาพที่ถูกเพิกถอน บัญชีเฝ้าระวัง และยื่นเรื่องแจ้งเบาะแสต่อเจ้าหน้าที่ พร้อมระบบติดตามความคืบหน้า
           </p>
 
           {/* Navigation Tabs */}
@@ -208,7 +208,7 @@ export default function PublicPortalPage() {
               }`}
             >
               <Search className="w-4 h-4" />
-              ค้นหา Open Data เตือนภัย
+              สืบค้นข้อมูลเตือนภัย
             </button>
             <button
               type="button"
@@ -232,7 +232,7 @@ export default function PublicPortalPage() {
               }`}
             >
               <Compass className="w-4 h-4" />
-              ติดตามสถานะคำร้อง
+              ติดตามสถานะเรื่องร้องเรียน
             </button>
           </div>
         </div>

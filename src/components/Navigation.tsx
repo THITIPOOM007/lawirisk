@@ -42,41 +42,41 @@ type NavItem = {
 };
 
 const primaryNav: NavItem[] = [
-  { name: 'ภาพรวมศูนย์บัญชาการ', href: '/', icon: LayoutDashboard },
-  { name: 'คิวคัดกรองคำร้อง', href: '/intake', icon: Inbox },
-  { name: 'สำนวนคดี', href: '/cases', icon: BriefcaseBusiness },
-  { name: 'แหล่งสืบค้น', href: '/sources', icon: ScanSearch },
-  { name: 'คลังหลักฐาน', href: '/evidence', icon: FileSearch },
+  { name: 'ภาพรวมระบบ', href: '/', icon: LayoutDashboard },
+  { name: 'รายการรับเรื่องและคัดกรอง', href: '/intake', icon: Inbox },
+  { name: 'สำนวนคดีสืบสวน', href: '/cases', icon: BriefcaseBusiness },
+  { name: 'แหล่งสืบค้นข้อมูล', href: '/sources', icon: ScanSearch },
+  { name: 'คลังหลักฐานดิจิทัล', href: '/evidence', icon: FileSearch },
 ];
 
 const intelligenceNav: NavItem[] = [
-  { name: 'ศูนย์งานอัตโนมัติ', href: '/automation', icon: Workflow },
-  { name: 'ข้อเสนอจาก AI', href: '/review', icon: Sparkles },
-  { name: 'ทะเบียนข้อมูล', href: '/entities', icon: Database },
-  { name: 'ความเชื่อมโยง', href: '/matches', icon: Link2 },
-  { name: '3D Evidence Universe', href: '/universe', icon: Network },
-  { name: 'รายงานตรวจสอบย้อนกลับ', href: '/reports', icon: FileBarChart },
+  { name: 'ระบบงานอัตโนมัติ', href: '/automation', icon: Workflow },
+  { name: 'ผลการวิเคราะห์และข้อเสนอแนะ', href: '/review', icon: Sparkles },
+  { name: 'ทะเบียนข้อมูลบุคคล/นิติบุคคล', href: '/entities', icon: Database },
+  { name: 'การวิเคราะห์ความเชื่อมโยง', href: '/matches', icon: Link2 },
+  { name: 'ผังความเชื่อมโยง 3 มิติ', href: '/universe', icon: Network },
+  { name: 'รายงานสรุปสำนวนคดี', href: '/reports', icon: FileBarChart },
 ];
 
 const governanceNav: NavItem[] = [
-  { name: 'บันทึกการตรวจสอบ', href: '/audit', icon: History },
-  { name: 'ประตูประชาชน (Public Portal)', href: '/public', icon: Globe },
+  { name: 'บันทึกประวัติการใช้งาน', href: '/audit', icon: History },
+  { name: 'บริการรับเรื่องสำหรับประชาชน', href: '/public', icon: Globe },
 ];
 
 const sectionMeta = [
-  { prefix: '/intake', eyebrow: 'Intake & Triage', title: 'คัดกรองคำร้อง' },
-  { prefix: '/cases/new', eyebrow: 'Case workspace', title: 'สร้างสำนวนคดี' },
-  { prefix: '/cases', eyebrow: 'Case workspace', title: 'สำนวนคดี' },
-  { prefix: '/evidence', eyebrow: 'Evidence custody', title: 'คลังหลักฐาน' },
-  { prefix: '/sources', eyebrow: 'Authorized sources', title: 'แหล่งสืบค้น' },
-  { prefix: '/automation', eyebrow: 'n8n orchestration', title: 'ศูนย์งานอัตโนมัติ' },
-  { prefix: '/review', eyebrow: 'Human review', title: 'ข้อเสนอจาก AI' },
-  { prefix: '/entities', eyebrow: 'Data registry', title: 'ทะเบียนข้อมูล' },
-  { prefix: '/matches', eyebrow: 'Cross-case analysis', title: 'ความเชื่อมโยง' },
-  { prefix: '/universe', eyebrow: '3D Graph Intelligence', title: '3D Evidence Universe' },
-  { prefix: '/reports', eyebrow: 'Traceable outputs', title: 'รายงาน' },
-  { prefix: '/audit', eyebrow: 'Governance', title: 'บันทึกการตรวจสอบ' },
-  { prefix: '/admin', eyebrow: 'Administration', title: 'ตั้งค่าระบบ' },
+  { prefix: '/intake', eyebrow: 'การคัดกรองเบาะแส', title: 'รายการรับเรื่องและคัดกรอง' },
+  { prefix: '/cases/new', eyebrow: 'การบริหารจัดการคดี', title: 'ลงทะเบียนสำนวนคดีใหม่' },
+  { prefix: '/cases', eyebrow: 'การบริหารจัดการคดี', title: 'ทะเบียนสำนวนคดีสืบสวน' },
+  { prefix: '/evidence', eyebrow: 'การคุ้มครองหลักฐานดิจิทัล', title: 'คลังหลักฐานดิจิทัล' },
+  { prefix: '/sources', eyebrow: 'การเชื่อมต่อระบบภายนอก', title: 'แหล่งสืบค้นข้อมูลที่ได้รับอนุญาต' },
+  { prefix: '/automation', eyebrow: 'ระบบประมวลผลอัตโนมัติ', title: 'ศูนย์สั่งการระบบงานอัตโนมัติ' },
+  { prefix: '/review', eyebrow: 'การตรวจทานโดยเจ้าหน้าที่', title: 'ผลการวิเคราะห์และข้อเสนอแนะ' },
+  { prefix: '/entities', eyebrow: 'ฐานข้อมูลกลาง', title: 'ทะเบียนข้อมูลบุคคลและนิติบุคคล' },
+  { prefix: '/matches', eyebrow: 'การวิเคราะห์ข้อมูลเชิงลึก', title: 'การวิเคราะห์ความเชื่อมโยงข้ามคดี' },
+  { prefix: '/universe', eyebrow: 'ผังเครือข่ายความสัมพันธ์', title: 'ผังความเชื่อมโยง 3 มิติ (3D Graph)' },
+  { prefix: '/reports', eyebrow: 'เอกสารสรุปสำนวนคดี', title: 'รายงานและเอกสารสืบสวน' },
+  { prefix: '/audit', eyebrow: 'ธรรมาภิบาลและความโปร่งใส', title: 'บันทึกประวัติการใช้งาน (Audit Log)' },
+  { prefix: '/admin', eyebrow: 'การบริหารระบบ', title: 'การตั้งค่าและกำหนดสิทธิ์ผู้ใช้งาน' },
 ];
 
 const subscribeToAuth = (onStoreChange: () => void) => {

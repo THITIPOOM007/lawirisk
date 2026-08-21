@@ -62,11 +62,11 @@ export default function SourcesPage() {
         <div className="absolute -right-20 -top-28 h-64 w-64 rounded-full bg-teal-300/[0.06] blur-3xl" aria-hidden="true" />
         <div className="relative max-w-3xl">
           <div className="mb-4 inline-flex items-center gap-2 rounded-full border border-teal-300/15 bg-teal-300/[0.055] px-3 py-1.5 text-[9px] font-semibold uppercase tracking-[0.2em] text-teal-100">
-            <SearchCheck className="h-3.5 w-3.5 text-teal-300" /> Authorized source directory
+            <SearchCheck className="h-3.5 w-3.5 text-teal-300" /> Authorized Source Directory
           </div>
-          <h1 className="text-3xl font-bold tracking-[-0.035em] text-white sm:text-4xl">แหล่งสืบค้นที่ได้รับอนุญาต</h1>
+          <h1 className="text-3xl font-bold tracking-[-0.035em] text-white sm:text-4xl">แหล่งสืบค้นข้อมูลที่ได้รับอนุญาต</h1>
           <p className="mt-4 max-w-2xl text-sm leading-7 text-slate-400">
-            เปิดระบบต้นทางจากรายการที่กำหนดโดยเซิร์ฟเวอร์เท่านั้น LawiRisk-SSK ไม่รับรหัสผ่านภายนอก และทุกผลค้นที่นำมาใช้ต้องกลับเข้าสู่คลังหลักฐานเพื่อ hash, สแกน และตรวจสอบย้อนกลับ
+            การเข้าถึงระบบฐานข้อมูลภายนอกที่ได้รับอนุญาตตามมาตรฐานความมั่นคงปลอดภัย โดยข้อมูลที่ได้รับจะถูกนำเข้าสู่คลังพยานหลักฐานดิจิทัลเพื่อคำนวณรหัส SHA-256 และเก็บรักษาตามระเบียบ
           </p>
         </div>
       </header>

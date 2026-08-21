@@ -96,17 +96,25 @@ export default function ReportsPage() {
 
   return (
     <div className="space-y-8">
-      <header><h1 className="flex items-center gap-3 text-3xl font-extrabold tracking-tight text-white"><FileBarChart className="h-8 w-8 text-indigo-500" />รายงานแบบมีแหล่งอ้างอิง</h1><p className="mt-2 text-slate-400">รายงานทุกฉบับสร้างจากข้อมูลที่มี source mention หรือ relationship reference และเก็บ snapshot แยกจากข้อมูลปัจจุบัน</p></header>
+      <header>
+        <h1 className="flex items-center gap-3 text-3xl font-extrabold tracking-tight text-white">
+          <FileBarChart className="h-8 w-8 text-indigo-500" />
+          รายงานสรุปสำนวนคดีและการเชื่อมโยงพยานหลักฐาน
+        </h1>
+        <p className="mt-2 text-slate-400">
+          รายงานทุกฉบับประมวลผลจากข้อมูลพยานหลักฐานที่ได้รับการรับรองและมีเอกสารอ้างอิงชัดเจน โดยจัดเก็บ Snapshot รหัส SHA-256 เพื่อความโปร่งใสและตรวจสอบย้อนกลับได้
+        </p>
+      </header>
       {error && <div role="alert" className="rounded-2xl border border-rose-500/20 bg-rose-500/5 p-4 text-sm text-rose-300">{error}</div>}
       <div className="grid gap-6 xl:grid-cols-[380px_1fr]">
         <div className="space-y-6">
           <form onSubmit={generate} className="space-y-5 rounded-3xl border border-slate-900 bg-slate-900/30 p-6">
-            <h2 className="font-bold text-white">สร้าง snapshot ใหม่</h2>
-            <label className="block text-xs font-semibold text-slate-300">สำนวนคดี<select value={selectedCaseId} onChange={(event) => setSelectedCaseId(event.target.value)} required className="mt-2 w-full rounded-xl border border-slate-800 bg-slate-950 p-3 text-sm text-white"><option value="">เลือกคดี</option>{cases.map((item) => <option key={item.id} value={item.id}>{item.number} — {item.title}</option>)}</select></label>
-            <label className="block text-xs font-semibold text-slate-300">ประเภทรายงาน<select value={reportType} onChange={(event) => setReportType(event.target.value as 'SUMMARY' | 'OVERLAP')} className="mt-2 w-full rounded-xl border border-slate-800 bg-slate-950 p-3 text-sm text-white"><option value="SUMMARY">สรุปคดี</option><option value="OVERLAP">จุดทับซ้อนข้ามคดี</option></select></label>
-            <label className="block text-xs font-semibold text-slate-300">ชื่อรายงาน (ไม่บังคับ)<input value={title} onChange={(event) => setTitle(event.target.value)} maxLength={200} className="mt-2 w-full rounded-xl border border-slate-800 bg-slate-950 p-3 text-sm text-white" /></label>
-            <button disabled={isGenerating || !selectedCaseId} className="flex w-full items-center justify-center rounded-xl bg-indigo-600 px-4 py-3 text-sm font-bold text-white disabled:opacity-50">{isGenerating && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}สร้างรายงานจากข้อมูลจริง</button>
-            <p className="text-[11px] leading-relaxed text-slate-500">ระบบจะปฏิเสธหากยังไม่มีแหล่งอ้างอิงที่มนุษย์ยืนยัน รายงานนี้ไม่ใช่คำวินิจฉัยทางกฎหมาย</p>
+            <h2 className="font-bold text-white">สร้างรายงานสรุป (Snapshot)</h2>
+            <label className="block text-xs font-semibold text-slate-300">เลือกสำนวนคดี<select value={selectedCaseId} onChange={(event) => setSelectedCaseId(event.target.value)} required className="mt-2 w-full rounded-xl border border-slate-800 bg-slate-950 p-3 text-sm text-white"><option value="">เลือกสำนวนคดี</option>{cases.map((item) => <option key={item.id} value={item.id}>{item.number} — {item.title}</option>)}</select></label>
+            <label className="block text-xs font-semibold text-slate-300">ประเภทรายงาน<select value={reportType} onChange={(event) => setReportType(event.target.value as 'SUMMARY' | 'OVERLAP')} className="mt-2 w-full rounded-xl border border-slate-800 bg-slate-950 p-3 text-sm text-white"><option value="SUMMARY">รายงานสรุปสาระสำคัญของสำนวนคดี</option><option value="OVERLAP">รายงานการวิเคราะห์ความเชื่อมโยงข้ามคดี</option></select></label>
+            <label className="block text-xs font-semibold text-slate-300">หัวข้อรายงาน (ไม่บังคับ)<input value={title} onChange={(event) => setTitle(event.target.value)} maxLength={200} placeholder="ระบุชื่อเอกสารรายงาน..." className="mt-2 w-full rounded-xl border border-slate-800 bg-slate-950 p-3 text-sm text-white" /></label>
+            <button disabled={isGenerating || !selectedCaseId} className="flex w-full items-center justify-center rounded-xl bg-indigo-600 px-4 py-3 text-sm font-bold text-white disabled:opacity-50 cursor-pointer">{isGenerating && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}สร้างเอกสารรายงาน</button>
+            <p className="text-[11px] leading-relaxed text-slate-500">รายงานนี้จัดทำขึ้นเพื่อสนับสนุนการสืบสวนและรวบรวมพยานหลักฐานทางคดี</p>
           </form>
           <section className="rounded-3xl border border-slate-900 bg-slate-900/20 p-5">
             <div className="mb-4 flex items-center justify-between"><h2 className="text-sm font-bold text-white">รายงานที่จัดเก็บ</h2><button type="button" onClick={() => void load()} className="text-slate-400" aria-label="รีเฟรช"><RefreshCw className={`h-4 w-4 ${isLoading ? 'animate-spin' : ''}`} /></button></div>

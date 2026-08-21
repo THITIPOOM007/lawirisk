@@ -170,10 +170,10 @@ export default function IntakeQueuePage() {
         <div>
           <h1 className="text-3xl font-extrabold text-white tracking-tight flex items-center space-x-3">
             <Inbox className="h-8 w-8 text-teal-300 shrink-0" />
-            <span>คัดกรองคำร้อง (Intake & Triage)</span>
+            <span>ระบบรับเรื่องและคัดกรองเบาะแส</span>
           </h1>
           <p className="mt-2 text-slate-400 text-sm">
-            รับข้อมูลคำร้องและเอกสารเบาะแสจากทุกช่องทาง เพื่อสแกนความปลอดภัย ค้นเรื่องซ้ำ และคัดแยกสำนวนคดี
+            ศูนย์รวมการรับเรื่องร้องเรียนและเบาะแสดิจิทัลจากทุกช่องทาง เพื่อตรวจคัดกรองความปลอดภัย ตรวจสอบความซ้ำซ้อน และส่งต่อเข้าสู่กระบวนการสืบสวน
           </p>
         </div>
         <button
@@ -181,7 +181,7 @@ export default function IntakeQueuePage() {
           onClick={() => setShowManualModal(true)}
           className="primary-action inline-flex items-center justify-center gap-2 rounded-2xl px-5 py-3 text-sm font-bold shadow-[0_0_25px_rgba(66,232,206,0.25)] shrink-0 cursor-pointer"
         >
-          + บันทึกรับเรื่องใหม่
+          + บันทึกรับเรื่องร้องเรียน
         </button>
       </div>
 
@@ -192,7 +192,7 @@ export default function IntakeQueuePage() {
             <div className="flex items-center justify-between border-b border-white/[0.08] pb-4">
               <h2 className="text-lg font-bold text-white flex items-center gap-2">
                 <Inbox className="h-5 w-5 text-teal-300" />
-                บันทึกรับเรื่องร้องเรียนใหม่ (Walk-in / Phone)
+                บันทึกรับเรื่องร้องเรียนโดยตรง (Walk-in / โทรศัพท์)
               </h2>
               <button
                 type="button"
@@ -212,7 +212,7 @@ export default function IntakeQueuePage() {
             <form onSubmit={handleManualSubmit} className="space-y-4">
               <div>
                 <label className="block text-xs font-semibold text-slate-300 mb-1">
-                  ความเร่งด่วน <span className="text-rose-400">*</span>
+                  ระดับความเร่งด่วน <span className="text-rose-400">*</span>
                 </label>
                 <select
                   value={manualForm.urgency}
@@ -235,7 +235,7 @@ export default function IntakeQueuePage() {
                   rows={3}
                   value={manualForm.urgency_reason}
                   onChange={(e) => setManualForm(prev => ({ ...prev, urgency_reason: e.target.value }))}
-                  placeholder="เช่น ผู้เสียหายถูกหลอกโอนเงินซื้อสินค้าออนไลน์ผ่านเฟซบุ๊ก ยอด 15,000 บาท..."
+                  placeholder="ระบุรายละเอียดและพฤติการณ์เรื่องร้องเรียน..."
                   className="w-full rounded-xl border border-white/[0.1] bg-slate-950 p-2.5 text-xs text-white placeholder:text-slate-600"
                 />
               </div>
@@ -249,7 +249,7 @@ export default function IntakeQueuePage() {
                     type="text"
                     value={manualForm.agency}
                     onChange={(e) => setManualForm(prev => ({ ...prev, agency: e.target.value }))}
-                    placeholder="สภ.เมือง หรือ บช.สอท."
+                    placeholder="เช่น สภ.เมือง หรือ บช.สอท."
                     className="w-full rounded-xl border border-white/[0.1] bg-slate-950 p-2.5 text-xs text-white"
                   />
                 </div>
@@ -261,7 +261,7 @@ export default function IntakeQueuePage() {
                     type="text"
                     value={manualForm.region}
                     onChange={(e) => setManualForm(prev => ({ ...prev, region: e.target.value }))}
-                    placeholder="ภ.จว.ศรีสะเกษ"
+                    placeholder="เช่น ศรีสะเกษ หรือ อุบลราชธานี"
                     className="w-full rounded-xl border border-white/[0.1] bg-slate-950 p-2.5 text-xs text-white"
                   />
                 </div>
@@ -293,13 +293,13 @@ export default function IntakeQueuePage() {
       {/* Summary Indicators */}
       <div className="grid grid-cols-1 sm:grid-cols-4 gap-4">
         <div className="bg-slate-900/40 border border-slate-900 p-5 rounded-2xl flex flex-col justify-between">
-          <span className="text-xs text-slate-500 uppercase font-semibold">ค้างคัดแยก (Triage Pending)</span>
+          <span className="text-xs text-slate-500 uppercase font-semibold">รอการคัดกรอง (Triage Pending)</span>
           <span className="text-3xl font-bold text-indigo-400 mt-2">
             {envelopes.filter(e => e.status === 'TRIAGE_PENDING').length} เรื่อง
           </span>
         </div>
         <div className="bg-slate-900/40 border border-slate-900 p-5 rounded-2xl flex flex-col justify-between">
-          <span className="text-xs text-slate-500 uppercase font-semibold">ไฟล์กักกันความปลอดภัย (Quarantined)</span>
+          <span className="text-xs text-slate-500 uppercase font-semibold">เฝ้าระวังความปลอดภัย (Quarantined)</span>
           <span className="text-3xl font-bold text-rose-500 mt-2 flex items-center">
             {envelopes.filter(e => e.status === 'QUARANTINED').length} ไฟล์
             {envelopes.some(e => e.status === 'QUARANTINED') && <ShieldX className="h-5 w-5 ml-2 text-rose-500 animate-pulse" />}

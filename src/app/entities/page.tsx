@@ -65,10 +65,10 @@ export default function EntitiesPage() {
       <div>
         <h1 className="text-3xl font-extrabold text-white tracking-tight flex items-center space-x-3">
           <Database className="h-8 w-8 text-indigo-500 shrink-0" />
-          <span>ทะเบียนข้อมูลกลาง (Entity Register)</span>
+          <span>ทะเบียนข้อมูลบุคคลและนิติบุคคล</span>
         </h1>
         <p className="mt-2 text-slate-400">
-          ทะเบียนข้อมูลเอนทิตีที่ได้รับการตรวจสอบยืนยันแล้วจากไฟล์หลักฐานทั้งหมดในคดีต่างๆ แยกประเภทเพื่อวิเคราะห์การทับซ้อน
+          รวบรวมและจัดหมวดหมู่ข้อมูลบุคคล หมายเลขโทรศัพท์ บัญชีธนาคาร เลขประจำตัวประชาชน และนิติบุคคลที่ได้รับการรับรองแล้ว เพื่อสนับสนุนการวิเคราะห์ความเชื่อมโยง
         </p>
       </div>
 

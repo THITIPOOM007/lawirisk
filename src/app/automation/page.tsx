@@ -178,11 +178,11 @@ export default function AutomationPage() {
     <div className="space-y-8">
       <header className="flex flex-col gap-5 xl:flex-row xl:items-end xl:justify-between">
         <div>
-          <div className="mb-4 inline-flex items-center gap-2 rounded-full border border-cyan-300/15 bg-cyan-300/[0.045] px-3 py-1.5 text-[10px] font-bold uppercase tracking-[0.18em] text-cyan-200"><Workflow className="h-3.5 w-3.5" /> n8n orchestration</div>
-          <h1 className="text-3xl font-black tracking-[-0.04em] text-white sm:text-4xl">Automation Command Center</h1>
-          <p className="mt-3 max-w-3xl text-sm leading-7 text-slate-400">ส่งงานครั้งเดียว ระบบจัดคิว เรียก n8n ประมวลผลด้วย Gemini และสร้างข้อเสนอแบบ SUGGESTED โดยไม่ส่งไฟล์ดิบหรือรหัสลับออกจาก LawiRisk-SSK</p>
+          <div className="mb-4 inline-flex items-center gap-2 rounded-full border border-cyan-300/15 bg-cyan-300/[0.045] px-3 py-1.5 text-[10px] font-bold uppercase tracking-[0.18em] text-cyan-200"><Workflow className="h-3.5 w-3.5" /> ระบบประมวลผลอัตโนมัติ (Automation Pipeline)</div>
+          <h1 className="text-3xl font-black tracking-[-0.04em] text-white sm:text-4xl">ศูนย์สั่งการระบบงานอัตโนมัติ</h1>
+          <p className="mt-3 max-w-3xl text-sm leading-7 text-slate-400">ระบบบริหารจัดการกระบวนการประมวลผลและสกัดข้อมูลพยานหลักฐานดิจิทัลอัตโนมัติ เพื่อนำส่งเข้าสู่คิวการตรวจทานและรับรองโดยเจ้าหน้าที่</p>
         </div>
-        <button type="button" onClick={() => void load()} disabled={isLoading} className="secondary-action inline-flex min-h-11 items-center justify-center gap-2 rounded-xl border border-white/[0.08] px-4 text-xs font-semibold"><RefreshCw className={`h-4 w-4 ${isLoading ? 'animate-spin' : ''}`} />รีเฟรชสถานะ</button>
+        <button type="button" onClick={() => void load()} disabled={isLoading} className="secondary-action inline-flex min-h-11 items-center justify-center gap-2 rounded-xl border border-white/[0.08] px-4 text-xs font-semibold cursor-pointer"><RefreshCw className={`h-4 w-4 ${isLoading ? 'animate-spin' : ''}`} />รีเฟรชสถานะ</button>
       </header>
 
       <section aria-label="สถานะระบบอัตโนมัติ" className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">

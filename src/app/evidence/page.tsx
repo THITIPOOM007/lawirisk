@@ -167,10 +167,10 @@ export default function EvidencePage() {
       <div>
         <h1 className="text-3xl font-extrabold text-white tracking-tight flex items-center space-x-3">
           <FileText className="h-8 w-8 text-indigo-500 shrink-0" />
-          <span>ทะเบียนและนำเข้าหลักฐาน (Evidence Intake)</span>
+          <span>คลังและระบบลงทะเบียนพยานหลักฐานดิจิทัล</span>
         </h1>
         <p className="mt-2 text-slate-400">
-          ลงทะเบียนพยานหลักฐานดิจิทัล ตรวจสอบรหัส Hash, ความถูกต้องของประเภทไฟล์ในเบื้องต้น ป้องกันไฟล์ปลอมปน
+          ระบบลงทะเบียนและจัดเก็บพยานหลักฐานดิจิทัล พร้อมการคำนวณรหัส SHA-256 และตรวจสอบความสมบูรณ์ของโครงสร้างไฟล์ตามมาตรฐานงานตรวจพิสูจน์พยานหลักฐาน
         </p>
       </div>
 

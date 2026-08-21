@@ -150,10 +150,10 @@ export default function MatchesPage() {
           </div>
           <h1 className="flex items-center gap-3 text-2xl sm:text-3xl font-black tracking-tight text-white">
             <Link2 className="h-8 w-8 text-indigo-400" />
-            ตรวจทานความเชื่อมโยงข้ามคดี
+            การวิเคราะห์และตรวจทานความเชื่อมโยงข้ามคดี
           </h1>
           <p className="max-w-2xl text-xs sm:text-sm text-slate-400">
-            ทุกผลลัพธ์เป็นข้อเสนอ (Pending Candidate) จนกว่าผู้ตรวจทานจะยืนยันพร้อมเหตุผลและตรวจสอบแหล่งอ้างอิงจากหลักฐานต้นฉบับ
+            รายการความเชื่อมโยงทุกรายการมีสถานะเป็นข้อเสนอแนะ จนกว่าเจ้าหน้าที่จะดำเนินการตรวจสอบความถูกต้องและลงนามรับรองร่วมกับพยานหลักฐานต้นฉบับ
           </p>
         </div>
         <div className="flex flex-wrap items-center gap-3 self-start md:self-auto">
@@ -161,10 +161,10 @@ export default function MatchesPage() {
             type="button"
             onClick={() => void triggerScan()}
             disabled={isScanning || isLoading}
-            className="inline-flex items-center gap-2 rounded-xl bg-indigo-500/20 border border-indigo-400/40 px-4 py-2.5 text-xs font-bold text-indigo-200 hover:bg-indigo-500/30 transition shadow-[0_0_15px_rgba(99,102,241,0.2)] disabled:opacity-50"
+            className="inline-flex items-center gap-2 rounded-xl bg-indigo-500/20 border border-indigo-400/40 px-4 py-2.5 text-xs font-bold text-indigo-200 hover:bg-indigo-500/30 transition shadow-[0_0_15px_rgba(99,102,241,0.2)] disabled:opacity-50 cursor-pointer"
           >
             {isScanning ? <Loader2 className="h-4 w-4 animate-spin text-indigo-300" /> : <Sparkles className="h-4 w-4 text-indigo-300" />}
-            สแกนหาความเชื่อมโยง (AI & Fuzzy Scan)
+            ประมวลผลค้นหาความเชื่อมโยงอัตโนมัติ
           </button>
           <button
             type="button"
