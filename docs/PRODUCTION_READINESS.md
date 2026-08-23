@@ -9,6 +9,8 @@
 - vinext compatibility 100% และ Cloudflare Worker build/local runtime ผ่าน
 - Worker ที่ไม่มี secret ตอบ health 503 และ redirect หน้าป้องกันไป login แบบ fail closed
 - security headers, private signed download, shared rate limit, Origin check, immutable evidence/audit, human review, source snapshot และ transactional CSV import มี implementation แล้ว
+- Passkey รองรับ enrollment, passwordless login, device revocation และ biometric step-up โดยเก็บเฉพาะ FIDO2 public key/counter ไม่เก็บภาพใบหน้าหรือลายนิ้วมือ
+- Evidence intake รองรับ drag/drop หลายไฟล์และกล้องมือถือ; Vision OCR อ่านภาพ/PDF ที่เป็น `STORED/CLEAN` และทุกผลยังคงเป็น `SUGGESTED` รอมนุษย์รับรอง
 
 ยังห้ามใช้ข้อมูลจริงจนกว่า live gates ด้านล่างจะผ่านและมีผู้รับผิดชอบลงนาม
 
@@ -65,12 +67,13 @@
    - signed URL ออกได้เฉพาะ member และหลักฐาน `STORED/CLEAN`
    - audit update/delete และ stored evidence delete ถูกปฏิเสธ
    - suggestion จากหลักฐานไม่ clean ยืนยันไม่ได้
+   - ลงทะเบียน/ล็อกอิน/เพิกถอน Passkey ได้จริงบน Windows Hello, Face ID/Touch ID และ security key อย่างน้อยสองชนิด พร้อมตรวจ counter replay และ Audit Log
    - PERSON match ที่อาศัยชื่ออย่างเดียวถูกปฏิเสธ
    - report ที่ไม่มี source mention/reference ถูกปฏิเสธ
    - CSV import ที่ RPC ล้มเหลวไม่เหลือ partial batch/envelope
 6. ตรวจ query/index/connection limits ด้วยข้อมูลขนาดใกล้ production
 
-เครื่องที่ทำ audit ครั้งนี้ไม่มี Supabase CLI/Docker จึงยังไม่ได้พิสูจน์ migration/RLS กับ PostgreSQL จริง จุดนี้เป็น release blocker
+เครื่องที่ทำ audit ครั้งนี้มี Supabase CLI แต่ไม่มี Docker, linked staging project หรือ credentials จึงยังไม่ได้พิสูจน์ migration/RLS กับ PostgreSQL จริง จุดนี้เป็น release blocker
 
 ## Malware scanner gate
 
@@ -95,7 +98,7 @@ vinext ใช้ Workers Cache, ไม่ใช้ Data Cache/KV และไม
 
 ## External capability still requiring a decision
 
-- Gemini text extraction เชื่อมผ่าน route ฝั่งเซิร์ฟเวอร์แล้ว โดยรับเฉพาะข้อความที่เจ้าหน้าที่เลือกจากหลักฐาน `CLEAN`, ตรวจผลด้วย schema และบันทึกเป็น `SUGGESTED`; OCR สำหรับไฟล์ทั้งฉบับและ background worker ยังไม่ได้เชื่อม ระบบยังมี manual source-backed suggestion เป็น fallback และ `auto_extraction` default ปิดอยู่ ต้องสรุป data residency, DPA, retention และ evaluation set ก่อนขยายการใช้งาน
+- Gemini text/Vision extraction เชื่อมผ่าน route ฝั่งเซิร์ฟเวอร์แล้ว: ถ้ามีข้อความจะวิเคราะห์ข้อความนั้น ถ้าเว้นว่างจะดาวน์โหลดต้นฉบับภาพ/PDF ที่เป็น `STORED/CLEAN` จาก private bucket เพื่อทำ Vision OCR ตรวจผลด้วย schema และบันทึกเป็น `SUGGESTED`; งาน batch/background ใช้ automation job/n8n contract ที่มีอยู่ ส่วน demo ใช้ deterministic fixture ที่ติดป้ายชัดและไม่เรียก provider ภายนอก ยังต้องสรุป data residency, DPA, retention และ evaluation set ก่อนเปิด Gemini กับข้อมูลจริง
 - Kouprey/Partner endpoints พร้อม contract แต่ต้องมี production key, partner test fixture และการซ้อม key rotation/replay response
 - Email ingestion ไม่มี SMTP/mail provider เชื่อมจริง จึงยังไม่ควรประกาศช่องทางอีเมลว่าเปิดใช้งาน
 - FDA SKYNET/Privus เปิดใช้ในโหมด manual-only ผ่าน stable HTTPS entry point; ไม่เก็บ eGov credential/callback URL และต้องนำ official export กลับเข้า Evidence Intake

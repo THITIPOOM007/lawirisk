@@ -13,14 +13,12 @@ import {
   FileText, 
   Loader2, 
   User, 
-  Phone, 
   MapPin, 
   Tag, 
   Key, 
   FileCheck, 
   CheckCircle2, 
-  Code2, 
-  ExternalLink 
+  Code2
 } from 'lucide-react';
 import {
   type Case,
@@ -38,7 +36,6 @@ export default function IntakeDetailPage() {
   const router = useRouter();
   const intakeId = params.id as string;
 
-  const [mounted, setMounted] = useState(false);
   const [envelope, setEnvelope] = useState<IntakeEnvelope | null>(null);
   const [message, setMessage] = useState<IntakeMessage | null>(null);
   const [participants, setParticipants] = useState<IntakeParticipant[]>([]);
@@ -68,10 +65,6 @@ export default function IntakeDetailPage() {
   const [submitError, setSubmitError] = useState('');
   const [showRawJson, setShowRawJson] = useState(false);
 
-  useEffect(() => {
-    setMounted(true);
-  }, []);
-
   // Parse structured payload if the message contains JSON
   const parsedData = useMemo(() => {
     if (!message?.raw_payload) return null;
@@ -94,16 +87,7 @@ export default function IntakeDetailPage() {
       // not JSON
     }
     return null;
-  }, [message?.raw_payload]);
-
-  // Set default case title when parsedData or envelope arrives
-  useEffect(() => {
-    if (parsedData?.topic && !newCaseTitle) {
-      setNewCaseTitle(parsedData.topic);
-    } else if (envelope?.urgency_reason && !newCaseTitle) {
-      setNewCaseTitle(envelope.urgency_reason);
-    }
-  }, [parsedData, envelope, newCaseTitle]);
+  }, [message]);
 
   const handleFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
@@ -154,8 +138,22 @@ export default function IntakeDetailPage() {
       .then(async (response) => {
         const body = await response.json();
         if (!response.ok) throw new Error(body.error?.message || 'โหลดรายละเอียดคำร้องไม่สำเร็จ');
-        setEnvelope(body.data.envelope as IntakeEnvelope);
-        setMessage(body.data.message as IntakeMessage | null);
+        const nextEnvelope = body.data.envelope as IntakeEnvelope;
+        const nextMessage = body.data.message as IntakeMessage | null;
+        setEnvelope(nextEnvelope);
+        setMessage(nextMessage);
+        setNewCaseTitle((current) => {
+          if (current) return current;
+          if (nextMessage?.raw_payload) {
+            try {
+              const payload = JSON.parse(nextMessage.raw_payload) as { topic?: unknown };
+              if (typeof payload.topic === 'string' && payload.topic.trim()) return payload.topic.trim();
+            } catch {
+              // Plain-text intake messages use the envelope reason below.
+            }
+          }
+          return nextEnvelope.urgency_reason || '';
+        });
         setParticipants(body.data.participants as IntakeParticipant[]);
         setAttachments(body.data.attachments as IntakeAttachment[]);
         setDuplicates(body.data.duplicates as IntakeDuplicateCandidate[]);
@@ -200,7 +198,7 @@ export default function IntakeDetailPage() {
     }
   };
 
-  if (!mounted || (isLoading && !envelope)) {
+  if (isLoading && !envelope) {
     return <div className="flex items-center justify-center p-16 text-slate-400 text-sm" role="status"><Loader2 className="mr-2 h-5 w-5 animate-spin text-teal-300" />กำลังโหลดข้อมูลรายละเอียดคำร้องและพยานหลักฐาน...</div>;
   }
   if (loadError || !envelope) {
@@ -292,7 +290,7 @@ export default function IntakeDetailPage() {
               </h4>
               {envelope.complainant_mode === 'ANONYMOUS' ? (
                 <div className="p-3.5 bg-amber-950/20 rounded-xl text-xs text-amber-300 border border-amber-800/40">
-                  <span className="font-bold">⚠️ ผู้ร้องเรียนเลือก "ไม่ระบุตัวตน" (Anonymous Mode)</span>
+                  <span className="font-bold">⚠️ ผู้ร้องเรียนเลือก &quot;ไม่ระบุตัวตน&quot; (Anonymous Mode)</span>
                   <p className="mt-1 text-[11px] text-slate-400 leading-relaxed">
                     ระบบได้แยกการจัดเก็บข้อมูลและไม่บันทึกชื่อหรือเบอร์ติดต่อ เพื่อคุ้มครองความปลอดภัยสูงสุดของผู้แจ้งเบาะแส
                   </p>

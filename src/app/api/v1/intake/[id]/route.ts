@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { z } from 'zod';
 import { authorizeStaff } from '@/lib/api-auth';
 import { triageIntakeSchema } from '@/lib/intake-contracts';
-import { INTAKE_READ_ROLES } from '@/lib/roles';
+import { INTAKE_READ_ROLES, INTAKE_WRITE_ROLES } from '@/lib/roles';
 import { createServer } from '@/lib/supabase-server';
 import { consumeRateLimit } from '@/lib/rate-limit';
 import { hasTrustedBrowserOrigin } from '@/lib/request-security';
@@ -56,34 +56,20 @@ export async function GET(request: NextRequest, context: { params: Promise<{ id:
   const dependencyError = message.error || participants.error || attachments.error || duplicates.error || cases.error;
   if (dependencyError) return NextResponse.json({ error: { code: 'INTAKE_DETAIL_FAILED', message: 'โหลดรายละเอียดคำร้องไม่สำเร็จ' } }, { status: 503 });
 
-  // Guarantee envelope and attachments are CLEAN unless INFECTED
-  const safeEnvelope = {
-    ...envelope.data,
-    malware_scan_status: envelope.data.malware_scan_status === 'INFECTED' ? 'INFECTED' : 'CLEAN',
-  };
-  const safeAttachments = (attachments.data || []).map(att => ({
-    ...att,
-    malware_scan_status: att.malware_scan_status === 'INFECTED' ? 'INFECTED' : 'CLEAN',
-  }));
-
-  try {
-    const { createServiceClient } = await import('@/lib/supabase-server');
-    const service = createServiceClient();
-    if (envelope.data.malware_scan_status !== 'CLEAN' && envelope.data.malware_scan_status !== 'INFECTED') {
-      await service.from('intake_envelopes').update({ malware_scan_status: 'CLEAN' }).eq('id', id);
-    }
-    if ((attachments.data || []).some(att => att.malware_scan_status !== 'CLEAN' && att.malware_scan_status !== 'INFECTED')) {
-      await service.from('intake_attachments').update({ malware_scan_status: 'CLEAN' }).eq('envelope_id', id).neq('malware_scan_status', 'INFECTED');
-    }
-  } catch (err) {
-    console.warn('Auto-heal scan status background update:', err);
-  }
-
-  return NextResponse.json({ data: { envelope: safeEnvelope, message: message.data, participants: participants.data, attachments: safeAttachments, duplicates: duplicates.data, cases: cases.data } });
+  return NextResponse.json({
+    data: {
+      envelope: envelope.data,
+      message: message.data,
+      participants: participants.data,
+      attachments: attachments.data,
+      duplicates: duplicates.data,
+      cases: cases.data,
+    },
+  });
 }
 
 export async function PATCH(request: NextRequest, context: { params: Promise<{ id: string }> }) {
-  const auth = await authorizeStaff(request, INTAKE_READ_ROLES);
+  const auth = await authorizeStaff(request, INTAKE_WRITE_ROLES);
   if (!auth.ok) return NextResponse.json({ error: { code: auth.code, message: 'ไม่มีสิทธิ์คัดกรองคำร้อง' } }, { status: auth.status });
   if (!hasTrustedBrowserOrigin(request)) return NextResponse.json({ error: { code: 'UNTRUSTED_ORIGIN', message: 'คำขอไม่ได้มาจากระบบที่อนุญาต' } }, { status: 403 });
   const supabase = auth.identity.mode === 'supabase' ? await createServer() : undefined;
@@ -112,11 +98,6 @@ export async function PATCH(request: NextRequest, context: { params: Promise<{ i
   if (!z.string().uuid().safeParse(id).success) return NextResponse.json({ error: { code: 'NOT_FOUND', message: 'ไม่พบคำร้อง' } }, { status: 404 });
   if (!supabase) return NextResponse.json({ error: { code: 'AUTH_NOT_CONFIGURED', message: 'ฐานข้อมูลยังไม่พร้อมใช้งาน' } }, { status: 503 });
 
-  // Ensure envelope is marked CLEAN before calling database triage_intake RPC
-  const { createServiceClient } = await import('@/lib/supabase-server');
-  const service = createServiceClient();
-  await service.from('intake_envelopes').update({ malware_scan_status: 'CLEAN' }).eq('id', id).eq('malware_scan_status', 'PENDING');
-
   const { data, error } = await supabase.rpc('triage_intake', {
     p_envelope_id: id,
     p_action: payload.action,
@@ -127,46 +108,23 @@ export async function PATCH(request: NextRequest, context: { params: Promise<{ i
   });
 
   if (error) {
-    console.warn('RPC triage_intake error, using service client fallback:', error);
-    const { data: envelopeRec } = await service.from('intake_envelopes').select('*').eq('id', id).single();
-    if (!envelopeRec) return NextResponse.json({ error: { code: 'NOT_FOUND', message: 'ไม่พบคำร้อง' } }, { status: 404 });
-
-    let destinationId = payload.destination_case_id;
-    let nextStatus = 'REJECTED';
-
-    if (payload.action === 'CREATE_CASE') {
-      const now = new Date().toISOString();
-      const { data: newCase, error: caseErr } = await service.from('cases').insert({
-        number: payload.new_case_number!,
-        title: payload.new_case_title!,
-        description: `สร้างจากคำร้อง ${id}: ${payload.reason}`,
-        jurisdiction_region: envelopeRec.jurisdiction_region,
-        jurisdiction_agency: envelopeRec.jurisdiction_agency,
-        created_by: auth.identity.id,
-        created_at: now,
-        updated_at: now,
-      }).select('id').single();
-      if (caseErr) {
-        return NextResponse.json({ error: { code: 'CASE_CREATE_FAILED', message: caseErr.message || 'สร้างสำนวนคดีไม่สำเร็จ' } }, { status: 500 });
-      }
-      destinationId = newCase.id;
-      nextStatus = 'PROMOTED';
-    } else if (payload.action === 'MERGE_INTAKE') {
-      nextStatus = 'MERGED';
-    } else if (payload.action === 'REQUEST_MORE_INFO') {
-      nextStatus = 'NEEDS_INFO';
+    const knownConflict = [
+      'INTAKE_NOT_CLEAN',
+      'INTAKE_ATTACHMENT_NOT_CLEAN',
+      'INTAKE_DESTINATION_REQUIRED',
+      'INTAKE_INVALID_TRANSITION',
+    ].find((code) => error.message?.includes(code));
+    if (knownConflict) {
+      return NextResponse.json(
+        { error: { code: knownConflict, message: 'ยังไม่สามารถดำเนินการคำร้องได้ กรุณาตรวจผลสแกนและข้อมูลปลายทางให้ครบถ้วน' } },
+        { status: 409 },
+      );
     }
-
-    await service.from('intake_envelopes').update({ status: nextStatus, updated_at: new Date().toISOString() }).eq('id', id);
-    await service.from('triage_decisions').insert({
-      envelope_id: id,
-      action: payload.action,
-      reason: payload.reason,
-      destination_case_id: destinationId || null,
-      created_by: auth.identity.id,
-    });
-
-    return NextResponse.json({ data: { status: nextStatus, destination_case_id: destinationId } });
+    console.error('triage_intake RPC failed', { code: error.code });
+    return NextResponse.json(
+      { error: { code: 'INTAKE_TRIAGE_FAILED', message: 'บันทึกผลคัดกรองไม่สำเร็จ กรุณาลองใหม่' } },
+      { status: 503 },
+    );
   }
 
   return NextResponse.json({ data });

@@ -2,21 +2,22 @@
 
 import React, { useState } from 'react';
 import Image from 'next/image';
-import { useRouter } from 'next/navigation';
 import {
   AlertCircle,
   ArrowRight,
   BadgeCheck,
   Database,
+  Fingerprint,
   Loader2,
   LockKeyhole,
   ScanLine,
   ShieldCheck,
   Sparkles,
 } from 'lucide-react';
-import { createClient, isDemoModeEnabled, isSupabaseConfigured } from '@/lib/supabase';
+import { isDemoModeEnabled } from '@/lib/supabase';
 import { writeDemoAuthCookies } from '@/lib/browser-cookies';
 import type { StaffRole } from '@/lib/roles';
+import { loginWithPasskey } from '@/lib/webauthn-client';
 
 type DemoRole = StaffRole;
 
@@ -32,14 +33,13 @@ function toErrorMessage(error: unknown) {
 }
 
 export default function LoginPage() {
-  const router = useRouter();
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [isLoading, setIsLoading] = useState(false);
   const [activeDemoRole, setActiveDemoRole] = useState<DemoRole | null>(null);
   const [isDemoMode] = useState(() => isDemoModeEnabled());
-  const [isAuthConfigured] = useState(() => isSupabaseConfigured());
   const [errorMessage, setErrorMessage] = useState('');
+  const [isPasskeyScanning, setIsPasskeyScanning] = useState(false);
 
   const finishDemoLogin = (role: DemoRole, name: string) => {
     writeDemoAuthCookies(role, name);
@@ -87,6 +87,32 @@ export default function LoginPage() {
     setActiveDemoRole(role);
     setIsLoading(true);
     finishDemoLogin(role, name);
+  };
+
+  const handlePasskeyLogin = async () => {
+    if (isLoading || isPasskeyScanning) return;
+    setErrorMessage('');
+    setIsPasskeyScanning(true);
+
+    if (isDemoMode) {
+      await new Promise((resolve) => setTimeout(resolve, 900));
+      setActiveDemoRole('INVESTIGATOR');
+      finishDemoLogin('INVESTIGATOR', 'ร.ต.อ. สมชาย (Passkey Demo)');
+      return;
+    }
+    if (!email.trim()) {
+      setErrorMessage('กรอกอีเมลก่อน เพื่อเลือก Passkey ที่ผูกกับบัญชีนี้');
+      setIsPasskeyScanning(false);
+      return;
+    }
+    const result = await loginWithPasskey(email.trim());
+    if (!result.success) {
+      setErrorMessage(result.error || 'ยืนยัน Passkey ไม่สำเร็จ');
+      setIsPasskeyScanning(false);
+      return;
+    }
+    const searchParams = new URLSearchParams(window.location.search);
+    window.location.replace(searchParams.get('next') || '/');
   };
 
   return (
@@ -152,6 +178,14 @@ export default function LoginPage() {
                 {!isLoading && <ArrowRight className="h-4 w-4" />}
               </button>
             </form>
+
+            <div className="my-5 flex items-center gap-3" aria-hidden="true"><span className="h-px flex-1 bg-white/[0.07]" /><span className="text-[10px] text-slate-600">หรือยืนยันด้วยอุปกรณ์</span><span className="h-px flex-1 bg-white/[0.07]" /></div>
+            <button type="button" onClick={() => void handlePasskeyLogin()} disabled={isLoading || isPasskeyScanning} className="relative flex min-h-14 w-full items-center justify-center gap-3 overflow-hidden rounded-xl border border-cyan-200/20 bg-gradient-to-r from-cyan-300/[0.08] via-teal-300/[0.04] to-sky-300/[0.08] px-5 text-sm font-semibold text-cyan-50 transition hover:border-cyan-200/35 hover:bg-cyan-300/[0.1] disabled:cursor-wait disabled:opacity-60">
+              {isPasskeyScanning && <span className="absolute inset-0 animate-pulse bg-cyan-300/[0.05]" />}
+              {isPasskeyScanning ? <Loader2 className="relative h-5 w-5 animate-spin text-cyan-200" /> : <Fingerprint className="relative h-5 w-5 text-cyan-200" />}
+              <span className="relative">{isPasskeyScanning ? 'กำลังเรียกตัวสแกนของอุปกรณ์…' : 'สแกนใบหน้า / ลายนิ้วมือด้วย Passkey'}</span>
+            </button>
+            <p className="mt-2 text-center text-[9px] leading-4 text-slate-600">Windows Hello · Face ID · Touch ID · Security Key<br />ไม่มีการส่งหรือเก็บภาพใบหน้าไว้ในระบบ</p>
 
             {isDemoMode && <div className="mt-7 border-t border-white/[0.07] pt-6"><div className="flex items-center justify-between gap-3"><p className="text-xs font-semibold text-slate-300">หรือเลือกบทบาทสาธิต</p><p className="text-[9px] text-slate-600">ไม่มีข้อมูลจริง</p></div><div className="mt-3 grid gap-2 sm:grid-cols-2">{demoRoles.map((item) => <button key={item.role} type="button" onClick={() => handleDemoLogin(item.role, item.name)} disabled={isLoading} className={`group flex min-h-[58px] items-center justify-between rounded-xl border px-3.5 text-left transition ${activeDemoRole === item.role ? 'border-teal-300/30 bg-teal-300/[0.07]' : 'border-white/[0.07] bg-white/[0.02] hover:border-white/[0.15] hover:bg-white/[0.04]'} disabled:cursor-wait disabled:opacity-60`}><span><span className="block text-xs font-medium text-slate-200">{item.label}</span><span className="mt-0.5 block text-[9px] text-slate-600">{item.description}</span></span>{isLoading && activeDemoRole === item.role ? <Loader2 className="h-3.5 w-3.5 animate-spin text-teal-300" /> : <ArrowRight className="h-3.5 w-3.5 text-slate-700 transition group-hover:translate-x-0.5 group-hover:text-slate-400" />}</button>)}</div></div>}
           </div>

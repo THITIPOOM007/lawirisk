@@ -3,7 +3,7 @@
 import React, { useEffect, useRef, useState, useSyncExternalStore } from 'react';
 import Image from 'next/image';
 import Link from 'next/link';
-import { usePathname, useRouter } from 'next/navigation';
+import { usePathname } from 'next/navigation';
 import {
   Bell,
   BriefcaseBusiness,
@@ -12,6 +12,7 @@ import {
   Database,
   FileBarChart,
   FileSearch,
+  Fingerprint,
   Globe,
   History,
   Inbox,
@@ -28,7 +29,7 @@ import {
   Workflow,
   X,
 } from 'lucide-react';
-import { createClient, isSupabaseConfigured } from '@/lib/supabase';
+import { isSupabaseConfigured } from '@/lib/supabase';
 import { roleLabel } from '@/lib/roles';
 
 interface NavigationProps {
@@ -60,6 +61,7 @@ const intelligenceNav: NavItem[] = [
 
 const governanceNav: NavItem[] = [
   { name: 'บันทึกประวัติการใช้งาน', href: '/audit', icon: History },
+  { name: 'Passkey และการสแกนชีวมิติ', href: '/security', icon: Fingerprint },
   { name: 'บริการรับเรื่องสำหรับประชาชน', href: '/public', icon: Globe },
 ];
 
@@ -76,6 +78,7 @@ const sectionMeta = [
   { prefix: '/universe', eyebrow: 'ผังเครือข่ายความสัมพันธ์', title: 'ผังความเชื่อมโยง 3 มิติ (3D Graph)' },
   { prefix: '/reports', eyebrow: 'เอกสารสรุปสำนวนคดี', title: 'รายงานและเอกสารสืบสวน' },
   { prefix: '/audit', eyebrow: 'ธรรมาภิบาลและความโปร่งใส', title: 'บันทึกประวัติการใช้งาน (Audit Log)' },
+  { prefix: '/security', eyebrow: 'ความปลอดภัยบัญชีผู้ใช้', title: 'Passkey และการสแกนชีวมิติ' },
   { prefix: '/admin', eyebrow: 'การบริหารระบบ', title: 'การตั้งค่าและกำหนดสิทธิ์ผู้ใช้งาน' },
 ];
 
@@ -129,7 +132,6 @@ function NavLink({ item, active, collapsed, onNavigate }: {
 
 export default function Navigation({ children }: NavigationProps) {
   const pathname = usePathname();
-  const router = useRouter();
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
   const [isCollapsed, setIsCollapsed] = useState(false);
   const [isSigningOut, setIsSigningOut] = useState(false);

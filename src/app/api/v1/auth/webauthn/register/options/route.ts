@@ -1,13 +1,15 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { authorizeStaff } from '@/lib/api-auth';
-import { authError } from '@/lib/api-errors';
+import { apiError, authError } from '@/lib/api-errors';
 import { STAFF_READ_ROLES } from '@/lib/roles';
 import { createServer } from '@/lib/supabase-server';
 import { createRegistrationOptions, type StoredWebAuthnCredential } from '@/lib/webauthn-server';
+import { hasTrustedBrowserOrigin } from '@/lib/request-security';
 
 export async function POST(request: NextRequest) {
   const auth = await authorizeStaff(request, STAFF_READ_ROLES);
   if (!auth.ok) return authError(auth, 'ต้องเข้าสู่ระบบก่อนลงทะเบียน Passkey');
+  if (!hasTrustedBrowserOrigin(request)) return apiError('UNTRUSTED_ORIGIN', 'คำขอไม่ได้มาจากระบบที่อนุญาต', 403);
 
   if (auth.identity.mode === 'demo') {
     return NextResponse.json({
@@ -38,7 +40,7 @@ export async function POST(request: NextRequest) {
   const origin = request.headers.get('origin') || undefined;
   const options = await createRegistrationOptions({
     userId: auth.identity.id,
-    userEmail: `${auth.identity.name.replace(/\s+/g, '.').toLowerCase()}@lawirisk.ssk.gov.th`,
+    userEmail: auth.identity.email || `${auth.identity.id}@lawirisk.local`,
     userName: auth.identity.name,
     existingCredentials: mappedCreds,
     requestOrigin: origin,
@@ -46,12 +48,13 @@ export async function POST(request: NextRequest) {
 
   // Save challenge to webauthn_challenges table with 2-minute expiry
   const expiresAt = new Date(Date.now() + 2 * 60 * 1000).toISOString();
-  await supabase.from('webauthn_challenges').insert({
+  const { error: challengeError } = await supabase.from('webauthn_challenges').insert({
     profile_id: auth.identity.id,
     challenge: options.challenge,
     type: 'REGISTRATION',
     expires_at: expiresAt,
   });
+  if (challengeError) return apiError('CHALLENGE_STORAGE_FAILED', 'เริ่มลงทะเบียน Passkey ไม่สำเร็จ', 503);
 
   return NextResponse.json({ data: options });
 }

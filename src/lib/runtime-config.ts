@@ -16,6 +16,10 @@ export function isSupabaseServerConfigured() {
   return hasValue('NEXT_PUBLIC_SUPABASE_URL') && hasValue('NEXT_PUBLIC_SUPABASE_ANON_KEY');
 }
 
+export function isSupabaseServiceConfigured() {
+  return isSupabaseServerConfigured() && hasValue('SUPABASE_SERVICE_ROLE_KEY');
+}
+
 export function isDemoServerEnabled() {
   return process.env.NODE_ENV !== 'production'
     && process.env.NEXT_PUBLIC_DEMO_MODE !== 'false'
@@ -42,7 +46,7 @@ export function getRuntimeReadiness(): RuntimeReadiness {
   const supabase = isSupabaseServerConfigured();
   const checks = {
     supabase,
-    serviceRole: hasValue('SUPABASE_SERVICE_ROLE_KEY'),
+    serviceRole: isSupabaseServiceConfigured(),
     privateEvidenceBucket: hasValue('PRIVATE_EVIDENCE_BUCKET'),
     malwareScanner: hasSecureHttpsUrl('MALWARE_SCANNER_URL') && hasStrongSecret('MALWARE_SCANNER_TOKEN'),
     gemini: hasValue('GEMINI_API_KEY'),

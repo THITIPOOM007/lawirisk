@@ -4,6 +4,7 @@ import { apiError } from '@/lib/api-errors';
 import { verifyN8nCallbackToken } from '@/lib/automation-orchestrator';
 import { GeminiExtractionError, extractEntitiesWithGemini } from '@/lib/providers/gemini-extraction';
 import { consumeRateLimit } from '@/lib/rate-limit';
+import { isSupabaseServiceConfigured } from '@/lib/runtime-config';
 import { createServiceClient } from '@/lib/supabase-server';
 import { automationRunRequestSchema } from '@/lib/workflow-contracts';
 
@@ -19,6 +20,9 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
     return apiError('PAYLOAD_TOO_LARGE', 'ข้อมูล callback มีขนาดเกินกำหนด', 413);
   }
 
+  if (!isSupabaseServiceConfigured()) {
+    return apiError('SERVICE_UNAVAILABLE', 'ระบบอัตโนมัติยังตั้งค่าฐานข้อมูลไม่ครบ', 503);
+  }
   const service = createServiceClient();
   try {
     const limit = await consumeRateLimit({

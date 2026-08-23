@@ -60,6 +60,7 @@ export async function GET(
     const pdfDoc = await PDFDocument.create();
     let font = await pdfDoc.embedFont(StandardFonts.Helvetica);
     let fontBold = await pdfDoc.embedFont(StandardFonts.HelveticaBold);
+    let hasUnicodeFont = false;
     
     // Attempt to load Thai font
     try {
@@ -67,11 +68,15 @@ export async function GET(
       const fontkit = await import('@pdf-lib/fontkit');
       pdfDoc.registerFontkit(fontkit.default || fontkit);
       const fontUrl = new URL('/Thasadith-Regular.ttf', request.url);
-      const fontRes = await fetch(fontUrl);
+      let fontRes = await fetch(fontUrl, { cache: 'force-cache' });
+      if (!fontRes.ok) fontRes = await fetch(fontUrl, { cache: 'no-store' });
       if (fontRes.ok) {
         const fontBytes = await fontRes.arrayBuffer();
         font = await pdfDoc.embedFont(fontBytes);
         fontBold = font; // Use same font if bold is not available
+        hasUnicodeFont = true;
+      } else {
+        console.warn('Thai PDF font asset unavailable', { status: fontRes.status });
       }
     } catch (err) {
       console.warn('Failed to load Thai font, falling back to Helvetica', err);
@@ -86,8 +91,11 @@ export async function GET(
     let y = height - 50;
 
     const drawLine = (text: string, isBold = false, size = 10, color = rgb(0.1, 0.1, 0.1)) => {
-      // Just use the text directly; if font is loaded it will render Thai
-      page.drawText(text, {
+      // Standard PDF fonts are WinAnsi-only. Keep report generation available
+      // if the public font asset is temporarily unreachable, while preserving
+      // the immutable snapshot hash above for exact source verification.
+      const printableText = hasUnicodeFont ? text : text.replace(/[^\x20-\x7E]/g, '?');
+      page.drawText(printableText, {
         x: 50,
         y,
         size,
@@ -130,4 +138,3 @@ export async function GET(
     return apiError('INTERNAL_ERROR', 'เกิดข้อผิดพลาดในการสร้างไฟล์ PDF', 500, traceId);
   }
 }
-

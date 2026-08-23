@@ -12,7 +12,23 @@ export async function GET(request: NextRequest) {
   const auth = await authorizeStaff(request, STAFF_READ_ROLES);
   if (!auth.ok) return authError(auth, 'ไม่มีสิทธิ์ดูคิวตรวจทาน');
   if (auth.identity.mode === 'demo') {
-    return NextResponse.json({ data: { suggestions: [], cases: getCases(), evidence: getEvidence(), mode: 'demo' } });
+    return NextResponse.json({ data: { suggestions: [{
+      id: 'demo-suggestion-phone',
+      case_id: 'case-1',
+      evidence_id: 'ev-1',
+      page_number: 1,
+      source_text: 'ติดต่อสั่งซื้อและโอนมัดจำได้ที่เบอร์ 062-4149791',
+      source_location: { kind: 'demo-fixture', x: 112, y: 340, width: 420, height: 64 },
+      entity_type: 'PHONE',
+      candidate_value: '062-4149791',
+      confidence: 0.96,
+      reason: 'พบหมายเลขโทรศัพท์ในข้อความโฆษณาบนหลักฐานภาพหน้าจอ',
+      provider: 'DEMO_RULE_ENGINE',
+      model: 'deterministic-v1',
+      prompt_schema_version: 'demo-1',
+      status: 'SUGGESTED',
+      created_at: '2026-08-23T01:00:00.000Z',
+    }], cases: getCases(), evidence: getEvidence(), mode: 'demo' } });
   }
   const supabase = await createServer();
   const [suggestions, cases, evidence] = await Promise.all([
@@ -28,7 +44,22 @@ export async function POST(request: NextRequest) {
   const auth = await authorizeStaff(request, new Set([...REVIEW_ROLES, 'INVESTIGATOR']));
   if (!auth.ok) return authError(auth, 'ไม่มีสิทธิ์สร้างข้อเสนอเพื่อตรวจทาน');
   if (!hasTrustedBrowserOrigin(request)) return apiError('UNTRUSTED_ORIGIN', 'คำขอไม่ได้มาจากระบบที่อนุญาต', 403);
-  if (auth.identity.mode === 'demo') return apiError('DEMO_WRITE_UNAVAILABLE', 'ข้อเสนอแบบ manual ในโหมดสาธิตจะไม่ถูกบันทึก', 409);
+  if (auth.identity.mode === 'demo') {
+    const body = await request.json().catch(() => null) as Record<string, unknown> | null;
+    if (!body?.case_id || !body.evidence_id || !body.candidate_value || !body.reason || !body.source_text) {
+      return apiError('INVALID_REQUEST', 'ข้อมูลข้อเสนอไม่ครบ', 400);
+    }
+    return NextResponse.json({ data: {
+      id: `demo-manual-${Date.now()}`,
+      ...body,
+      confidence: null,
+      provider: 'MANUAL_DEMO',
+      prompt_schema_version: 'manual-1',
+      status: 'SUGGESTED',
+      created_at: new Date().toISOString(),
+      mode: 'demo',
+    } }, { status: 201 });
+  }
   const parsed = manualSuggestionSchema.safeParse(await request.json().catch(() => null));
   if (!parsed.success) return apiError('INVALID_REQUEST', 'ข้อมูลข้อเสนอไม่ครบหรือรูปแบบไม่ถูกต้อง', 400, undefined, parsed.error.flatten().fieldErrors);
   const supabase = await createServer();

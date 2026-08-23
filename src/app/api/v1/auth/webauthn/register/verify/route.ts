@@ -5,10 +5,12 @@ import { STAFF_READ_ROLES } from '@/lib/roles';
 import { createServer } from '@/lib/supabase-server';
 import { verifyRegistration } from '@/lib/webauthn-server';
 import type { RegistrationResponseJSON } from '@simplewebauthn/server';
+import { hasTrustedBrowserOrigin } from '@/lib/request-security';
 
 export async function POST(request: NextRequest) {
   const auth = await authorizeStaff(request, STAFF_READ_ROLES);
   if (!auth.ok) return authError(auth, 'ต้องเข้าสู่ระบบก่อนยืนยันการลงทะเบียน Passkey');
+  if (!hasTrustedBrowserOrigin(request)) return apiError('UNTRUSTED_ORIGIN', 'คำขอไม่ได้มาจากระบบที่อนุญาต', 403);
 
   const body = await request.json().catch(() => null);
   if (!body || !body.response) {
@@ -61,35 +63,20 @@ export async function POST(request: NextRequest) {
   // Store Base64-encoded public key and credential metadata
   const pubKeyBase64 = Buffer.from(credential.publicKey).toString('base64url');
 
-  const { error: insertErr } = await supabase.from('webauthn_credentials').insert({
-    profile_id: auth.identity.id,
-    credential_id: credential.id,
-    public_key: pubKeyBase64,
-    counter: credential.counter,
-    device_type: credentialDeviceType,
-    backed_up: credentialBackedUp,
-    transports: credential.transports || [],
-    aaguid: aaguid || null,
-    nickname,
+  const { data: completed, error: completeError } = await supabase.rpc('complete_webauthn_registration', {
+    p_challenge_id: challengeRecord.id,
+    p_credential_id: credential.id,
+    p_public_key: pubKeyBase64,
+    p_counter: credential.counter,
+    p_device_type: credentialDeviceType,
+    p_backed_up: credentialBackedUp,
+    p_transports: credential.transports || [],
+    p_aaguid: aaguid || null,
+    p_nickname: nickname,
   });
-
-  if (insertErr) {
-    return apiError('STORAGE_ERROR', 'บันทึกข้อมูลกุญแจความปลอดภัยไม่สำเร็จ', 500);
+  if (completeError || completed !== true) {
+    return apiError('STORAGE_ERROR', 'บันทึกข้อมูลกุญแจความปลอดภัยไม่สำเร็จ', 503);
   }
-
-  // Delete consumed challenge
-  await supabase.from('webauthn_challenges').delete().eq('id', challengeRecord.id);
-
-  // Log audit event
-  await supabase.from('audit_logs').insert({
-    profile_id: auth.identity.id,
-    action: 'WEBAUTHN_CREDENTIAL_REGISTERED',
-    details: {
-      credential_id: credential.id,
-      device_type: credentialDeviceType,
-      nickname,
-    },
-  });
 
   return NextResponse.json({
     data: {

@@ -1,13 +1,17 @@
 ﻿import { NextRequest, NextResponse } from 'next/server';
+import crypto from 'node:crypto';
 import { authorizeStaff } from '@/lib/api-auth';
-import { apiError } from '@/lib/api-errors';
+import { apiError, authError } from '@/lib/api-errors';
 import { STAFF_READ_ROLES } from '@/lib/roles';
 import { createServer } from '@/lib/supabase-server';
 import { verifyAuthentication } from '@/lib/webauthn-server';
 import type { AuthenticationResponseJSON } from '@simplewebauthn/server';
+import { hasTrustedBrowserOrigin } from '@/lib/request-security';
 
 export async function POST(request: NextRequest) {
   const auth = await authorizeStaff(request, STAFF_READ_ROLES);
+  if (!auth.ok) return authError(auth, 'ต้องเข้าสู่ระบบก่อนใช้ Passkey');
+  if (!hasTrustedBrowserOrigin(request)) return apiError('UNTRUSTED_ORIGIN', 'คำขอไม่ได้มาจากระบบที่อนุญาต', 403);
   const body = await request.json().catch(() => null);
 
   if (!body || !body.response) {
@@ -16,7 +20,7 @@ export async function POST(request: NextRequest) {
 
   const response = body.response as AuthenticationResponseJSON;
 
-  if (auth.ok && auth.identity.mode === 'demo') {
+  if (auth.identity.mode === 'demo') {
     return NextResponse.json({
       data: {
         verified: true,
@@ -34,6 +38,7 @@ export async function POST(request: NextRequest) {
     .from('webauthn_credentials')
     .select('id, profile_id, credential_id, public_key, counter, transports')
     .eq('credential_id', response.id)
+    .eq('profile_id', auth.identity.id)
     .maybeSingle();
 
   if (credErr || !dbCred) {
@@ -44,6 +49,7 @@ export async function POST(request: NextRequest) {
   const { data: challengeRecord, error: challengeErr } = await supabase
     .from('webauthn_challenges')
     .select('id, challenge, expires_at')
+    .eq('profile_id', auth.identity.id)
     .eq('type', 'AUTHENTICATION')
     .gt('expires_at', new Date().toISOString())
     .order('created_at', { ascending: false })
@@ -75,34 +81,33 @@ export async function POST(request: NextRequest) {
 
   const { newCounter } = verification.authenticationInfo;
 
-  // Update credential counter & last_used_at to prevent replay attacks
-  await supabase
-    .from('webauthn_credentials')
-    .update({
-      counter: newCounter,
-      last_used_at: new Date().toISOString(),
-      updated_at: new Date().toISOString(),
-    })
-    .eq('id', dbCred.id);
-
-  // Clean up used challenge
-  await supabase.from('webauthn_challenges').delete().eq('id', challengeRecord.id);
-
-  // Log audit event
-  await supabase.from('audit_logs').insert({
-    profile_id: dbCred.profile_id,
-    action: 'WEBAUTHN_AUTHENTICATION_VERIFIED',
-    details: {
-      credential_id: dbCred.credential_id,
-      verified_at: new Date().toISOString(),
-    },
+  const stepUpToken = crypto.randomBytes(32).toString('base64url');
+  const stepUpHash = crypto.createHash('sha256').update(stepUpToken).digest('hex');
+  const { data: completed, error: completeError } = await supabase.rpc('complete_webauthn_authentication', {
+    p_credential_id: dbCred.id,
+    p_challenge_id: challengeRecord.id,
+    p_expected_counter: Number(dbCred.counter),
+    p_new_counter: newCounter,
+    p_token_hash: stepUpHash,
+    p_purpose: 'REVIEW_CONFIRMATION',
   });
+  if (completeError || completed !== true) {
+    return apiError('WEBAUTHN_STATE_COMMIT_FAILED', 'ยืนยันลายเซ็นแล้วแต่บันทึกสถานะความปลอดภัยไม่สำเร็จ กรุณาลองใหม่', 503);
+  }
 
-  return NextResponse.json({
+  const result = NextResponse.json({
     data: {
       verified: true,
       credentialId: dbCred.credential_id,
       profileId: dbCred.profile_id,
     },
   });
+  result.cookies.set('lawirisk-step-up', stepUpToken, {
+    httpOnly: true,
+    secure: process.env.NODE_ENV === 'production',
+    sameSite: 'strict',
+    path: '/api/v1/review',
+    maxAge: 5 * 60,
+  });
+  return result;
 }

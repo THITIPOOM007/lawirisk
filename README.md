@@ -28,7 +28,6 @@ n8n Automation Command Center, workflow import และ trust boundary อย�
 pnpm quality
 pnpm test:e2e
 pnpm audit:prod
-pnpm peers check
 pnpm build:vinext
 ```
 
@@ -37,10 +36,13 @@ pnpm build:vinext
 - API ตรวจ session/role ซ้ำจาก server และ PostgreSQL RLS เป็นแนวป้องกันหลัก
 - mutation จาก browser ตรวจ Origin และใช้ shared rate limit ใน PostgreSQL
 - หลักฐานรองรับ PDF/PNG/JPEG สูงสุด 20 MB ตรวจ MIME, magic bytes, SHA-256 และ scanner ภายนอก
+- หน้า Evidence รองรับลากวาง/เลือกพร้อมกันสูงสุด 20 ไฟล์และถ่ายภาพจากกล้องมือถือ โดยรายงานผลสำเร็จ/ล้มเหลวแยกรายไฟล์
 - object path ไม่เปิดเผยต่อ client; ดาวน์โหลดผ่าน signed URL 60 วินาที เฉพาะไฟล์ `STORED/CLEAN`
 - metadata ต้นฉบับและ audit เป็น append-only/immutable ด้วย database trigger
 - extraction/match เป็นข้อเสนอ; การยืนยันต้องมี source และหลักฐานที่สแกน `CLEAN`
-- Gemini extraction ทำงานฝั่งเซิร์ฟเวอร์กับข้อความที่เจ้าหน้าที่เลือกเท่านั้น ผลถูก validate และบันทึกเป็น `SUGGESTED`; manual fallback ยังคงใช้งานได้
+- การเข้าใช้ระบบและลงนามรับรองรองรับ WebAuthn Passkey (Windows Hello, Face ID, Touch ID, security key) พร้อมหน้าจัดการอุปกรณ์; ข้อมูลชีวมิติอยู่บนอุปกรณ์และ production ไม่มี simulated passkey fallback
+- public portal รองรับค้นหา ส่งคำร้องแบบไม่เปิดเผยตัว และติดตามด้วย opaque token; ไฟล์ที่ไม่ใช่ `CLEAN` ถูกกักกัน
+- Gemini text/Vision extraction ทำงานฝั่งเซิร์ฟเวอร์กับข้อความหรือภาพ/PDF ที่เป็น `CLEAN` ผลถูก validate และบันทึกเป็น `SUGGESTED`; manual fallback ยังคงใช้งานได้
 - รายงานเก็บ source snapshot และ SHA-256; ไม่มี source จะสร้างไม่ได้
 - CSV import เป็น UTF-8 สูงสุด 2 MB/1,000 แถว และบันทึก batch ผ่าน RPC ธุรกรรมเดียว
 - Kouprey ใช้ HMAC/timestamp/nonce/idempotency; Partner API ใช้ bearer key/idempotency และไม่มี production demo fallback

@@ -2,6 +2,7 @@
 
 import React, { useState } from 'react';
 import Link from 'next/link';
+import Image from 'next/image';
 import {
   ShieldCheck,
   Search,
@@ -17,7 +18,6 @@ import {
   Paperclip,
   Upload,
   X,
-  ImageIcon,
 } from 'lucide-react';
 
 interface SearchResultItem {
@@ -32,12 +32,24 @@ interface SearchResultItem {
   status: 'SAFE' | 'WARNING' | 'REVOKED' | 'UNREGISTERED';
 }
 
+interface TrackingResult {
+  trackingToken: string;
+  receivedAt: string;
+  updatedAt: string;
+  status: string;
+  statusLabel: string;
+  progressStep: number;
+  jurisdiction: string;
+}
+
+type SearchCategory = 'ALL' | 'HEALTH_PRODUCTS' | 'FRAUD_ALERTS' | 'COMPANIES' | 'LICENSES';
+
 export default function PublicPortalPage() {
   const [activeTab, setActiveTab] = useState<'SEARCH' | 'COMPLAINT' | 'TRACK'>('SEARCH');
 
   // Search State
   const [searchQuery, setSearchQuery] = useState('');
-  const [category, setCategory] = useState('ALL');
+  const [category, setCategory] = useState<SearchCategory>('ALL');
   const [isSearching, setIsSearching] = useState(false);
   const [searchError, setSearchError] = useState('');
   const [searchResults, setSearchResults] = useState<SearchResultItem[]>([]);
@@ -56,7 +68,42 @@ export default function PublicPortalPage() {
   const [fileError, setFileError] = useState('');
   const [isSubmittingComplaint, setIsSubmittingComplaint] = useState(false);
   const [complaintSuccessToken, setComplaintSuccessToken] = useState('');
+  const [complaintScanStatus, setComplaintScanStatus] = useState<string | null>(null);
   const [complaintError, setComplaintError] = useState('');
+
+  // Tracking State
+  const [trackTokenInput, setTrackTokenInput] = useState('');
+  const [isTracking, setIsTracking] = useState(false);
+  const [trackError, setTrackError] = useState('');
+  const [trackingResult, setTrackingResult] = useState<TrackingResult | null>(null);
+
+  const handleSearch = async (e: React.FormEvent) => {
+    e.preventDefault();
+    const normalizedQuery = searchQuery.trim();
+    if (normalizedQuery.length < 2) {
+      setSearchError('กรุณากรอกคำค้นหาอย่างน้อย 2 ตัวอักษร');
+      return;
+    }
+
+    setIsSearching(true);
+    setSearchError('');
+    setSearchResults([]);
+    setAiSummary('');
+    try {
+      const params = new URLSearchParams({ q: normalizedQuery, category });
+      const res = await fetch(`/api/v1/public/search?${params.toString()}`, { cache: 'no-store' });
+      const body = await res.json();
+      if (!res.ok) {
+        throw new Error(typeof body.error === 'string' ? body.error : body.error?.message || 'ค้นหาข้อมูลไม่สำเร็จ');
+      }
+      setSearchResults(Array.isArray(body.data?.results) ? body.data.results : []);
+      setAiSummary(typeof body.data?.aiSummary === 'string' ? body.data.aiSummary : '');
+    } catch (err: unknown) {
+      setSearchError(err instanceof Error ? err.message : 'ค้นหาข้อมูลไม่สำเร็จ');
+    } finally {
+      setIsSearching(false);
+    }
+  };
 
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
@@ -115,8 +162,9 @@ export default function PublicPortalPage() {
         body: formData,
       });
       const body = await res.json();
-      if (!res.ok) throw new Error(body.error || 'บันทึกคำร้องไม่สำเร็จ');
+      if (!res.ok) throw new Error(typeof body.error === 'string' ? body.error : body.error?.message || 'บันทึกคำร้องไม่สำเร็จ');
       setComplaintSuccessToken(body.data.trackingToken);
+      setComplaintScanStatus(typeof body.data.attachmentScanStatus === 'string' ? body.data.attachmentScanStatus : null);
       setTopic('');
       setDescription('');
       setComplainantName('');
@@ -141,7 +189,7 @@ export default function PublicPortalPage() {
     try {
       const res = await fetch(`/api/v1/public/track/${encodeURIComponent(trackTokenInput.trim())}`);
       const body = await res.json();
-      if (!res.ok) throw new Error(body.error || 'ไม่พบข้อมูลคำร้อง');
+      if (!res.ok) throw new Error(typeof body.error === 'string' ? body.error : body.error?.message || 'ไม่พบข้อมูลคำร้อง');
       setTrackingResult(body.data);
     } catch (err: unknown) {
       setTrackError(err instanceof Error ? err.message : 'ไม่พบข้อมูลคำร้อง');
@@ -249,6 +297,7 @@ export default function PublicPortalPage() {
                   <Search className="absolute left-4 top-3.5 h-4 w-4 text-slate-500" />
                   <input
                     type="text"
+                    aria-label="คำค้นหาข้อมูลสาธารณะ"
                     value={searchQuery}
                     onChange={(e) => setSearchQuery(e.target.value)}
                     placeholder="พิมพ์ชื่อผลิตภัณฑ์, ยี่ห้อ, เลข อย., หรือชื่อบุคคล/เพจที่สงสัย..."
@@ -257,7 +306,7 @@ export default function PublicPortalPage() {
                 </div>
                 <select
                   value={category}
-                  onChange={(e) => setCategory(e.target.value)}
+                  onChange={(e) => setCategory(e.target.value as SearchCategory)}
                   className="bg-slate-950 border border-white/[0.1] rounded-2xl px-4 py-3 text-xs text-white"
                 >
                   <option value="ALL">ทุกหมวดหมู่</option>
@@ -365,7 +414,11 @@ export default function PublicPortalPage() {
                 </div>
                 <h3 className="text-xl font-bold text-white">บันทึกเรื่องร้องเรียนเรียบร้อยแล้ว</h3>
                 <p className="text-xs text-slate-300 max-w-md mx-auto">
-                  ข้อมูลและหลักฐานของคุณถูกนำเข้าสู่ระบบคลังนิรภัยเพื่อสแกนมัลแวร์และคัดกรองความปลอดภัยเรียบร้อยแล้ว
+                  {complaintScanStatus === 'CLEAN'
+                    ? 'รับข้อมูลและจัดเก็บไฟล์ในคลังส่วนตัวแล้ว ผลสแกนความปลอดภัยเป็น CLEAN'
+                    : complaintScanStatus
+                      ? `รับข้อมูลและจัดเก็บไฟล์แล้ว ผลสแกนปัจจุบันคือ ${complaintScanStatus} จึงยังไม่นำไฟล์ไปประมวลผล`
+                      : 'รับข้อมูลคำร้องเข้าสู่ระบบแล้ว เจ้าหน้าที่จะดำเนินการคัดกรองตามขั้นตอนต่อไป'}
                 </p>
                 <div className="p-4 bg-slate-950 border border-white/[0.1] rounded-2xl inline-block">
                   <span className="text-[10px] text-slate-500 uppercase block">รหัสติดตามเรื่องของคุณ (Tracking Token)</span>
@@ -376,6 +429,7 @@ export default function PublicPortalPage() {
                     type="button"
                     onClick={() => {
                       setComplaintSuccessToken('');
+                      setComplaintScanStatus(null);
                       setActiveTab('TRACK');
                       setTrackTokenInput(complaintSuccessToken);
                     }}
@@ -405,10 +459,11 @@ export default function PublicPortalPage() {
 
                 <div className="space-y-4">
                   <div>
-                    <label className="block text-xs font-semibold text-slate-300 mb-1">
+                    <label htmlFor="complaint-category" className="block text-xs font-semibold text-slate-300 mb-1">
                       ประเภทเรื่องร้องเรียน <span className="text-rose-400">*</span>
                     </label>
                     <select
+                      id="complaint-category"
                       value={complaintCategory}
                       onChange={(e) => setComplaintCategory(e.target.value as 'HEALTH_HAZARD' | 'ONLINE_FRAUD' | 'ILLEGAL_CLINIC' | 'OTHER')}
                       className="w-full rounded-xl border border-white/[0.1] bg-slate-950 p-3 text-xs text-white"
@@ -421,10 +476,11 @@ export default function PublicPortalPage() {
                   </div>
 
                   <div>
-                    <label className="block text-xs font-semibold text-slate-300 mb-1">
+                    <label htmlFor="complaint-topic" className="block text-xs font-semibold text-slate-300 mb-1">
                       หัวข้อเรื่องร้องเรียน <span className="text-rose-400">*</span>
                     </label>
                     <input
+                      id="complaint-topic"
                       type="text"
                       required
                       value={topic}
@@ -435,10 +491,11 @@ export default function PublicPortalPage() {
                   </div>
 
                   <div>
-                    <label className="block text-xs font-semibold text-slate-300 mb-1">
+                    <label htmlFor="complaint-description" className="block text-xs font-semibold text-slate-300 mb-1">
                       รายละเอียดพฤติการณ์ / ข้อมูลเบาะแส <span className="text-rose-400">*</span>
                     </label>
                     <textarea
+                      id="complaint-description"
                       required
                       rows={4}
                       value={description}
@@ -450,10 +507,11 @@ export default function PublicPortalPage() {
 
                   <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                     <div>
-                      <label className="block text-xs font-semibold text-slate-300 mb-1">
+                      <label htmlFor="complaint-region" className="block text-xs font-semibold text-slate-300 mb-1">
                         พื้นที่เกิดเหตุ / จังหวัด
                       </label>
                       <input
+                        id="complaint-region"
                         type="text"
                         value={region}
                         onChange={(e) => setRegion(e.target.value)}
@@ -478,10 +536,11 @@ export default function PublicPortalPage() {
                   {!isAnonymous && (
                     <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 pt-2 border-t border-white/[0.05]">
                       <div>
-                        <label className="block text-xs font-semibold text-slate-300 mb-1">
+                        <label htmlFor="complainant-name" className="block text-xs font-semibold text-slate-300 mb-1">
                           ชื่อ-นามสกุล ผู้แจ้ง
                         </label>
                         <input
+                          id="complainant-name"
                           type="text"
                           value={complainantName}
                           onChange={(e) => setComplainantName(e.target.value)}
@@ -490,10 +549,11 @@ export default function PublicPortalPage() {
                         />
                       </div>
                       <div>
-                        <label className="block text-xs font-semibold text-slate-300 mb-1">
+                        <label htmlFor="complainant-contact" className="block text-xs font-semibold text-slate-300 mb-1">
                           เบอร์โทรศัพท์ / อีเมลติดต่อกลับ
                         </label>
                         <input
+                          id="complainant-contact"
                           type="text"
                           value={complainantContact}
                           onChange={(e) => setComplainantContact(e.target.value)}
@@ -540,9 +600,12 @@ export default function PublicPortalPage() {
                       <div className="flex items-center justify-between p-3.5 rounded-2xl border border-teal-500/30 bg-teal-950/20">
                         <div className="flex items-center gap-3 min-w-0">
                           {filePreview ? (
-                            <img
+                            <Image
                               src={filePreview}
-                              alt="Preview"
+                              alt="ตัวอย่างไฟล์แนบ"
+                              width={48}
+                              height={48}
+                              unoptimized
                               className="w-12 h-12 rounded-xl object-cover border border-white/[0.1] shrink-0"
                             />
                           ) : (
@@ -602,6 +665,7 @@ export default function PublicPortalPage() {
               <div className="flex gap-3">
                 <input
                   type="text"
+                  aria-label="รหัสติดตามเรื่อง"
                   required
                   value={trackTokenInput}
                   onChange={(e) => setTrackTokenInput(e.target.value)}

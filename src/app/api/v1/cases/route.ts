@@ -59,25 +59,11 @@ export async function POST(request: NextRequest) {
     if (error?.code === '23505') {
       return NextResponse.json({ error: { code: 'CASE_NUMBER_EXISTS', message: 'เลขคดีนี้มีอยู่แล้วในระบบ' } }, { status: 409 });
     }
-    // Fallback using service client
-    const { createServiceClient } = await import('@/lib/supabase-server');
-    const service = createServiceClient();
-    const now = new Date().toISOString();
-    const { data: directCase, error: directError } = await service.from('cases').insert({
-      number: payload.number,
-      title: payload.title,
-      description: payload.description ?? '',
-      jurisdiction_region: payload.jurisdiction_region ?? null,
-      jurisdiction_agency: payload.jurisdiction_agency ?? null,
-      created_by: auth.identity.id,
-      created_at: now,
-      updated_at: now,
-    }).select('id').single();
-
-    if (directError) {
-      return NextResponse.json({ error: { code: 'CASE_CREATE_FAILED', message: directError.message || 'สร้างคดีไม่สำเร็จ กรุณาลองใหม่' } }, { status: 500 });
-    }
-    return NextResponse.json({ data: { id: directCase.id } }, { status: 201 });
+    console.error('create_case RPC failed', { code: error?.code });
+    return NextResponse.json(
+      { error: { code: 'CASE_CREATE_FAILED', message: 'สร้างคดีไม่สำเร็จ กรุณาลองใหม่' } },
+      { status: 503 },
+    );
   }
 
   return NextResponse.json({ data: { id: caseId } }, { status: 201 });

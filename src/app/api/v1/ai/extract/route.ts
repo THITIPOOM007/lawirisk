@@ -14,7 +14,32 @@ export async function POST(request: NextRequest) {
   const auth = await authorizeStaff(request, AI_CREATE_ROLES);
   if (!auth.ok) return authError(auth, 'ไม่มีสิทธิ์สร้างข้อเสนอด้วย AI');
   if (!hasTrustedBrowserOrigin(request)) return apiError('UNTRUSTED_ORIGIN', 'คำขอไม่ได้มาจากระบบที่อนุญาต', 403);
-  if (auth.identity.mode === 'demo') return apiError('DEMO_WRITE_UNAVAILABLE', 'โหมดสาธิตไม่เรียกผู้ให้บริการ AI ภายนอก', 409);
+  if (auth.identity.mode === 'demo') {
+    const body = await request.json().catch(() => null) as Record<string, unknown> | null;
+    if (!body?.case_id || !body.evidence_id) return apiError('INVALID_REQUEST', 'กรุณาเลือกคดีและหลักฐาน', 400);
+    const sourceText = typeof body.source_text === 'string' && body.source_text.trim()
+      ? body.source_text.trim()
+      : 'OCR สาธิตจากภาพ: ติดต่อสั่งซื้อทาง LINE และโทร 062-4149791 ผู้รับเงิน นางสาวปนัดดา คำนนท์';
+    const phone = sourceText.match(/0\d{2}[- ]?\d{3}[- ]?\d{4}/)?.[0] || '062-4149791';
+    const suggestion = {
+      id: `demo-ai-${Date.now()}`,
+      case_id: body.case_id,
+      evidence_id: body.evidence_id,
+      page_number: Number(body.page_number || 1),
+      source_text: sourceText,
+      source_location: body.source_location || { kind: 'demo-ocr' },
+      entity_type: 'PHONE',
+      candidate_value: phone,
+      confidence: 0.94,
+      reason: 'ตัวประมวลผลสาธิตพบรูปแบบหมายเลขโทรศัพท์ในข้อความ OCR',
+      provider: 'DEMO_OCR_RULE_ENGINE',
+      model: 'deterministic-v1',
+      prompt_schema_version: 'demo-1',
+      status: 'SUGGESTED',
+      created_at: new Date().toISOString(),
+    };
+    return NextResponse.json({ data: { suggestion_ids: [suggestion.id], suggestions: [suggestion], count: 1, provider: suggestion.provider, model: suggestion.model, status: 'SUGGESTED', mode: 'demo' } }, { status: 201 });
+  }
 
   const parsed = aiExtractionRequestSchema.safeParse(await request.json().catch(() => null));
   if (!parsed.success) return apiError('INVALID_REQUEST', 'ข้อมูลสำหรับ AI ไม่ครบหรือรูปแบบไม่ถูกต้อง', 400, undefined, parsed.error.flatten().fieldErrors);

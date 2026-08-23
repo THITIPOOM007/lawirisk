@@ -283,7 +283,10 @@ export async function resolveMultiChannelSearch(rawQuery: string, searchDb = tru
   const results: SmartSearchResult[] = [];
 
   // Try DB first if searchDb is true
-  if (searchDb) {
+  const canSearchDb = searchDb
+    && Boolean(process.env.NEXT_PUBLIC_SUPABASE_URL?.trim())
+    && Boolean(process.env.SUPABASE_SERVICE_ROLE_KEY?.trim());
+  if (canSearchDb) {
     try {
       const { createServiceClient } = await import('@/lib/supabase-server');
       const supabase = createServiceClient();

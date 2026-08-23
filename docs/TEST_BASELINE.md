@@ -1,18 +1,24 @@
 # Test Baseline
 
-### 1. Unit Tests (Vitest)
-* 16 Test files in `src/lib/`.
-* High coverage on cryptographic functions (HMAC, SHA-256), rate limiting, normalization, CSV parsing, and Zod schemas.
+Baseline recorded 2026-08-23.
 
-### 2. E2E Tests (Playwright)
-* `e2e/critical-flow.spec.ts` covers login, dashboard, CSV import, CSRF rejections, responsive design, and RBAC.
+## Automated gates
 
-### 3. Missing Coverage
-* Need E2E coverage for WebAuthn flow (mocking hardware).
-* Need tests for the actual n8n callback execution (`api/v1/automation/jobs/[id]/run`).
-* PDF generation visual tests / text extraction tests (ensure Thai renders).
+- `pnpm lint`: pass.
+- `pnpm typecheck`: pass, including Next.js route type generation.
+- `pnpm test`: 18 Vitest files and 93 tests pass. Coverage includes schemas, normalization, cryptography/webhook verification, rate limiting, runtime configuration, auth fail-closed behavior and security source/migration regressions.
+- `pnpm test:e2e`: 10/10 Chromium flows pass sequentially. Coverage includes protected workspace/demo login, dashboard/case access, UTF-8 CSV intake, CSRF rejection, mobile/reduced-motion behavior, approved/blocked source launching, viewer RBAC, demo automation fail-closed behavior, authenticated PDF export and citizen search → complaint → tracking.
+- `pnpm build`: Next.js production build passes.
+- `pnpm build:vinext`: Cloudflare/vinext build passes.
+- `pnpm audit --prod`: no known production dependency vulnerabilities.
 
-Before committing any phases, we must run:
-`pnpm typecheck`
-`pnpm lint`
-`pnpm test`
+## Live-environment tests still required
+
+- Supabase migration/RLS matrix using ADMIN, two isolated INVESTIGATOR users, REVIEWER and VIEWER.
+- Private object storage, signed download and malware scanner clean/EICAR/timeout/invalid-response fixtures.
+- Physical/platform WebAuthn registration and one-time step-up consumption on the staging RP domain.
+- n8n callback, retry/idempotency and outage exercises against the real orchestrator.
+- PDF visual inspection with Thai case fixtures in the deployed runtime.
+- Backup restore, monitoring/alerting, WAF/request-size and rollback drills.
+
+These are release gates, not optional test debt. Local passing results do not substitute for them.

@@ -71,6 +71,7 @@ export interface MatchCandidate {
   source_case_id: string;
   target_case_id: string;
   entity_id: string;
+  target_entity_id?: string;
   entity_type: string;
   entity_value: string;
   confidence: number;
@@ -144,7 +145,7 @@ export interface IntakeAttachment {
   mime_type: string;
   sha256: string;
   storage_path: string;
-  malware_scan_status: 'PENDING' | 'CLEAN' | 'INFECTED';
+  malware_scan_status: 'PENDING' | 'CLEAN' | 'INFECTED' | 'UNAVAILABLE' | 'ERROR';
   malware_scan_details?: string;
 }
 
@@ -358,6 +359,8 @@ export const INITIAL_EVIDENCE: EvidenceFile[] = [
     mime_type: 'image/png',
     sha256: '89504E47d32b509ef8c8d6263bb496a718b5774a3db0ffcb4159518e974e4600',
     status: 'PROCESSED',
+    upload_state: 'STORED',
+    malware_scan_status: 'CLEAN',
     created_by: 'ร.ต.อ. สมชาย',
     created_at: '2026-07-25T11:15:00Z',
   }
@@ -405,10 +408,11 @@ export const INITIAL_MATCHES: MatchCandidate[] = [
     source_case_id: 'case-1',
     target_case_id: 'case-2',
     entity_id: 'ent-3',
+    target_entity_id: 'ent-5',
     entity_type: 'LOCATION',
     entity_value: 'จังหวัดศรีสะเกษ',
     confidence: 0.92,
-    status: 'PENDING',
+    status: 'VERIFIED',
     created_at: '2026-07-26T12:00:00Z',
   }
 ];

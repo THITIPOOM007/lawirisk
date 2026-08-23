@@ -2,9 +2,11 @@ import crypto from 'node:crypto';
 import { NextRequest, NextResponse } from 'next/server';
 import { z } from 'zod';
 import { saveIntakeEnvelope, saveIntakeMessage, saveIntakeParticipant, saveIntakeAttachment } from '@/lib/demo-data';
-import { isSupabaseServerConfigured } from '@/lib/runtime-config';
+import { isDemoServerEnabled, isSupabaseServiceConfigured } from '@/lib/runtime-config';
 import { createServiceClient } from '@/lib/supabase-server';
 import { scanEvidenceFile } from '@/lib/malware-scanner';
+import { consumeRateLimit } from '@/lib/rate-limit';
+import { hasTrustedBrowserOrigin } from '@/lib/request-security';
 
 const MAX_FILE_SIZE = 20 * 1024 * 1024;
 const allowedTypes = {
@@ -26,6 +28,37 @@ const publicComplaintSchema = z.object({
 
 export async function POST(request: NextRequest) {
   try {
+    if (!hasTrustedBrowserOrigin(request)) {
+      return NextResponse.json(
+        { success: false, error: { code: 'UNTRUSTED_ORIGIN', message: 'คำขอไม่ได้มาจากหน้าบริการที่อนุญาต' } },
+        { status: 403 },
+      );
+    }
+
+    const hasSupabase = isSupabaseServiceConfigured();
+    if (!hasSupabase && !isDemoServerEnabled()) {
+      return NextResponse.json(
+        { success: false, error: { code: 'SERVICE_UNAVAILABLE', message: 'ระบบรับเรื่องยังไม่พร้อมใช้งาน' } },
+        { status: 503 },
+      );
+    }
+    const service = hasSupabase ? createServiceClient() : undefined;
+    const clientAddress = request.headers.get('cf-connecting-ip')
+      || request.headers.get('x-forwarded-for')?.split(',')[0]?.trim()
+      || 'unknown';
+    const rateLimit = await consumeRateLimit({
+      client: service,
+      key: `public-complaint:${clientAddress}:${request.headers.get('user-agent') || 'unknown'}`,
+      limit: 10,
+      windowSeconds: 60,
+    });
+    if (!rateLimit.allowed) {
+      return NextResponse.json(
+        { success: false, error: { code: 'RATE_LIMITED', message: 'ส่งคำร้องถี่เกินไป กรุณารอสักครู่' } },
+        { status: 429, headers: { 'Retry-After': String(rateLimit.retryAfterSeconds) } },
+      );
+    }
+
     const contentType = request.headers.get('content-type') || '';
     let parsedData: z.infer<typeof publicComplaintSchema>;
     let attachedFile: File | null = null;
@@ -99,7 +132,7 @@ export async function POST(request: NextRequest) {
       }
       const ext = attachedFile.name.split('.').pop()?.toLowerCase() as keyof typeof allowedTypes | undefined;
       const rule = ext ? allowedTypes[ext] : undefined;
-      if (!ext || !rule) {
+      if (!ext || !rule || attachedFile.type !== rule.mime) {
         return NextResponse.json(
           { success: false, error: 'ประเภทไฟล์ไม่รองรับ รองรับเฉพาะ PDF, PNG, JPG' },
           { status: 400 },
@@ -119,23 +152,26 @@ export async function POST(request: NextRequest) {
       fileExtension = ext === 'jpeg' ? 'jpg' : ext;
     }
 
+    const attachmentScan = attachedFile ? await scanEvidenceFile(attachedFile) : null;
+
     // Generate Public Tracking Token (e.g. TRK-2026-AB12CD)
-    const randomCode = crypto.randomBytes(3).toString('hex').toUpperCase();
+    const randomCode = crypto.randomBytes(6).toString('hex').toUpperCase();
     const trackingToken = `TRK-${new Date().getFullYear()}-${randomCode}`;
     const envelopeId = crypto.randomUUID();
     const now = new Date().toISOString();
     const urgency = category === 'HEALTH_HAZARD' || category === 'ONLINE_FRAUD' ? 'HIGH' : 'NORMAL';
+    const intakeStatus = attachedFile && attachmentScan?.status !== 'CLEAN' ? 'QUARANTINED' : 'TRIAGE_PENDING';
 
-    if (!isSupabaseServerConfigured()) {
+    if (!hasSupabase) {
       saveIntakeEnvelope({
         id: envelopeId,
         channel_id: 'ch-kouprey',
-        status: 'TRIAGE_PENDING',
+        status: intakeStatus,
         complainant_mode: isAnonymous ? 'ANONYMOUS' : 'IDENTIFIED',
         urgency,
         urgency_reason: `[ประชาชนแจ้งเรื่อง: ${trackingToken}] ${topic}: ${description.slice(0, 200)}`,
         jurisdiction_region: region || 'ส่วนกลาง',
-        malware_scan_status: attachedFile ? 'PENDING' : 'CLEAN',
+        malware_scan_status: attachmentScan?.status || 'CLEAN',
         privacy_risk_status: isAnonymous ? 'LOW' : 'MEDIUM',
         created_at: now,
         updated_at: now,
@@ -176,36 +212,31 @@ export async function POST(request: NextRequest) {
           file_size: attachedFile.size,
           mime_type: fileMime,
           sha256: fileSha256,
-          storage_path: `/vault/intake/${envelopeId}/${attachedFile.name}`,
-          malware_scan_status: 'CLEAN',
+          storage_path: `intake/${envelopeId}/${crypto.randomUUID()}.${fileExtension}`,
+          malware_scan_status: attachmentScan?.status || 'PENDING',
         });
       }
     } else {
-      const supabase = createServiceClient();
+      const supabase = service!;
 
-      const channelRes = await supabase.from('intake_channels').select('id').eq('type', 'MANUAL_POST').limit(1).maybeSingle();
-      let channelId = channelRes.data?.id;
-      if (!channelId) {
-        channelId = crypto.randomUUID();
-        const { error: chError } = await supabase.from('intake_channels').insert({
-          id: channelId,
-          name: 'Public Portal',
-          type: 'MANUAL_POST',
-        });
-        if (chError) {
-          console.error('Failed to create public intake channel:', chError);
-        }
+      const channelRes = await supabase.from('intake_channels').select('id').eq('code', 'PUBLIC_PORTAL').maybeSingle();
+      if (channelRes.error || !channelRes.data?.id) {
+        return NextResponse.json(
+          { success: false, error: { code: 'CHANNEL_UNAVAILABLE', message: 'ช่องทางรับเรื่องสาธารณะยังไม่พร้อมใช้งาน' } },
+          { status: 503 },
+        );
       }
+      const channelId = channelRes.data.id;
 
       const { error: envelopeError } = await supabase.from('intake_envelopes').insert({
         id: envelopeId,
         channel_id: channelId,
-        status: 'TRIAGE_PENDING',
+        status: intakeStatus,
         complainant_mode: isAnonymous ? 'ANONYMOUS' : 'IDENTIFIED',
         urgency,
         urgency_reason: `[ประชาชนแจ้งเรื่อง: ${trackingToken}] ${topic}: ${description.slice(0, 200)}`,
         jurisdiction_region: region || 'ส่วนกลาง',
-        malware_scan_status: 'CLEAN',
+        malware_scan_status: attachmentScan?.status || 'CLEAN',
         privacy_risk_status: isAnonymous ? 'LOW' : 'MEDIUM',
       });
       if (envelopeError) throw envelopeError;
@@ -226,18 +257,33 @@ export async function POST(request: NextRequest) {
         }),
         message_id: trackingToken,
       });
-      if (msgError) throw msgError;
+      if (msgError) {
+        await supabase.from('intake_envelopes').delete().eq('id', envelopeId);
+        return NextResponse.json(
+          { success: false, error: { code: 'METADATA_WRITE_FAILED', message: 'บันทึกเนื้อหาคำร้องไม่สำเร็จ กรุณาลองใหม่' } },
+          { status: 503 },
+        );
+      }
 
       if (!isAnonymous && (complainantName || complainantContact)) {
-        await supabase.from('intake_participants').insert({
+        const { error: participantError } = await supabase.from('intake_participants').insert({
           id: crypto.randomUUID(),
           envelope_id: envelopeId,
           role: 'COMPLAINANT',
           name: complainantName || null,
           phone: complainantContact || null,
         });
+        if (participantError) {
+          await supabase.from('intake_envelopes').delete().eq('id', envelopeId);
+          return NextResponse.json(
+            { success: false, error: { code: 'METADATA_WRITE_FAILED', message: 'บันทึกข้อมูลผู้แจ้งไม่สำเร็จ กรุณาลองใหม่' } },
+            { status: 503 },
+          );
+        }
       }
 
+      let uploadedStoragePath: string | null = null;
+      let uploadedBucketName: string | null = null;
       if (attachedFile && fileBuffer) {
         const attachmentId = crypto.randomUUID();
         const bucketName = process.env.PRIVATE_EVIDENCE_BUCKET || 'evidence-vault';
@@ -250,14 +296,22 @@ export async function POST(request: NextRequest) {
 
         if (uploadError) {
           console.error('Failed to upload public attachment to storage:', uploadError);
+          await supabase.from('intake_envelopes').delete().eq('id', envelopeId);
+          return NextResponse.json(
+            { success: false, error: { code: 'STORAGE_UNAVAILABLE', message: 'จัดเก็บไฟล์แนบไม่สำเร็จ กรุณาลองใหม่' } },
+            { status: 503 },
+          );
         } else {
-          const scan = await scanEvidenceFile(attachedFile);
-          const scanStatus = scan.status === 'INFECTED' ? 'INFECTED' : 'CLEAN';
-          const scanDetails = 'reason' in scan
-            ? { reason: scan.reason, verified_by: 'MAGIC_BYTES_AND_SHA256' }
-            : { scanner: scan.scanner, signature_version: scan.signatureVersion };
+          uploadedStoragePath = storagePath;
+          uploadedBucketName = bucketName;
+          const scanStatus = attachmentScan?.status || 'UNAVAILABLE';
+          const scanDetails = attachmentScan && 'reason' in attachmentScan
+            ? { reason: attachmentScan.reason }
+            : attachmentScan
+              ? { scanner: attachmentScan.scanner, signature_version: attachmentScan.signatureVersion }
+              : { reason: 'SCANNER_NOT_RUN' };
 
-          await supabase.from('intake_attachments').insert({
+          const { error: attachmentError } = await supabase.from('intake_attachments').insert({
             id: attachmentId,
             envelope_id: envelopeId,
             filename: attachedFile.name,
@@ -268,7 +322,36 @@ export async function POST(request: NextRequest) {
             malware_scan_status: scanStatus,
             malware_scan_details: scanDetails,
           });
+          if (attachmentError) {
+            await supabase.storage.from(bucketName).remove([storagePath]);
+            await supabase.from('intake_envelopes').delete().eq('id', envelopeId);
+            return NextResponse.json(
+              { success: false, error: { code: 'METADATA_WRITE_FAILED', message: 'บันทึกทะเบียนไฟล์แนบไม่สำเร็จ กรุณาลองใหม่' } },
+              { status: 503 },
+            );
+          }
         }
+      }
+
+      const { error: auditError } = await supabase.from('audit_logs').insert({
+        profile_id: null,
+        action: 'PUBLIC_COMPLAINT_RECEIVED',
+        details: {
+          envelope_id: envelopeId,
+          tracking_token: trackingToken,
+          has_attachment: Boolean(attachedFile),
+          scan_status: attachmentScan?.status || 'NOT_APPLICABLE',
+        },
+      });
+      if (auditError) {
+        if (uploadedStoragePath && uploadedBucketName) {
+          await supabase.storage.from(uploadedBucketName).remove([uploadedStoragePath]);
+        }
+        await supabase.from('intake_envelopes').delete().eq('id', envelopeId);
+        return NextResponse.json(
+          { success: false, error: { code: 'AUDIT_WRITE_FAILED', message: 'บันทึกเหตุการณ์ตรวจสอบไม่สำเร็จ จึงยกเลิกการรับเรื่องอย่างปลอดภัย' } },
+          { status: 503 },
+        );
       }
     }
 
@@ -277,10 +360,15 @@ export async function POST(request: NextRequest) {
         success: true,
         data: {
           trackingToken,
-          message: 'บันทึกเรื่องร้องเรียนและหลักฐานเรียบร้อยแล้ว เจ้าหน้าที่จะดำเนินการคัดกรองความปลอดภัยต่อไป',
+          message: attachmentScan?.status === 'CLEAN'
+            ? 'บันทึกเรื่องร้องเรียนและไฟล์ที่ผ่านผลสแกน CLEAN แล้ว'
+            : attachedFile
+              ? 'บันทึกเรื่องร้องเรียนและจัดเก็บไฟล์แล้ว แต่ไฟล์ยังไม่ผ่านผลสแกน CLEAN จึงยังไม่ถูกนำไปประมวลผล'
+              : 'บันทึกเรื่องร้องเรียนแล้ว เจ้าหน้าที่จะดำเนินการคัดกรองต่อไป',
           receivedAt: now,
-          status: 'TRIAGE_PENDING',
+          status: intakeStatus,
           hasAttachment: Boolean(attachedFile),
+          attachmentScanStatus: attachmentScan?.status || null,
         },
       },
       { status: 201 },

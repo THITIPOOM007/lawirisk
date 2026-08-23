@@ -4,7 +4,7 @@ import { saveIntakeEnvelope, saveIntakeMessage, saveIntakeParticipant, addAuditL
 import { externalIntakeSchema } from '@/lib/intake-contracts';
 import { createServiceClient } from '@/lib/supabase-server';
 import { consumeRateLimit } from '@/lib/rate-limit';
-import { isDemoServerEnabled, isSupabaseServerConfigured } from '@/lib/runtime-config';
+import { isDemoServerEnabled, isSupabaseServiceConfigured } from '@/lib/runtime-config';
 
 function safeEqual(left: string, right: string) {
   const leftBytes = Buffer.from(left);
@@ -55,7 +55,7 @@ export async function POST(
     }
     const payload = parsedPayload.data;
 
-    if (isSupabaseServerConfigured()) {
+    if (isSupabaseServiceConfigured()) {
       try {
         const supabase = createServiceClient();
         const limit = await consumeRateLimit({ client: supabase, key: `external:partner:${partnerId}`, limit: 120, windowSeconds: 60 });

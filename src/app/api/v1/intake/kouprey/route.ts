@@ -4,7 +4,7 @@ import { verifySignedWebhook } from '@/lib/webhook-security';
 import { externalIntakeSchema } from '@/lib/intake-contracts';
 import { createServiceClient } from '@/lib/supabase-server';
 import { consumeRateLimit } from '@/lib/rate-limit';
-import { isDemoServerEnabled, isSupabaseServerConfigured } from '@/lib/runtime-config';
+import { isDemoServerEnabled, isSupabaseServiceConfigured } from '@/lib/runtime-config';
 
 export async function POST(request: NextRequest) {
   try {
@@ -67,7 +67,7 @@ export async function POST(request: NextRequest) {
     }
     const payload = parsedPayload.data;
 
-    if (isSupabaseServerConfigured()) {
+    if (isSupabaseServiceConfigured()) {
       try {
         const supabase = createServiceClient();
         const limit = await consumeRateLimit({ client: supabase, key: 'external:kouprey', limit: 120, windowSeconds: 60 });

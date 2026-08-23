@@ -110,11 +110,14 @@ export default function ReviewPage() {
       const body = await response.json();
       if (!response.ok) throw new Error(body.error?.message || 'การวิเคราะห์สกัดข้อมูลไม่สำเร็จ');
       const count = Number(body.data?.count || 0);
+      if (mode === 'demo' && Array.isArray(body.data?.suggestions)) {
+        setSuggestions((current) => [...body.data.suggestions, ...current]);
+      }
       setAiInput({ evidence_id: '', page_number: '1', source_text: '' });
       setSuccess(count > 0
         ? `ระบบประมวลผลข้อเสนอแนะสำเร็จ ${count} รายการ (สถานะ SUGGESTED รอการตรวจทานรับรอง)`
         : 'ระบบไม่พบข้อมูลที่ตรงตามเกณฑ์จากข้อความที่ระบุ');
-      await load();
+      if (mode !== 'demo') await load();
     } catch (error: unknown) {
       setActionError(error instanceof Error ? error.message : 'การวิเคราะห์สกัดข้อมูลไม่สำเร็จ กรุณาใช้การบันทึกข้อมูลด้วยตนเอง');
     } finally {
@@ -147,9 +150,10 @@ export default function ReviewPage() {
       });
       const body = await response.json();
       if (!response.ok) throw new Error(body.error?.message || 'บันทึกข้อมูลไม่สำเร็จ');
+      if (mode === 'demo' && body.data) setSuggestions((current) => [body.data as Suggestion, ...current]);
       setManual({ evidence_id: '', page_number: '1', source_text: '', entity_type: 'PERSON', candidate_value: '', reason: '' });
       setSuccess('บันทึกข้อมูลเสนอตรวจทานเรียบร้อยแล้ว (สถานะ SUGGESTED รอเจ้าหน้าที่ผู้รับผิดชอบรับรอง)');
-      await load();
+      if (mode !== 'demo') await load();
     } catch (error: unknown) {
       setActionError(error instanceof Error ? error.message : 'บันทึกข้อมูลไม่สำเร็จ');
     } finally {
@@ -224,15 +228,15 @@ export default function ReviewPage() {
           <h2 className="font-bold text-white">การสกัดข้อมูลอัตโนมัติด้วย AI จากเอกสารหลักฐาน</h2>
         </div>
         <p className="mt-2 text-xs leading-5 text-slate-500">
-          ระบบจะวิเคราะห์เฉพาะข้อความที่เจ้าหน้าที่ระบุจากหลักฐานที่ผ่านการตรวจความปลอดภัย (CLEAN) โดยผลลัพธ์จะถูกบันทึกเป็นข้อเสนอแนะ (SUGGESTED) เพื่อรอการอนุมัติ
+          ระบบรองรับทั้ง OCR จากภาพ/PDF และการวิเคราะห์ข้อความที่เจ้าหน้าที่ระบุ โดยรับเฉพาะหลักฐานที่ผ่านการตรวจความปลอดภัย (CLEAN) และบันทึกผลเป็นข้อเสนอแนะ (SUGGESTED) เพื่อรอการอนุมัติ
         </p>
         <div className="mt-5 grid gap-4 md:grid-cols-[minmax(0,1fr)_150px]">
-          <label className="text-xs text-slate-300">หลักฐานที่ปลอดภัย (CLEAN)<select required disabled={!selectedCaseId || mode === 'demo'} value={aiInput.evidence_id} onChange={(event) => setAiInput((current) => ({ ...current, evidence_id: event.target.value }))} className="mt-2 w-full rounded-xl border border-slate-800 bg-slate-950 p-3 text-sm text-white"><option value="">เลือกไฟล์หลักฐาน</option>{cleanCaseEvidence.map((item) => <option key={item.id} value={item.id}>{item.filename}</option>)}</select></label>
+          <label className="text-xs text-slate-300">หลักฐานที่ปลอดภัย (CLEAN)<select required disabled={!selectedCaseId} value={aiInput.evidence_id} onChange={(event) => setAiInput((current) => ({ ...current, evidence_id: event.target.value }))} className="mt-2 w-full rounded-xl border border-slate-800 bg-slate-950 p-3 text-sm text-white"><option value="">เลือกไฟล์หลักฐาน</option>{cleanCaseEvidence.map((item) => <option key={item.id} value={item.id}>{item.filename}</option>)}</select></label>
           <label className="text-xs text-slate-300">หน้าเอกสาร<input required type="number" min="1" max="100000" value={aiInput.page_number} onChange={(event) => setAiInput((current) => ({ ...current, page_number: event.target.value }))} className="mt-2 w-full rounded-xl border border-slate-800 bg-slate-950 p-3 text-sm text-white" /></label>
-          <label className="text-xs text-slate-300 md:col-span-2">ข้อความต้นทางในเอกสาร<textarea required maxLength={4000} rows={5} value={aiInput.source_text} onChange={(event) => setAiInput((current) => ({ ...current, source_text: event.target.value }))} aria-describedby="ai-source-help" className="mt-2 w-full rounded-xl border border-slate-800 bg-slate-950 p-3 text-sm text-white" /><span id="ai-source-help" className="mt-1 block text-[10px] text-slate-600">ข้อความจะถูกส่งไปประมวลผลตามขอบเขตการรักษาความลับของสำนวนคดี</span></label>
+          <label className="text-xs text-slate-300 md:col-span-2">ข้อความต้นทางในเอกสาร (ไม่บังคับ)<textarea maxLength={4000} rows={5} value={aiInput.source_text} onChange={(event) => setAiInput((current) => ({ ...current, source_text: event.target.value }))} placeholder="เว้นว่างเพื่อให้ระบบ OCR อ่านจากภาพหรือ PDF ที่เลือก" aria-describedby="ai-source-help" className="mt-2 w-full rounded-xl border border-slate-800 bg-slate-950 p-3 text-sm text-white" /><span id="ai-source-help" className="mt-1 block text-[10px] text-slate-600">เมื่อระบุข้อความ ระบบจะวิเคราะห์เฉพาะข้อความนั้น; เมื่อเว้นว่าง ระบบจะใช้ Vision OCR กับต้นฉบับ CLEAN</span></label>
         </div>
         {selectedCaseId && cleanCaseEvidence.length === 0 && <p role="status" className="mt-4 rounded-xl border border-amber-400/15 bg-amber-400/[0.04] p-3 text-xs text-amber-200">คดีนี้ยังไม่มีหลักฐานที่ผ่านการตรวจความปลอดภัย (CLEAN)</p>}
-        <button type="submit" disabled={submitting === 'ai' || mode === 'demo' || !selectedCaseId || cleanCaseEvidence.length === 0} className="mt-5 inline-flex min-h-11 items-center rounded-xl bg-indigo-400 px-4 py-2.5 text-sm font-bold text-slate-950 disabled:opacity-50 cursor-pointer">{submitting === 'ai' ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Sparkles className="mr-2 h-4 w-4" />}สั่งการให้ AI วิเคราะห์สกัดข้อมูล</button>
+        <button type="submit" disabled={submitting === 'ai' || !selectedCaseId || cleanCaseEvidence.length === 0} className="mt-5 inline-flex min-h-11 items-center rounded-xl bg-indigo-400 px-4 py-2.5 text-sm font-bold text-slate-950 disabled:opacity-50 cursor-pointer">{submitting === 'ai' ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Sparkles className="mr-2 h-4 w-4" />}{mode === 'demo' ? 'ทดลอง OCR และสกัดข้อมูล' : 'สั่งการให้ AI วิเคราะห์สกัดข้อมูล'}</button>
       </form>
 
       <form onSubmit={createManualSuggestion} className="rounded-3xl border border-slate-900 bg-slate-900/30 p-6">
@@ -242,14 +246,14 @@ export default function ReviewPage() {
         </div>
         <p className="mt-2 text-xs text-slate-500">ใช้สำหรับบันทึกความเชื่อมโยงโดยตรงจากเอกสารต้นฉบับ</p>
         <div className="mt-5 grid gap-4 md:grid-cols-2 xl:grid-cols-3">
-          <label className="text-xs text-slate-300">ไฟล์หลักฐานอ้างอิง<select required disabled={!selectedCaseId || mode === 'demo'} value={manual.evidence_id} onChange={(event) => setManual((current) => ({ ...current, evidence_id: event.target.value }))} className="mt-2 w-full rounded-xl border border-slate-800 bg-slate-950 p-3 text-sm text-white"><option value="">เลือกไฟล์หลักฐาน</option>{caseEvidence.map((item) => <option key={item.id} value={item.id}>{item.filename} · {item.malware_scan_status || 'PENDING'}</option>)}</select></label>
+          <label className="text-xs text-slate-300">ไฟล์หลักฐานอ้างอิง<select required disabled={!selectedCaseId} value={manual.evidence_id} onChange={(event) => setManual((current) => ({ ...current, evidence_id: event.target.value }))} className="mt-2 w-full rounded-xl border border-slate-800 bg-slate-950 p-3 text-sm text-white"><option value="">เลือกไฟล์หลักฐาน</option>{caseEvidence.map((item) => <option key={item.id} value={item.id}>{item.filename} · {item.malware_scan_status || 'PENDING'}</option>)}</select></label>
           <label className="text-xs text-slate-300">หน้าเอกสาร<input required type="number" min="1" max="100000" value={manual.page_number} onChange={(event) => setManual((current) => ({ ...current, page_number: event.target.value }))} className="mt-2 w-full rounded-xl border border-slate-800 bg-slate-950 p-3 text-sm text-white" /></label>
           <label className="text-xs text-slate-300">ประเภทข้อมูล<select value={manual.entity_type} onChange={(event) => setManual((current) => ({ ...current, entity_type: event.target.value }))} className="mt-2 w-full rounded-xl border border-slate-800 bg-slate-950 p-3 text-sm text-white">{entityTypes.map((type) => <option key={type}>{type}</option>)}</select></label>
           <label className="text-xs text-slate-300 md:col-span-2">ข้อความต้นทางในหลักฐาน<textarea required maxLength={4000} rows={3} value={manual.source_text} onChange={(event) => setManual((current) => ({ ...current, source_text: event.target.value }))} className="mt-2 w-full rounded-xl border border-slate-800 bg-slate-950 p-3 text-sm text-white" /></label>
           <label className="text-xs text-slate-300">ค่าข้อมูลที่ระบุ<input required maxLength={1000} value={manual.candidate_value} onChange={(event) => setManual((current) => ({ ...current, candidate_value: event.target.value }))} placeholder="เช่น ชื่อ-นามสกุล, เลขบัญชี, เบอร์โทร" className="mt-2 w-full rounded-xl border border-slate-800 bg-slate-950 p-3 text-sm text-white" /></label>
           <label className="text-xs text-slate-300 md:col-span-2 xl:col-span-3">เหตุผลและความเชื่อมโยง<textarea required maxLength={2000} rows={2} value={manual.reason} onChange={(event) => setManual((current) => ({ ...current, reason: event.target.value }))} placeholder="ระบุความเชื่อมโยงกับพฤติการณ์ในคดี..." className="mt-2 w-full rounded-xl border border-slate-800 bg-slate-950 p-3 text-sm text-white" /></label>
         </div>
-        <button type="submit" disabled={submitting === 'manual' || mode === 'demo' || !selectedCaseId} className="mt-5 inline-flex items-center rounded-xl bg-teal-300 px-4 py-2.5 text-sm font-bold text-slate-950 disabled:opacity-50 cursor-pointer">{submitting === 'manual' ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Save className="mr-2 h-4 w-4" />}บันทึกข้อเสนอแนะข้อมูล</button>
+        <button type="submit" disabled={submitting === 'manual' || !selectedCaseId} className="mt-5 inline-flex items-center rounded-xl bg-teal-300 px-4 py-2.5 text-sm font-bold text-slate-950 disabled:opacity-50 cursor-pointer">{submitting === 'manual' ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Save className="mr-2 h-4 w-4" />}บันทึกข้อเสนอแนะข้อมูล</button>
       </form>
 
       {isLoading ? (

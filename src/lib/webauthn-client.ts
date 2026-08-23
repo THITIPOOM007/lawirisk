@@ -22,6 +22,43 @@ export interface PasskeyRegistrationResult {
   error?: string;
 }
 
+export interface PasskeyLoginResult {
+  success: boolean;
+  error?: string;
+}
+
+export async function loginWithPasskey(email: string): Promise<PasskeyLoginResult> {
+  try {
+    if (typeof window === 'undefined' || !window.PublicKeyCredential) {
+      throw new Error('อุปกรณ์หรือเบราว์เซอร์นี้ไม่รองรับ Passkey');
+    }
+    const optionsResponse = await fetch('/api/v1/auth/passkey/login/options', {
+      method: 'POST',
+      credentials: 'same-origin',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ email }),
+    });
+    const optionsBody = await optionsResponse.json().catch(() => null);
+    if (!optionsResponse.ok || !optionsBody?.data?.options || !optionsBody?.data?.flowId) {
+      throw new Error(optionsBody?.error?.message || 'เริ่มการสแกน Passkey ไม่สำเร็จ');
+    }
+    const assertion = await startAuthentication({ optionsJSON: optionsBody.data.options });
+    const verifyResponse = await fetch('/api/v1/auth/passkey/login/verify', {
+      method: 'POST',
+      credentials: 'same-origin',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ flowId: optionsBody.data.flowId, response: assertion }),
+    });
+    const verifyBody = await verifyResponse.json().catch(() => null);
+    if (!verifyResponse.ok || !verifyBody?.data?.verified) {
+      throw new Error(verifyBody?.error?.message || 'ยืนยัน Passkey ไม่สำเร็จ');
+    }
+    return { success: true };
+  } catch (caught: unknown) {
+    return { success: false, error: caught instanceof Error ? caught.message : 'ยืนยัน Passkey ไม่สำเร็จ' };
+  }
+}
+
 /**
  * Check if the current browser and platform supports WebAuthn Biometrics
  */
@@ -149,17 +186,19 @@ export async function verifyBiometricPasskey(
         }
       }
     } catch (err: unknown) {
-      console.warn('Server FIDO2 verification fallback to local passkey:', err);
+      return {
+        success: false,
+        method: 'WINDOWS_HELLO',
+        verifiedAt,
+        error: err instanceof Error ? err.message : 'การตรวจสอบ Passkey ไม่สำเร็จ',
+      };
     }
   }
 
-  // Graceful simulation fallback for devices/browsers without configured biometric hardware or in tests
-  await new Promise((resolve) => setTimeout(resolve, 600));
-
   return {
-    success: true,
-    method: 'SIMULATED_PASSKEY',
+    success: false,
+    method: 'WINDOWS_HELLO',
     verifiedAt,
-    credentialId: `sim-passkey-${Date.now()}`,
+    error: 'อุปกรณ์หรือเบราว์เซอร์นี้ไม่รองรับ WebAuthn Passkey',
   };
 }

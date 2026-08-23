@@ -1,19 +1,55 @@
 import { NextRequest, NextResponse } from 'next/server';
+import { z } from 'zod';
 import { getIntakeEnvelopes, getIntakeMessages } from '@/lib/demo-data';
-import { isSupabaseServerConfigured } from '@/lib/runtime-config';
+import { isDemoServerEnabled, isSupabaseServiceConfigured } from '@/lib/runtime-config';
 import { createServiceClient } from '@/lib/supabase-server';
+import { consumeRateLimit } from '@/lib/rate-limit';
+
+const trackingTokenSchema = z.string().regex(/^TRK-\d{4}-[A-F0-9]{6,24}$/);
 
 export async function GET(
-  _request: NextRequest,
+  request: NextRequest,
   { params }: { params: Promise<{ token: string }> },
 ) {
   const { token } = await params;
   const decodedToken = decodeURIComponent(token).trim().toUpperCase();
 
-  if (!decodedToken || decodedToken.length < 5) {
+  if (!trackingTokenSchema.safeParse(decodedToken).success) {
     return NextResponse.json(
       { success: false, error: 'รหัสติดตามเรื่องไม่ถูกต้อง' },
       { status: 400 },
+    );
+  }
+
+  const hasSupabase = isSupabaseServiceConfigured();
+  if (!hasSupabase && !isDemoServerEnabled()) {
+    return NextResponse.json(
+      { success: false, error: { code: 'SERVICE_UNAVAILABLE', message: 'ระบบติดตามเรื่องยังไม่พร้อมใช้งาน' } },
+      { status: 503 },
+    );
+  }
+  const service = hasSupabase ? createServiceClient() : undefined;
+  const clientAddress = request.headers.get('cf-connecting-ip')
+    || request.headers.get('x-forwarded-for')?.split(',')[0]?.trim()
+    || 'unknown';
+  let rateLimit: Awaited<ReturnType<typeof consumeRateLimit>>;
+  try {
+    rateLimit = await consumeRateLimit({
+      client: service,
+      key: `public-track:${clientAddress}:${request.headers.get('user-agent') || 'unknown'}`,
+      limit: 30,
+      windowSeconds: 60,
+    });
+  } catch {
+    return NextResponse.json(
+      { success: false, error: { code: 'RATE_LIMIT_UNAVAILABLE', message: 'ระบบติดตามเรื่องไม่พร้อมใช้งานชั่วคราว' } },
+      { status: 503 },
+    );
+  }
+  if (!rateLimit.allowed) {
+    return NextResponse.json(
+      { success: false, error: { code: 'RATE_LIMITED', message: 'ตรวจสอบรหัสถี่เกินไป กรุณารอสักครู่' } },
+      { status: 429, headers: { 'Retry-After': String(rateLimit.retryAfterSeconds) } },
     );
   }
 
@@ -23,7 +59,7 @@ export async function GET(
   let jurisdiction = 'ส่วนกลาง';
   let found = false;
 
-  if (!isSupabaseServerConfigured()) {
+  if (!hasSupabase) {
     const messages = getIntakeMessages();
     const matchedMessage = messages.find((m) => m.message_id === decodedToken);
 
@@ -44,13 +80,19 @@ export async function GET(
       found = true;
     }
   } else {
-    const supabase = createServiceClient();
-    const { data: msgData } = await supabase
+    const supabase = service!;
+    const { data: msgData, error: messageError } = await supabase
       .from('intake_messages')
       .select('envelope_id')
       .eq('message_id', decodedToken)
       .maybeSingle();
 
+    if (messageError) {
+      return NextResponse.json(
+        { success: false, error: { code: 'TRACKING_LOOKUP_FAILED', message: 'ตรวจสอบสถานะไม่สำเร็จ กรุณาลองใหม่' } },
+        { status: 503 },
+      );
+    }
     if (!msgData) {
       return NextResponse.json(
         { success: false, error: 'ไม่พบข้อมูลคำร้องจากรหัสติดตามนี้ กรุณาตรวจสอบรหัสอีกครั้ง' },
@@ -58,12 +100,18 @@ export async function GET(
       );
     }
 
-    const { data: envData } = await supabase
+    const { data: envData, error: envelopeError } = await supabase
       .from('intake_envelopes')
       .select('status, created_at, updated_at, jurisdiction_region')
       .eq('id', msgData.envelope_id)
       .maybeSingle();
 
+    if (envelopeError) {
+      return NextResponse.json(
+        { success: false, error: { code: 'TRACKING_LOOKUP_FAILED', message: 'ตรวจสอบสถานะไม่สำเร็จ กรุณาลองใหม่' } },
+        { status: 503 },
+      );
+    }
     if (envData) {
       status = envData.status;
       createdAt = envData.created_at;

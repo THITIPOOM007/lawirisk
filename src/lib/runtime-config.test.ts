@@ -1,5 +1,10 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
-import { isSupabaseServerConfigured, isDemoServerEnabled, getRuntimeReadiness } from './runtime-config';
+import {
+  getRuntimeReadiness,
+  isDemoServerEnabled,
+  isSupabaseServerConfigured,
+  isSupabaseServiceConfigured,
+} from './runtime-config';
 
 vi.mock('server-only', () => ({}));
 
@@ -39,6 +44,14 @@ describe('runtime-config', () => {
     process.env.NEXT_PUBLIC_SUPABASE_URL = 'https://example.supabase.co';
     process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY = 'ey-anon-key';
     expect(isSupabaseServerConfigured()).toBe(true);
+  });
+
+  it('requires the service-role key for service-backed operations', () => {
+    process.env.NEXT_PUBLIC_SUPABASE_URL = 'https://example.supabase.co';
+    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY = 'ey-anon-key';
+    expect(isSupabaseServiceConfigured()).toBe(false);
+    process.env.SUPABASE_SERVICE_ROLE_KEY = 'service-role-key';
+    expect(isSupabaseServiceConfigured()).toBe(true);
   });
 
   it('isDemoServerEnabled returns true by default in non-production', () => {

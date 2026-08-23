@@ -1,22 +1,24 @@
 import { expect, test, type Page } from '@playwright/test';
 
+const testBaseUrl = process.env.E2E_BASE_URL || 'http://127.0.0.1:3100';
+
 async function loginAsInvestigator(page: Page) {
   await page.goto('/login');
   await page.getByRole('button', { name: 'เข้าใช้งานในฐานะพนักงานสืบสวน' }).click();
   await expect(page).toHaveURL('/');
-  await expect(page.getByRole('heading', { name: /เห็นภาพรวมเร็วขึ้น/ })).toBeVisible();
+  await expect(page.getByRole('heading', { name: /ระบบสืบสวนและเชื่อมโยง/ })).toBeVisible();
 }
 
 test('protects the workspace and exposes an explicit demo login', async ({ page }) => {
   await page.goto('/cases');
   await expect(page).toHaveURL(/\/login\?next=%2Fcases/);
-  await expect(page.getByText('โหมดสาธิต · ข้อมูลอยู่ในอุปกรณ์นี้')).toBeVisible();
+  await expect(page.getByText('โหมดสาธิต · จำลองการทำงานในอุปกรณ์')).toBeVisible();
 });
 
 test('loads authenticated dashboard data and case registry', async ({ page }) => {
   await loginAsInvestigator(page);
   await page.goto('/cases');
-  await expect(page.getByRole('heading', { name: /คดีสืบสวนทั้งหมด/ })).toBeVisible();
+  await expect(page.getByRole('heading', { level: 1, name: 'ทะเบียนสำนวนคดีสืบสวน' })).toBeVisible();
   await expect(page.getByText(/ค\.123\/2569/).first()).toBeVisible();
 });
 
@@ -62,7 +64,7 @@ test('keeps the command center usable on mobile and respects reduced motion', as
 test('allows only reviewed external sources and fails closed for insecure transport', async ({ page }) => {
   await loginAsInvestigator(page);
   await page.goto('/sources');
-  await expect(page.getByRole('heading', { name: 'แหล่งสืบค้นที่ได้รับอนุญาต' })).toBeVisible();
+  await expect(page.getByRole('heading', { level: 1, name: 'แหล่งสืบค้นข้อมูลที่ได้รับอนุญาต' })).toBeVisible();
   await expect(page.getByRole('heading', { name: 'SKYNET / Privus อย.' })).toBeVisible();
   await expect(page.getByRole('button', { name: /เปิด SKYNET \/ Privus อย\./ })).toBeEnabled();
   await expect(page.getByRole('heading', { name: 'OSS สบส.' })).toBeVisible();
@@ -77,8 +79,8 @@ test('allows only reviewed external sources and fails closed for insecure transp
 
 test('denies source registry access to viewer role', async ({ page }) => {
   await page.context().addCookies([
-    { name: 'mock-auth-logged-in', value: 'true', url: 'http://127.0.0.1:3100' },
-    { name: 'mock-auth-role', value: 'VIEWER', url: 'http://127.0.0.1:3100' },
+    { name: 'mock-auth-logged-in', value: 'true', url: testBaseUrl },
+    { name: 'mock-auth-role', value: 'VIEWER', url: testBaseUrl },
   ]);
   const response = await page.request.get('/api/v1/sources');
   expect(response.status()).toBe(403);
@@ -88,8 +90,103 @@ test('denies source registry access to viewer role', async ({ page }) => {
 test('shows the n8n automation command center and fails closed in demo mode', async ({ page }) => {
   await loginAsInvestigator(page);
   await page.goto('/automation');
-  await expect(page.getByRole('heading', { name: 'Automation Command Center' })).toBeVisible();
+  await expect(page.getByRole('heading', { level: 1, name: 'ศูนย์สั่งการระบบงานอัตโนมัติ' })).toBeVisible();
   await expect(page.getByText(/โหมดสาธิตแสดงหน้าจอและ state model เท่านั้น/)).toBeVisible();
   await expect(page.getByRole('button', { name: /ส่งเข้า n8n Pipeline/ })).toBeDisabled();
   await expect(page.getByText('n8n เห็นเฉพาะ Job ID')).toBeVisible();
+});
+
+test('exposes passkey face-scan login and self-service device management', async ({ page }) => {
+  await page.goto('/login');
+  await page.getByRole('button', { name: 'สแกนใบหน้า / ลายนิ้วมือด้วย Passkey' }).click();
+  await expect(page).toHaveURL('/');
+  await page.goto('/security');
+  await expect(page.getByRole('heading', { level: 1, name: 'สแกนใบหน้า / ลายนิ้วมือด้วย Passkey' })).toBeVisible();
+  await expect(page.getByText('Windows Hello · เครื่องสาธิต')).toBeVisible();
+  await expect(page.getByText(/ไม่บันทึกภาพใบหน้า/).first()).toBeVisible();
+});
+
+test('loads the demo Evidence Universe with case, evidence, and entity nodes', async ({ page }) => {
+  await loginAsInvestigator(page);
+  const graphResponse = await page.request.get('/api/v1/universe');
+  expect(graphResponse.status()).toBe(200);
+  const graph = await graphResponse.json();
+  expect(graph.meta).toMatchObject({ mode: 'demo' });
+  expect(graph.data.nodes.some((node: { group: string }) => node.group === 'evidence')).toBe(true);
+  expect(graph.data.links.length).toBeGreaterThan(0);
+  await page.goto('/universe');
+  await expect(page.getByText(/ชุดข้อมูลสาธิตภายในเครื่อง/)).toBeVisible();
+  await expect(page.getByRole('button', { name: 'อ่านง่าย 2D' })).toHaveAttribute('aria-pressed', 'true');
+  await page.getByRole('textbox', { name: 'ค้นหาโหนดในผังความเชื่อมโยง' }).fill('062');
+  await page.getByRole('button', { name: 'PHONE · 062-4149791', exact: true }).click();
+  await expect(page.getByRole('heading', { level: 2, name: 'PHONE · 062-4149791' })).toBeVisible();
+  await expect(page.getByRole('button', { name: /คดี ค\.123\/2569/ })).toBeVisible();
+  await page.getByRole('button', { name: '3D เต็มรูปแบบ' }).click();
+  await expect(page.getByRole('button', { name: 'หมุนอัตโนมัติ' })).toBeVisible();
+});
+
+test('queues multiple evidence files and reports browser validation per file', async ({ page }) => {
+  await loginAsInvestigator(page);
+  await page.goto('/evidence');
+  const chooser = page.locator('input[type="file"][multiple]');
+  await chooser.setInputFiles([
+    { name: 'capture-one.png', mimeType: 'image/png', buffer: Buffer.from([0x89, 0x50, 0x4e, 0x47, 1, 2, 3, 4]) },
+    { name: 'capture-two.png', mimeType: 'image/png', buffer: Buffer.from([0x89, 0x50, 0x4e, 0x47, 5, 6, 7, 8]) },
+  ]);
+  await expect(page.getByText('2/20 ไฟล์')).toBeVisible();
+  await expect(page.getByText(/capture-one\.png/)).toBeVisible();
+  await expect(page.getByText(/capture-two\.png/)).toBeVisible();
+  await expect(page.getByText(/พร้อมอัปโหลด/)).toHaveCount(2);
+});
+
+test('runs demo OCR, keeps source trace, and reaches biometric review', async ({ page }) => {
+  await page.context().addCookies([
+    { name: 'mock-auth-logged-in', value: 'true', url: testBaseUrl },
+    { name: 'mock-auth-role', value: 'REVIEWER', url: testBaseUrl },
+    { name: 'mock-auth-name', value: encodeURIComponent('ผู้ตรวจทานสาธิต'), url: testBaseUrl },
+  ]);
+  await page.goto('/review');
+  await page.getByLabel('เลือกสำนวนคดี').selectOption('case-1');
+  await page.getByLabel('หลักฐานที่ปลอดภัย (CLEAN)').selectOption('ev-1');
+  await page.getByRole('button', { name: 'ทดลอง OCR และสกัดข้อมูล' }).click();
+  await expect(page.getByText(/ประมวลผลข้อเสนอแนะสำเร็จ 1 รายการ/)).toBeVisible();
+  await expect(page.getByText('DEMO_OCR_RULE_ENGINE').first()).toBeVisible();
+
+  const firstCard = page.locator('article').filter({ hasText: 'DEMO_OCR_RULE_ENGINE' }).first();
+  await firstCard.getByPlaceholder(/ระบุเหตุผลการรับรอง/).fill('ตรวจข้อความและตำแหน่งอ้างอิงแล้ว');
+  await firstCard.getByRole('button', { name: 'ลงนามรับรอง' }).click();
+  await expect(page.getByRole('heading', { name: 'ยืนยันการรับรองพยานหลักฐานด้วยชีวมิติ' })).toBeVisible();
+  await page.getByRole('button', { name: 'สแกนใบหน้า / ลายนิ้วมือเพื่อยืนยัน' }).click();
+  await expect(page.getByText(/บันทึกผลการตรวจทานและบันทึกประวัติ/)).toBeVisible({ timeout: 15_000 });
+});
+
+test('exports an authenticated immutable PDF snapshot', async ({ page }) => {
+  await loginAsInvestigator(page);
+  const response = await page.request.get('/api/v1/reports/demo-report/pdf');
+  expect(response.status()).toBe(200);
+  expect(response.headers()['content-type']).toContain('application/pdf');
+  const bytes = await response.body();
+  expect(bytes.subarray(0, 5).toString('ascii')).toBe('%PDF-');
+  expect(bytes.byteLength).toBeGreaterThan(1_000);
+});
+
+test('lets a citizen search, submit an anonymous complaint, and track it', async ({ page }) => {
+  await page.goto('/public');
+
+  await page.getByLabel('คำค้นหาข้อมูลสาธารณะ').fill('2A36/61');
+  await page.getByRole('button', { name: 'ค้นหาข้อมูล' }).click();
+  await expect(page.getByText(/ผลการค้นหาจากฐานข้อมูลทางการ/)).toBeVisible();
+
+  await page.getByRole('button', { name: 'แจ้งเรื่องร้องเรียน / เบาะแส' }).click();
+  await page.getByPlaceholder(/ถูกเพจหลอกขายสินค้า/).fill('แจ้งเบาะแสทดสอบระบบสาธารณะ');
+  await page.getByPlaceholder(/ระบุข้อความแชต/).fill('ข้อมูลสังเคราะห์สำหรับทดสอบเส้นทางรับเรื่องและติดตามสถานะเท่านั้น');
+  await page.getByRole('checkbox', { name: /ไม่ประสงค์ออกนาม/ }).check();
+  await page.getByRole('button', { name: 'ส่งเรื่องร้องเรียน' }).click();
+  await expect(page.getByRole('heading', { name: 'บันทึกเรื่องร้องเรียนเรียบร้อยแล้ว' })).toBeVisible();
+
+  const token = (await page.locator('text=/TRK-\\d{4}-[A-F0-9]{12}/').last().textContent())?.trim();
+  expect(token).toMatch(/^TRK-\d{4}-[A-F0-9]{12}$/);
+  await page.getByRole('button', { name: 'ไปที่หน้าติดตามสถานะ' }).click();
+  await page.getByRole('button', { name: 'ตรวจสอบ' }).click();
+  await expect(page.getByText('รอดำเนินการคัดกรอง')).toBeVisible();
 });

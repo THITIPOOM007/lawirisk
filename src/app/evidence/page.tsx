@@ -1,7 +1,7 @@
 'use client';
 
 import React, { useEffect, useState } from 'react';
-import { FileText, Upload, Check, AlertCircle, FileCheck, Loader2, Database, RefreshCw } from 'lucide-react';
+import { FileText, Upload, Check, AlertCircle, FileCheck, Loader2, Database, RefreshCw, Camera, X } from 'lucide-react';
 import { getCases, getEvidence, saveEvidence, Case, EvidenceFile } from '@/lib/demo-data';
 import { validateFileInBrowser } from '@/lib/file-validator';
 import { isDemoModeEnabled } from '@/lib/supabase';
@@ -15,25 +15,19 @@ export default function EvidencePage() {
   
   // Form State
   const [selectedCaseId, setSelectedCaseId] = useState('');
-  const [selectedFile, setSelectedFile] = useState<File | null>(null);
+  type QueueItem = {
+    id: string;
+    file: File;
+    status: 'validating' | 'ready' | 'uploading' | 'success' | 'failed';
+    sha256?: string;
+    magicBytes?: string;
+    error?: string;
+  };
+  const [fileQueue, setFileQueue] = useState<QueueItem[]>([]);
+  const [isDragging, setIsDragging] = useState(false);
   const [isUploading, setIsUploading] = useState(false);
   const [errorMessage, setErrorMessage] = useState('');
   const [successMessage, setSuccessMessage] = useState('');
-
-  // Live validation checklist state
-  const [validationSteps, setValidationSteps] = useState<{
-    size: 'pending' | 'success' | 'failed';
-    extension: 'pending' | 'success' | 'failed';
-    magic: 'pending' | 'success' | 'failed';
-    hash: 'pending' | 'success' | 'failed';
-  }>({
-    size: 'pending',
-    extension: 'pending',
-    magic: 'pending',
-    hash: 'pending',
-  });
-  const [computedHash, setComputedHash] = useState('');
-  const [computedMagicBytes, setComputedMagicBytes] = useState('');
 
   useEffect(() => {
     const controller = new AbortController();
@@ -53,49 +47,57 @@ export default function EvidencePage() {
     return () => controller.abort();
   }, [reloadToken]);
 
-  const handleFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0] || null;
-    setSelectedFile(file);
+  const addFiles = async (incoming: File[]) => {
     setErrorMessage('');
     setSuccessMessage('');
-    setComputedHash('');
-    setComputedMagicBytes('');
-    
-    if (!file) {
-      setValidationSteps({ size: 'pending', extension: 'pending', magic: 'pending', hash: 'pending' });
-      return;
-    }
+    const existingKeys = new Set(fileQueue.map((item) => `${item.file.name}:${item.file.size}:${item.file.lastModified}`));
+    const unique = incoming.filter((file) => !existingKeys.has(`${file.name}:${file.size}:${file.lastModified}`));
+    const remaining = Math.max(0, 20 - fileQueue.length);
+    const accepted = unique.slice(0, remaining);
+    if (unique.length > accepted.length) setErrorMessage('เพิ่มได้สูงสุด 20 ไฟล์ต่อชุดอัปโหลด');
+    const pending = accepted.map((file) => ({
+      id: crypto.randomUUID(),
+      file,
+      status: 'validating' as const,
+    }));
+    setFileQueue((current) => [...current, ...pending]);
+    await Promise.all(pending.map(async (item) => {
+      const validation = await validateFileInBrowser(item.file);
+      setFileQueue((current) => current.map((queued) => queued.id === item.id ? {
+        ...queued,
+        status: validation.isValid ? 'ready' : 'failed',
+        sha256: validation.sha256,
+        magicBytes: validation.magicBytes,
+        error: validation.isValid ? undefined : validation.error || 'ไฟล์ไม่ผ่านการตรวจสอบ',
+      } : queued));
+    }));
+  };
 
-    // Reset checklist to scanning state
-    setValidationSteps({ size: 'pending', extension: 'pending', magic: 'pending', hash: 'pending' });
+  const handleFileChange = (event: React.ChangeEvent<HTMLInputElement>) => {
+    void addFiles(Array.from(event.target.files || []));
+    event.target.value = '';
+  };
 
-    // Step 1: Size
-    const isSizeOk = file.size <= 20 * 1024 * 1024;
-    setValidationSteps(prev => ({ ...prev, size: isSizeOk ? 'success' : 'failed' }));
+  const removeQueuedFile = (id: string) => {
+    if (isUploading) return;
+    setFileQueue((current) => current.filter((item) => item.id !== id));
+  };
 
-    // Step 2: Extension
-    const ext = file.name.split('.').pop()?.toLowerCase();
-    const isExtOk = !!ext && ['pdf', 'png', 'jpg', 'jpeg'].includes(ext);
-    setValidationSteps(prev => ({ ...prev, extension: isExtOk ? 'success' : 'failed' }));
+  const handleDrop = (event: React.DragEvent<HTMLDivElement>) => {
+    event.preventDefault();
+    setIsDragging(false);
+    if (isUploading) return;
+    void addFiles(Array.from(event.dataTransfer.files));
+  };
 
-    if (!isSizeOk || !isExtOk) return;
+  const handleDragOver = (event: React.DragEvent<HTMLDivElement>) => {
+    event.preventDefault();
+    if (!isUploading) setIsDragging(true);
+  };
 
-    // Full validation (Hash & Magic Bytes)
-    setIsUploading(true);
-    const result = await validateFileInBrowser(file);
-    setIsUploading(false);
-
-    if (result.isValid) {
-      setValidationSteps(prev => ({ ...prev, magic: 'success', hash: 'success' }));
-      setComputedHash(result.sha256 || '');
-      setComputedMagicBytes(result.magicBytes || '');
-    } else {
-      setValidationSteps(prev => ({
-        ...prev,
-        magic: result.error?.includes('Magic') ? 'failed' : 'success',
-        hash: result.error?.includes('Hash') ? 'failed' : 'success',
-      }));
-      setErrorMessage(result.error || 'ไฟล์ไม่ผ่านการตรวจสอบความปลอดภัย');
+  const handleDragLeave = (event: React.DragEvent<HTMLDivElement>) => {
+    if (!event.currentTarget.contains(event.relatedTarget as Node | null)) {
+      setIsDragging(false);
     }
   };
 
@@ -109,56 +111,46 @@ export default function EvidencePage() {
       return;
     }
 
-    if (!selectedFile) {
-      setErrorMessage('กรุณาเลือกไฟล์หลักฐาน');
+    const readyFiles = fileQueue.filter((item) => item.status === 'ready' || item.status === 'failed');
+    if (readyFiles.length === 0) {
+      setErrorMessage('กรุณาเลือกไฟล์หลักฐานและรอให้ตรวจสอบเสร็จ');
       return;
     }
 
     setIsUploading(true);
-
-    // Re-verify file before uploading
-    const validation = await validateFileInBrowser(selectedFile);
-    if (!validation.isValid) {
-      setErrorMessage(validation.error || 'การตรวจสอบความปลอดภัยล้มเหลว');
-      setIsUploading(false);
-      return;
-    }
-
-    try {
-      const body = new FormData();
-      body.append('file', selectedFile);
-      body.append('case_id', selectedCaseId);
-      const response = await fetch('/api/evidence/upload', { method: 'POST', body });
-      const payload = await response.json() as {
-        success?: boolean;
-        message?: string;
-        data?: EvidenceFile;
-        error?: { message?: string };
-      };
-      if (!response.ok || !payload.success || !payload.data) {
-        throw new Error(payload.error?.message || 'ไม่สามารถจัดเก็บหลักฐานได้');
+    let succeeded = 0;
+    let failed = fileQueue.filter((item) => item.status === 'failed').length;
+    for (const queued of fileQueue) {
+      if (queued.status !== 'ready') continue;
+      setFileQueue((current) => current.map((item) => item.id === queued.id ? { ...item, status: 'uploading' } : item));
+      try {
+        const validation = await validateFileInBrowser(queued.file);
+        if (!validation.isValid) throw new Error(validation.error || 'การตรวจสอบซ้ำก่อนอัปโหลดไม่ผ่าน');
+        const body = new FormData();
+        body.append('file', queued.file);
+        body.append('case_id', selectedCaseId);
+        const response = await fetch('/api/evidence/upload', { method: 'POST', body });
+        const payload = await response.json().catch(() => null) as {
+          success?: boolean;
+          data?: EvidenceFile;
+          error?: { message?: string };
+        } | null;
+        if (!response.ok || !payload?.success || !payload.data) throw new Error(payload?.error?.message || 'ไม่สามารถจัดเก็บหลักฐานได้');
+        if (isDemoModeEnabled()) saveEvidence(payload.data);
+        setEvidenceList((current) => [payload.data!, ...current.filter((item) => item.id !== payload.data!.id)]);
+        setFileQueue((current) => current.map((item) => item.id === queued.id ? { ...item, status: 'success' } : item));
+        succeeded += 1;
+      } catch (caught: unknown) {
+        failed += 1;
+        setFileQueue((current) => current.map((item) => item.id === queued.id ? { ...item, status: 'failed', error: caught instanceof Error ? caught.message : 'อัปโหลดไม่สำเร็จ' } : item));
       }
-
-      if (isDemoModeEnabled()) saveEvidence(payload.data);
-      setEvidenceList((current) => [payload.data!, ...current.filter((item) => item.id !== payload.data!.id)]);
-      setSuccessMessage(payload.message || 'รับหลักฐานแล้วและกำลังรอการสแกนความปลอดภัย');
-      window.dispatchEvent(new Event('ev-data-change'));
-      
-      // Reset form
-      setSelectedFile(null);
-      setSelectedCaseId('');
-      setValidationSteps({ size: 'pending', extension: 'pending', magic: 'pending', hash: 'pending' });
-    } catch (error: unknown) {
-      setErrorMessage(error instanceof Error ? error.message : 'ไม่สามารถบันทึกข้อมูลหลักฐานได้');
-    } finally {
-      setIsUploading(false);
     }
-  };
-
-  const getStepIcon = (status: 'pending' | 'success' | 'failed') => {
-    if (status === 'success') return <Check className="h-5 w-5 text-emerald-400 shrink-0" />;
-    if (status === 'failed') return <AlertCircle className="h-5 w-5 text-rose-400 shrink-0" />;
-    return <div className="h-5 w-5 rounded-full border-2 border-slate-700 shrink-0" />;
+    setIsUploading(false);
+    if (succeeded > 0) {
+      setSuccessMessage(`จัดเก็บสำเร็จ ${succeeded} ไฟล์${failed > 0 ? ` · ไม่สำเร็จ ${failed} ไฟล์ (ตรวจสอบรายไฟล์ด้านล่าง)` : ' และส่งเข้าสู่ขั้นตอนสแกนความปลอดภัยแล้ว'}`);
+      window.dispatchEvent(new Event('ev-data-change'));
+    }
+    if (succeeded === 0) setErrorMessage(`ยังไม่มีไฟล์ที่จัดเก็บสำเร็จ${failed ? ` · พบปัญหา ${failed} ไฟล์` : ''}`);
   };
 
   return (
@@ -220,77 +212,53 @@ export default function EvidencePage() {
 
               <div>
                 <label className="block text-xs font-semibold text-slate-400 uppercase tracking-wider">
-                  ไฟล์หลักฐาน (PDF, PNG, JPG - ไม่เกิน 20MB)
+                  ไฟล์หลักฐาน (PDF, PNG, JPG · ไฟล์ละไม่เกิน 20MB · สูงสุด 20 ไฟล์)
                 </label>
-                <div className="mt-2 flex justify-center rounded-2xl border-2 border-dashed border-slate-800 hover:border-indigo-500/40 bg-slate-950/40 px-6 py-6 transition-all duration-200">
+                <div
+                  onDrop={handleDrop}
+                  onDragOver={handleDragOver}
+                  onDragLeave={handleDragLeave}
+                  className={`mt-2 flex justify-center rounded-2xl border-2 border-dashed px-6 py-6 transition-all duration-200 ${isDragging ? 'border-indigo-300 bg-indigo-400/[0.08]' : 'border-slate-800 bg-slate-950/40 hover:border-indigo-500/40'}`}
+                >
                   <div className="text-center space-y-2">
                     <Upload className="mx-auto h-8 w-8 text-slate-500" />
-                    <div className="flex text-sm text-slate-400">
+                    <p className="text-xs text-slate-500">ลากหลายไฟล์มาวางที่นี่</p>
+                    <div className="flex flex-wrap justify-center gap-2 text-sm text-slate-400">
                       <label className="relative cursor-pointer rounded-md font-semibold text-indigo-400 hover:text-indigo-300 focus-within:outline-none">
-                        <span>เลือกไฟล์อัปโหลด</span>
+                        <span className="inline-flex min-h-9 items-center rounded-lg border border-indigo-300/15 px-3">เลือกจากเครื่อง</span>
                         <input
                           type="file"
+                          multiple
                           accept=".pdf,.png,.jpg,.jpeg"
                           onChange={handleFileChange}
                           className="sr-only"
                         />
                       </label>
+                      <label className="relative cursor-pointer rounded-md font-semibold text-teal-300 hover:text-teal-200 focus-within:outline-none">
+                        <span className="inline-flex min-h-9 items-center gap-1.5 rounded-lg border border-teal-300/15 px-3"><Camera className="h-3.5 w-3.5" />ถ่ายภาพ</span>
+                        <input type="file" accept="image/*" capture="environment" onChange={handleFileChange} className="sr-only" />
+                      </label>
                     </div>
-                    {selectedFile && (
-                      <p className="text-xs text-white font-medium truncate max-w-[200px]">
-                        {selectedFile.name}
-                      </p>
-                    )}
                   </div>
                 </div>
               </div>
 
-              {/* Validation Checklist UI */}
-              {selectedFile && (
-                <div className="p-4 bg-slate-950/60 border border-slate-900 rounded-2xl space-y-3.5">
-                  <span className="block text-[10px] font-bold text-slate-500 uppercase tracking-wider">
-                    ผลตรวจความปลอดภัยฝั่ง Browser (Magic Bytes & Hash)
-                  </span>
-                  
-                  <div className="space-y-2.5">
-                    <div className="flex items-center space-x-2 text-xs">
-                      {getStepIcon(validationSteps.size)}
-                      <span className="text-slate-300">ขนาดไฟล์ไม่เกิน 20 MB</span>
+              {fileQueue.length > 0 && (
+                <div className="space-y-2 rounded-2xl border border-slate-900 bg-slate-950/60 p-3">
+                  <div className="flex items-center justify-between px-1"><span className="text-[10px] font-bold uppercase tracking-wider text-slate-500">คิวตรวจ Magic Bytes + SHA-256</span><span className="text-[10px] text-slate-600">{fileQueue.length}/20 ไฟล์</span></div>
+                  {fileQueue.map((item) => (
+                    <div key={item.id} className="flex items-start gap-2 rounded-xl border border-white/[0.05] bg-white/[0.02] p-2.5">
+                      <span className="mt-0.5">{item.status === 'validating' || item.status === 'uploading' ? <Loader2 className="h-4 w-4 animate-spin text-indigo-300" /> : item.status === 'failed' ? <AlertCircle className="h-4 w-4 text-rose-400" /> : <Check className="h-4 w-4 text-emerald-400" />}</span>
+                      <div className="min-w-0 flex-1"><p className="truncate text-xs font-medium text-slate-200">{item.file.name}</p><p className={`mt-0.5 text-[9px] ${item.status === 'failed' ? 'text-rose-300' : 'text-slate-600'}`}>{item.status === 'validating' ? 'กำลังตรวจชนิดไฟล์และคำนวณแฮช…' : item.status === 'uploading' ? 'กำลังสำรองต้นฉบับและสแกนฝั่งเซิร์ฟเวอร์…' : item.status === 'success' ? 'จัดเก็บต้นฉบับสำเร็จ' : item.status === 'failed' ? item.error : `พร้อมอัปโหลด · ${(item.file.size / 1024 / 1024).toFixed(2)} MB · SHA ${item.sha256?.slice(0, 10)}…`}</p></div>
+                      {item.status !== 'uploading' && item.status !== 'success' && <button type="button" onClick={() => removeQueuedFile(item.id)} disabled={isUploading} aria-label={`นำ ${item.file.name} ออกจากคิว`} className="grid h-7 w-7 shrink-0 place-items-center rounded-lg text-slate-600 hover:bg-rose-300/[0.06] hover:text-rose-300"><X className="h-3.5 w-3.5" /></button>}
                     </div>
-                    <div className="flex items-center space-x-2 text-xs">
-                      {getStepIcon(validationSteps.extension)}
-                      <span className="text-slate-300">นามสกุลไฟล์ถูกต้อง (.pdf, .png, .jpg)</span>
-                    </div>
-                    <div className="flex items-center space-x-2 text-xs">
-                      {getStepIcon(validationSteps.magic)}
-                      <span className="text-slate-300">ความถูกต้องโครงสร้างไฟล์ (Magic Bytes)</span>
-                    </div>
-                    <div className="flex items-center space-x-2 text-xs">
-                      {getStepIcon(validationSteps.hash)}
-                      <span className="text-slate-300">คำนวณรหัส SHA-256 สำเร็จ</span>
-                    </div>
-                  </div>
-
-                  {computedHash && (
-                    <div className="pt-2 border-t border-slate-900 space-y-1.5 text-[10px]">
-                      <div>
-                        <span className="text-slate-500 font-medium">SHA-256:</span>
-                        <p className="font-mono text-slate-300 truncate">{computedHash}</p>
-                      </div>
-                      {computedMagicBytes && (
-                        <div>
-                          <span className="text-slate-500 font-medium">Magic Bytes (Hex):</span>
-                          <p className="font-mono text-slate-300">{computedMagicBytes}</p>
-                        </div>
-                      )}
-                    </div>
-                  )}
+                  ))}
                 </div>
               )}
 
               <button
                 type="submit"
-                disabled={isUploading || !selectedFile || !selectedCaseId || validationSteps.magic === 'failed'}
+                disabled={isUploading || !fileQueue.some((item) => item.status === 'ready') || !selectedCaseId}
                 className="w-full inline-flex items-center justify-center px-4 py-3 border border-transparent rounded-2xl shadow-lg text-sm font-semibold text-white bg-indigo-600 hover:bg-indigo-500 active:bg-indigo-700 disabled:opacity-50 disabled:cursor-not-allowed transition-all cursor-pointer"
               >
                 {isUploading ? (
@@ -301,7 +269,7 @@ export default function EvidencePage() {
                 ) : (
                   <>
                     <FileCheck className="h-5 w-5 mr-2 shrink-0" />
-                    บันทึกหลักฐาน
+                    บันทึกหลักฐาน {fileQueue.filter((item) => item.status === 'ready').length > 0 ? `${fileQueue.filter((item) => item.status === 'ready').length} ไฟล์` : ''}
                   </>
                 )}
               </button>
