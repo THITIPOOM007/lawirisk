@@ -6,11 +6,15 @@ export const dynamic = 'force-dynamic';
 
 export async function GET() {
   const readiness = getRuntimeReadiness();
-  if (readiness.checks.malwareScanner && !await checkMalwareScannerHealth()) {
-    readiness.checks.malwareScanner = false;
-    readiness.blockers.push('MALWARE_SCANNER_UNAVAILABLE');
-    readiness.ready = false;
+  const scannerHealth = await checkMalwareScannerHealth();
+  readiness.checks.malwareScanner = scannerHealth === 'READY';
+  readiness.blockers = readiness.blockers.filter((blocker) => !blocker.startsWith('MALWARE_SCANNER_'));
+  if (scannerHealth !== 'READY') {
+    readiness.blockers.push(scannerHealth === 'NOT_CONFIGURED'
+      ? 'MALWARE_SCANNER_NOT_CONFIGURED'
+      : 'MALWARE_SCANNER_UNAVAILABLE');
   }
+  readiness.ready = readiness.blockers.length === 0;
   return NextResponse.json(
     {
       status: readiness.ready ? 'ready' : readiness.mode === 'demo' ? 'demo' : 'not_ready',
