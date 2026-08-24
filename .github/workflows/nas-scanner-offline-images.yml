@@ -1,0 +1,51 @@
+name: Build NAS scanner offline images
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    steps:
+      - name: Check out the requested revision
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+
+      - name: Pull pinned upstream images
+        run: |
+          set -euo pipefail
+          docker pull clamav/clamav:1.4@sha256:761f6e334c462a4ad264391dcb6fa561f855f624df3a7e66a98b20b91e6aa9b9
+          docker pull cloudflare/cloudflared:2026.8.0@sha256:2535e5c056f1134808a86f951ef6136826553cf6cf46025724a355e427dd0149
+          docker tag clamav/clamav:1.4@sha256:761f6e334c462a4ad264391dcb6fa561f855f624df3a7e66a98b20b91e6aa9b9 lawirisk-offline/clamav:1.4-761f6e334c46
+          docker tag cloudflare/cloudflared:2026.8.0@sha256:2535e5c056f1134808a86f951ef6136826553cf6cf46025724a355e427dd0149 lawirisk-offline/cloudflared:2026.8.0-2535e5c056f1
+
+      - name: Test and build the scanner API image
+        run: |
+          set -euo pipefail
+          docker build --pull --no-cache \
+            --tag lawirisk-offline/scanner-api:2026.08.24-1 \
+            ops/malware-scanner/api
+
+      - name: Package and checksum images
+        run: |
+          set -euo pipefail
+          mkdir -p ops/malware-scanner/offline
+          docker save \
+            lawirisk-offline/clamav:1.4-761f6e334c46 \
+            lawirisk-offline/scanner-api:2026.08.24-1 \
+            lawirisk-offline/cloudflared:2026.8.0-2535e5c056f1 \
+            | gzip -1 > ops/malware-scanner/offline/lawirisk-malware-scanner-images.tar.gz
+          sha256sum ops/malware-scanner/offline/lawirisk-malware-scanner-images.tar.gz \
+            > ops/malware-scanner/offline/lawirisk-malware-scanner-images.tar.gz.sha256
+
+      - name: Upload short-lived offline bundle
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: lawirisk-malware-scanner-offline-images
+          path: ops/malware-scanner/offline/*
+          if-no-files-found: error
+          retention-days: 1
+          compression-level: 0

@@ -5,7 +5,6 @@ const wranglerConfig = readFileSync('wrangler.jsonc', 'utf8');
 const deployScript = readFileSync('scripts/deploy-staging.mjs', 'utf8');
 
 const readinessSecrets = [
-  'MALWARE_SCANNER_URL',
   'MALWARE_SCANNER_TOKEN',
   'N8N_AUTOMATION_WEBHOOK_URL',
   'N8N_DISPATCH_TOKEN',
@@ -20,5 +19,12 @@ describe('staging deployment contract', () => {
 
   it('checks Cloudflare secret names before invoking deployment', () => {
     expect(deployScript.indexOf('assertCloudflareSecrets();')).toBeLessThan(deployScript.indexOf('const deployment = runPnpm'));
+  });
+
+  it('binds the malware scanner through the private VPC service', () => {
+    expect(wranglerConfig).toContain('"MALWARE_SCANNER_TRANSPORT": "vpc"');
+    expect(wranglerConfig).toContain('"MALWARE_SCANNER_URL": "http://scanner-api:8080"');
+    expect(wranglerConfig).toContain('"binding": "MALWARE_SCANNER_VPC"');
+    expect(deployScript).not.toContain("'MALWARE_SCANNER_URL'");
   });
 });

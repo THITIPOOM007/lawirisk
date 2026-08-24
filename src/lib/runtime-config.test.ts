@@ -21,6 +21,7 @@ describe('runtime-config', () => {
     delete process.env.SUPABASE_SERVICE_ROLE_KEY;
     delete process.env.PRIVATE_EVIDENCE_BUCKET;
     delete process.env.MALWARE_SCANNER_URL;
+    delete process.env.MALWARE_SCANNER_TRANSPORT;
     delete process.env.MALWARE_SCANNER_TOKEN;
     delete process.env.GEMINI_API_KEY;
     delete process.env.N8N_AUTOMATION_WEBHOOK_URL;
@@ -89,5 +90,19 @@ describe('runtime-config', () => {
     expect(readiness.ready).toBe(false);
     expect(readiness.mode).toBe('production'); // URL is present
     expect(readiness.blockers).toContain('SERVICE_ROLE_NOT_CONFIGURED');
+  });
+
+  it('accepts the fixed private VPC scanner endpoint with a strong token', () => {
+    process.env.MALWARE_SCANNER_TRANSPORT = 'vpc';
+    process.env.MALWARE_SCANNER_URL = 'http://scanner-api:8080';
+    process.env.MALWARE_SCANNER_TOKEN = 'a'.repeat(32);
+    expect(getRuntimeReadiness().checks.malwareScanner).toBe(true);
+  });
+
+  it('rejects an arbitrary plaintext endpoint in VPC mode', () => {
+    process.env.MALWARE_SCANNER_TRANSPORT = 'vpc';
+    process.env.MALWARE_SCANNER_URL = 'http://192.168.90.48:18080';
+    process.env.MALWARE_SCANNER_TOKEN = 'a'.repeat(32);
+    expect(getRuntimeReadiness().checks.malwareScanner).toBe(false);
   });
 });
