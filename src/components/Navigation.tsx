@@ -6,6 +6,7 @@ import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import {
   Bell,
+  BookOpenText,
   BriefcaseBusiness,
   ChevronRight,
   CircleUserRound,
@@ -31,6 +32,7 @@ import {
 } from 'lucide-react';
 import { isSupabaseConfigured } from '@/lib/supabase';
 import { roleLabel } from '@/lib/roles';
+import GuideAssistant from '@/components/GuideAssistant';
 
 interface NavigationProps {
   children: React.ReactNode;
@@ -60,6 +62,7 @@ const intelligenceNav: NavItem[] = [
 ];
 
 const governanceNav: NavItem[] = [
+  { name: 'คู่มือการใช้งาน', href: '/guide', icon: BookOpenText },
   { name: 'บันทึกประวัติการใช้งาน', href: '/audit', icon: History },
   { name: 'Passkey และการสแกนชีวมิติ', href: '/security', icon: Fingerprint },
   { name: 'บริการรับเรื่องสำหรับประชาชน', href: '/public', icon: Globe },
@@ -78,6 +81,7 @@ const sectionMeta = [
   { prefix: '/universe', eyebrow: 'ผังเครือข่ายความสัมพันธ์', title: 'ผังความเชื่อมโยง 3 มิติ (3D Graph)' },
   { prefix: '/reports', eyebrow: 'เอกสารสรุปสำนวนคดี', title: 'รายงานและเอกสารสืบสวน' },
   { prefix: '/audit', eyebrow: 'ธรรมาภิบาลและความโปร่งใส', title: 'บันทึกประวัติการใช้งาน (Audit Log)' },
+  { prefix: '/guide', eyebrow: 'ศูนย์การเรียนรู้', title: 'คู่มือการใช้งาน LawiRisk-SSK' },
   { prefix: '/security', eyebrow: 'ความปลอดภัยบัญชีผู้ใช้', title: 'Passkey และการสแกนชีวมิติ' },
   { prefix: '/admin', eyebrow: 'การบริหารระบบ', title: 'การตั้งค่าและกำหนดสิทธิ์ผู้ใช้งาน' },
 ];
@@ -322,6 +326,7 @@ export default function Navigation({ children }: NavigationProps) {
           </aside>
         </div>
       )}
+      <GuideAssistant />
     </div>
   );
 }

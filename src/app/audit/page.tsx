@@ -61,6 +61,7 @@ export default function AuditPage() {
     document.body.appendChild(link);
     link.click();
     document.body.removeChild(link);
+    URL.revokeObjectURL(url);
   };
 
   const filteredLogs = logs.filter(log => {
@@ -119,8 +120,8 @@ export default function AuditPage() {
           />
         </div>
 
-        <div className="flex items-center space-x-2 shrink-0">
-          <span className="text-xs text-slate-500 mr-2 uppercase tracking-wide font-medium">กรองประเภท:</span>
+        <div className="flex flex-wrap items-center gap-2">
+          <span className="mr-1 text-xs font-medium uppercase tracking-wide text-slate-500">กรองประเภท:</span>
           {['ALL', 'CASE_CREATE', 'EVIDENCE_UPLOAD', 'RELATION_VERIFY', 'REPORT_GENERATE', 'MATCH_REVIEW'].map((action) => (
             <button
               key={action}
@@ -142,14 +143,33 @@ export default function AuditPage() {
       </div>
 
       {/* Audit Log Ledger Table */}
-      <div className="bg-slate-900/40 border border-slate-900 rounded-3xl p-6">
+      <div className="rounded-3xl border border-slate-900 bg-slate-900/40 p-4 sm:p-6">
         {isLoading ? (
           <div className="flex min-h-52 items-center justify-center text-sm text-slate-400" role="status"><Loader2 className="mr-2 h-5 w-5 animate-spin" />กำลังโหลด audit trail...</div>
         ) : loadError ? (
           <div className="py-14 text-center" role="alert"><p className="text-sm text-rose-300">{loadError}</p><button type="button" onClick={handleRefresh} className="mt-4 inline-flex items-center rounded-xl border border-rose-400/20 px-4 py-2 text-xs font-semibold text-rose-200"><RefreshCw className="mr-2 h-4 w-4" />ลองใหม่</button></div>
         ) : filteredLogs.length > 0 ? (
-          <div className="overflow-x-auto">
-            <table className="min-w-full divide-y divide-slate-950 text-xs md:text-sm">
+          <>
+            <div className="space-y-3 sm:hidden">
+              {filteredLogs.map((log) => (
+                <article key={log.id} className="rounded-2xl border border-slate-800/80 bg-slate-950/45 p-4">
+                  <div className="flex items-start justify-between gap-3">
+                    <span className="flex min-w-0 items-center text-xs font-bold text-white">
+                      <Shield className="mr-2 h-4 w-4 shrink-0 text-indigo-400" />
+                      <span className="truncate">{log.profile_name}</span>
+                    </span>
+                    <span className="shrink-0 rounded-lg border border-indigo-400/20 bg-indigo-400/[0.07] px-2 py-1 font-mono text-[9px] font-bold text-indigo-300">{log.action}</span>
+                  </div>
+                  <p className="mt-3 break-words text-xs leading-6 text-slate-300">{log.details}</p>
+                  <div className="mt-3 flex flex-wrap items-center justify-between gap-2 border-t border-slate-800/70 pt-3 text-[10px] text-slate-500">
+                    <span className="break-all font-mono">IP {log.ip_address}</span>
+                    <span className="flex items-center"><Calendar className="mr-1 h-3.5 w-3.5" />{new Date(log.created_at).toLocaleString('th-TH')}</span>
+                  </div>
+                </article>
+              ))}
+            </div>
+            <div className="hidden overflow-x-auto sm:block">
+            <table className="min-w-[880px] divide-y divide-slate-950 text-xs md:text-sm">
               <thead>
                 <tr className="text-slate-400 text-left font-medium">
                   <th className="pb-3">ผู้ปฏิบัติงาน</th>
@@ -179,7 +199,8 @@ export default function AuditPage() {
                 ))}
               </tbody>
             </table>
-          </div>
+            </div>
+          </>
         ) : (
           <div className="text-center py-16">
             <History className="h-10 w-10 text-slate-700 mx-auto" />

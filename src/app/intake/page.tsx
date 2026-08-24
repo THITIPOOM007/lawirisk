@@ -21,6 +21,7 @@ export default function IntakeQueuePage() {
   const [showManualModal, setShowManualModal] = useState(false);
   const [isSubmittingManual, setIsSubmittingManual] = useState(false);
   const [manualError, setManualError] = useState('');
+  const [manualMessage, setManualMessage] = useState('');
   const [manualForm, setManualForm] = useState<{
     channel_id: string;
     complainant_mode: 'IDENTIFIED' | 'ANONYMOUS' | 'INCOMPLETE';
@@ -28,13 +29,17 @@ export default function IntakeQueuePage() {
     urgency_reason: string;
     agency: string;
     region: string;
+    complainant_name: string;
+    complainant_phone: string;
   }>({
     channel_id: 'ch-walkin',
-    complainant_mode: 'IDENTIFIED',
+    complainant_mode: 'INCOMPLETE',
     urgency: 'NORMAL',
     urgency_reason: '',
     agency: '',
     region: '',
+    complainant_name: '',
+    complainant_phone: '',
   });
 
   const handleManualSubmit = async (e: React.FormEvent) => {
@@ -43,8 +48,13 @@ export default function IntakeQueuePage() {
       setManualError('กรุณากรอกสรุปพฤติการณ์เรื่องร้องเรียน');
       return;
     }
+    if (manualForm.complainant_mode === 'IDENTIFIED' && !manualForm.complainant_name.trim()) {
+      setManualError('กรุณาระบุชื่อผู้ร้อง หรือเลือกข้อมูลไม่สมบูรณ์/ไม่ประสงค์ออกนาม');
+      return;
+    }
     setIsSubmittingManual(true);
     setManualError('');
+    setManualMessage('');
     try {
       const response = await fetch('/api/v1/intake/manual', {
         method: 'POST',
@@ -57,18 +67,27 @@ export default function IntakeQueuePage() {
           urgency_reason: manualForm.urgency_reason.trim(),
           agency: manualForm.agency.trim() || undefined,
           region: manualForm.region.trim() || undefined,
+          ...(manualForm.complainant_mode === 'IDENTIFIED' ? {
+            complainant: {
+              name: manualForm.complainant_name.trim(),
+              ...(manualForm.complainant_phone.trim() ? { phone: manualForm.complainant_phone.trim() } : {}),
+            },
+          } : {}),
         }),
       });
       const body = await response.json();
       if (!response.ok) throw new Error(body.error?.message || 'บันทึกคำร้องไม่สำเร็จ');
+      setManualMessage(body.message || 'รับคำร้องแล้วและพร้อมเข้าสู่การคัดกรอง');
       setShowManualModal(false);
       setManualForm({
         channel_id: 'ch-walkin',
-        complainant_mode: 'IDENTIFIED',
+        complainant_mode: 'INCOMPLETE',
         urgency: 'NORMAL',
         urgency_reason: '',
         agency: '',
         region: '',
+        complainant_name: '',
+        complainant_phone: '',
       });
       setIsLoading(true);
       setReloadToken(prev => prev + 1);
@@ -211,10 +230,57 @@ export default function IntakeQueuePage() {
 
             <form onSubmit={handleManualSubmit} className="space-y-4">
               <div>
-                <label className="block text-xs font-semibold text-slate-300 mb-1">
+                <label htmlFor="manual-complainant-mode" className="mb-1 block text-xs font-semibold text-slate-300">
+                  สถานะข้อมูลผู้ร้อง <span className="text-rose-400">*</span>
+                </label>
+                <select
+                  id="manual-complainant-mode"
+                  value={manualForm.complainant_mode}
+                  onChange={(event) => setManualForm((previous) => ({ ...previous, complainant_mode: event.target.value as 'IDENTIFIED' | 'ANONYMOUS' | 'INCOMPLETE' }))}
+                  className="w-full rounded-xl border border-white/[0.1] bg-slate-950 p-2.5 text-xs text-white"
+                >
+                  <option value="INCOMPLETE">ข้อมูลผู้ร้องยังไม่สมบูรณ์</option>
+                  <option value="IDENTIFIED">ระบุชื่อผู้ร้อง</option>
+                  <option value="ANONYMOUS">ไม่ประสงค์ออกนาม</option>
+                </select>
+              </div>
+
+              {manualForm.complainant_mode === 'IDENTIFIED' && (
+                <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+                  <div>
+                    <label htmlFor="manual-complainant-name" className="mb-1 block text-xs font-semibold text-slate-300">ชื่อผู้ร้อง <span className="text-rose-400">*</span></label>
+                    <input
+                      id="manual-complainant-name"
+                      type="text"
+                      required
+                      maxLength={200}
+                      value={manualForm.complainant_name}
+                      onChange={(event) => setManualForm((previous) => ({ ...previous, complainant_name: event.target.value }))}
+                      placeholder="ชื่อ-นามสกุล"
+                      className="w-full rounded-xl border border-white/[0.1] bg-slate-950 p-2.5 text-xs text-white"
+                    />
+                  </div>
+                  <div>
+                    <label htmlFor="manual-complainant-phone" className="mb-1 block text-xs font-semibold text-slate-300">เบอร์ติดต่อ</label>
+                    <input
+                      id="manual-complainant-phone"
+                      type="tel"
+                      maxLength={30}
+                      value={manualForm.complainant_phone}
+                      onChange={(event) => setManualForm((previous) => ({ ...previous, complainant_phone: event.target.value }))}
+                      placeholder="เช่น 081-234-5678"
+                      className="w-full rounded-xl border border-white/[0.1] bg-slate-950 p-2.5 text-xs text-white"
+                    />
+                  </div>
+                </div>
+              )}
+
+              <div>
+                <label htmlFor="manual-urgency" className="block text-xs font-semibold text-slate-300 mb-1">
                   ระดับความเร่งด่วน <span className="text-rose-400">*</span>
                 </label>
                 <select
+                  id="manual-urgency"
                   value={manualForm.urgency}
                   onChange={(e) => setManualForm(prev => ({ ...prev, urgency: e.target.value as 'CRITICAL' | 'HIGH' | 'NORMAL' | 'LOW' }))}
                   className="w-full rounded-xl border border-white/[0.1] bg-slate-950 p-2.5 text-xs text-white"
@@ -227,10 +293,11 @@ export default function IntakeQueuePage() {
               </div>
 
               <div>
-                <label className="block text-xs font-semibold text-slate-300 mb-1">
+                <label htmlFor="manual-summary" className="block text-xs font-semibold text-slate-300 mb-1">
                   สรุปพฤติการณ์ / หัวข้อเรื่องร้องเรียน <span className="text-rose-400">*</span>
                 </label>
                 <textarea
+                  id="manual-summary"
                   required
                   rows={3}
                   value={manualForm.urgency_reason}
@@ -291,6 +358,12 @@ export default function IntakeQueuePage() {
       )}
 
       {/* Summary Indicators */}
+      {manualMessage && (
+        <div role="status" className="rounded-2xl border border-emerald-500/30 bg-emerald-950/30 p-4 text-sm font-semibold text-emerald-300">
+          {manualMessage}
+        </div>
+      )}
+
       <div className="grid grid-cols-1 sm:grid-cols-4 gap-4">
         <div className="bg-slate-900/40 border border-slate-900 p-5 rounded-2xl flex flex-col justify-between">
           <span className="text-xs text-slate-500 uppercase font-semibold">รอการคัดกรอง (Triage Pending)</span>

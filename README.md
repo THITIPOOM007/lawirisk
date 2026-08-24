@@ -35,7 +35,7 @@ pnpm build:vinext
 
 - API ตรวจ session/role ซ้ำจาก server และ PostgreSQL RLS เป็นแนวป้องกันหลัก
 - mutation จาก browser ตรวจ Origin และใช้ shared rate limit ใน PostgreSQL
-- หลักฐานรองรับ PDF/PNG/JPEG สูงสุด 20 MB ตรวจ MIME, magic bytes, SHA-256 และ scanner ภายนอก
+- หลักฐานรองรับ PDF/PNG/JPEG สูงสุด 200 MB อัปโหลดตรงแบบ TUS resumable ไป private Storage แล้วให้ NAS ตรวจ MIME, magic bytes, SHA-256 และมัลแวร์ซ้ำก่อนปลดจากพื้นที่กักกัน
 - หน้า Evidence รองรับลากวาง/เลือกพร้อมกันสูงสุด 20 ไฟล์และถ่ายภาพจากกล้องมือถือ โดยรายงานผลสำเร็จ/ล้มเหลวแยกรายไฟล์
 - object path ไม่เปิดเผยต่อ client; ดาวน์โหลดผ่าน signed URL 60 วินาที เฉพาะไฟล์ `STORED/CLEAN`
 - metadata ต้นฉบับและ audit เป็น append-only/immutable ด้วย database trigger

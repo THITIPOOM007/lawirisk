@@ -19,11 +19,18 @@ server-side provider adapter.
 
 ## Cloudflare staging
 
-Set a secret interactively so the value is not placed in shell history:
+Set every required secret interactively so the value is not placed in shell history. At minimum, configure the scanner and provider secrets before deployment:
 
 ```powershell
+pnpm exec wrangler secret put MALWARE_SCANNER_URL --env staging
+pnpm exec wrangler secret put MALWARE_SCANNER_TOKEN --env staging
 pnpm exec wrangler secret put GEMINI_API_KEY --env staging
+pnpm exec wrangler secret put N8N_AUTOMATION_WEBHOOK_URL --env staging
+pnpm exec wrangler secret put N8N_DISPATCH_TOKEN --env staging
+pnpm exec wrangler secret put N8N_CALLBACK_TOKEN --env staging
 ```
+
+`MALWARE_SCANNER_URL` ให้ใส่ HTTPS origin ของ tunnel (ใส่ `/scan` ต่อท้ายก็ได้ ระบบจะเลือก `/scan-reference` สำหรับไฟล์จริงเอง) และตั้ง `MALWARE_SCANNER_TIMEOUT_MS=180000` เป็น Worker var สำหรับไฟล์สูงสุด 200 MB ห้ามส่ง signed Storage URL หรือ scanner token ไปยัง browser/log
 
 The renamed staging Worker is `lawirisk-ssk`, so its expected workers.dev URL
 after a successful deployment is:
@@ -36,7 +43,9 @@ Before deploying the renamed Worker, set all required secrets declared in
 `wrangler.jsonc`, including the Supabase keys, private bucket, `APP_ORIGIN`, and
 Gemini key. Update the Supabase Auth site URL and redirect allow-list in the live
 Supabase project as well; changing `supabase/config.toml` does not change the
-remote project by itself.
+remote project by itself. `pnpm deploy:staging` now stops before building when
+any secret required by the production readiness contract is absent. After
+deployment, `/api/health` must return HTTP 200 with `status: "ready"`.
 
 ## SKYNET and OSS สบส.
 

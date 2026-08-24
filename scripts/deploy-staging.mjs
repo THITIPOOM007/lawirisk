@@ -1,6 +1,19 @@
 import { spawnSync } from 'node:child_process';
 
 const projectRef = process.env.SUPABASE_PROJECT_REF?.trim() || 'keenndeevrwmembphckn';
+const requiredCloudflareSecrets = [
+  'APP_ORIGIN',
+  'GEMINI_API_KEY',
+  'MALWARE_SCANNER_TOKEN',
+  'MALWARE_SCANNER_URL',
+  'N8N_AUTOMATION_WEBHOOK_URL',
+  'N8N_CALLBACK_TOKEN',
+  'N8N_DISPATCH_TOKEN',
+  'NEXT_PUBLIC_SUPABASE_ANON_KEY',
+  'NEXT_PUBLIC_SUPABASE_URL',
+  'PRIVATE_EVIDENCE_BUCKET',
+  'SUPABASE_SERVICE_ROLE_KEY',
+];
 
 function runPnpm(args, options = {}) {
   const command = process.platform === 'win32' ? (process.env.ComSpec || 'cmd.exe') : 'pnpm';
@@ -58,7 +71,27 @@ function resolvePublicSupabaseConfig() {
   };
 }
 
+function assertCloudflareSecrets() {
+  const result = runPnpm(['exec', 'wrangler', 'secret', 'list', '--env', 'staging']);
+  if (result.status !== 0) {
+    throw new Error(`ตรวจรายการ Cloudflare secrets ไม่สำเร็จ: ${result.stderr?.trim() || result.error?.message || 'unknown error'}`);
+  }
+
+  let secrets;
+  try {
+    secrets = JSON.parse(result.stdout);
+  } catch {
+    throw new Error('Cloudflare ส่งรายการ secrets ในรูปแบบที่อ่านไม่ได้');
+  }
+  const configured = new Set(Array.isArray(secrets) ? secrets.map((item) => item?.name).filter(Boolean) : []);
+  const missing = requiredCloudflareSecrets.filter((name) => !configured.has(name));
+  if (missing.length) {
+    throw new Error(`ยัง deploy staging ไม่ได้: Cloudflare ขาด secret ${missing.join(', ')}`);
+  }
+}
+
 try {
+  assertCloudflareSecrets();
   const publicConfig = resolvePublicSupabaseConfig();
   const deployment = runPnpm(
     ['exec', 'vinext-cloudflare', 'deploy', '--env', 'staging'],

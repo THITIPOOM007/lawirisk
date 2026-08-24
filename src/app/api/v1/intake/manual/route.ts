@@ -40,7 +40,7 @@ export async function POST(request: NextRequest) {
         console.error('Manual intake persistence failed', { code: error?.code });
         return NextResponse.json({ success: false, error: { code: 'PERSISTENCE_FAILED', message: 'บันทึกคำร้องไม่สำเร็จ กรุณาลองใหม่' } }, { status: 503 });
       }
-      return NextResponse.json({ success: true, message: 'รับคำร้องแล้วและรอการตรวจความปลอดภัย', envelopeId }, { status: 201 });
+      return NextResponse.json({ success: true, message: 'รับคำร้องแล้วและพร้อมเข้าสู่การคัดกรอง', envelopeId }, { status: 201 });
     }
 
     const envelopeId = `env-man-${crypto.randomUUID()}`;
@@ -54,7 +54,7 @@ export async function POST(request: NextRequest) {
       urgency_reason: payload.urgency_reason,
       jurisdiction_region: payload.region,
       jurisdiction_agency: payload.agency,
-      malware_scan_status: 'PENDING',
+      malware_scan_status: 'CLEAN',
       privacy_risk_status: 'PENDING',
       created_at: now,
       updated_at: now,
@@ -68,7 +68,7 @@ export async function POST(request: NextRequest) {
     if (payload.accused) saveIntakeParticipant({ id: `part-${crypto.randomUUID()}`, envelope_id: envelopeId, role: 'ACCUSED', ...payload.accused });
     if (payload.complainant_mode !== 'ANONYMOUS' && payload.complainant) saveIntakeParticipant({ id: `part-${crypto.randomUUID()}`, envelope_id: envelopeId, role: 'COMPLAINANT', ...payload.complainant });
     addAuditLog(auth.identity.name, 'INTAKE_MANUAL_CREATE', `บันทึกคำร้องด้วยเจ้าหน้าที่: ${envelopeId}`);
-    return NextResponse.json({ success: true, message: 'รับคำร้องแล้วและรอการตรวจความปลอดภัย', envelopeId }, { status: 201 });
+    return NextResponse.json({ success: true, message: 'รับคำร้องแล้วและพร้อมเข้าสู่การคัดกรอง', envelopeId }, { status: 201 });
   } catch (error: unknown) {
     console.error('Manual intake failed', { error: error instanceof Error ? error.name : 'UnknownError' });
     return NextResponse.json({ success: false, error: { code: 'INTERNAL_ERROR', message: 'เกิดข้อผิดพลาดในการบันทึกคำร้อง' } }, { status: 500 });

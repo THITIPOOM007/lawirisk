@@ -34,6 +34,29 @@ test('imports a validated UTF-8 CSV batch through the real API route', async ({ 
   await expect(page.getByText(/นำเข้าแล้ว 1 แถว; ไม่ผ่าน 0 แถว/)).toBeVisible();
 });
 
+test('creates a text-only manual intake that is immediately ready for triage', async ({ page }) => {
+  await loginAsInvestigator(page);
+  await page.goto('/intake');
+  await page.getByRole('button', { name: /บันทึกรับเรื่องร้องเรียน/ }).click();
+  await expect(page.getByLabel(/สถานะข้อมูลผู้ร้อง/)).toHaveValue('INCOMPLETE');
+  await page.getByLabel(/สรุปพฤติการณ์/).fill('ทดสอบรับเรื่องด้วยมือพร้อมเข้าสู่การคัดกรอง');
+  await page.getByRole('button', { name: 'บันทึกรับเรื่อง', exact: true }).click();
+  await expect(page.getByRole('status').filter({ hasText: 'รับคำร้องแล้วและพร้อมเข้าสู่การคัดกรอง' })).toBeVisible();
+  await expect(page.getByText('ทดสอบรับเรื่องด้วยมือพร้อมเข้าสู่การคัดกรอง')).toBeVisible();
+  await expect(page.getByText('ปลอดภัย').last()).toBeVisible();
+});
+
+test('runs the protected match scan and rejects cross-origin mutations', async ({ page }) => {
+  await loginAsInvestigator(page);
+  await page.goto('/matches');
+  await page.getByRole('button', { name: 'ประมวลผลค้นหาความเชื่อมโยงอัตโนมัติ' }).click();
+  await expect(page.getByRole('status').filter({ hasText: 'สแกนเสร็จสิ้น' })).toBeVisible();
+
+  const blocked = await page.request.post('/api/v1/matches/scan', { data: {} });
+  expect(blocked.status()).toBe(403);
+  await expect(blocked.json()).resolves.toMatchObject({ error: { code: 'UNTRUSTED_ORIGIN' } });
+});
+
 test('rejects authenticated browser mutations without a trusted Origin header', async ({ page }) => {
   await loginAsInvestigator(page);
   const response = await page.request.post('/api/v1/cases', { data: { number: 'CSRF-1', title: 'ต้องไม่ถูกสร้าง' } });
@@ -59,6 +82,34 @@ test('keeps the command center usable on mobile and respects reduced motion', as
     return duration.endsWith('ms') ? Number.parseFloat(duration) : Number.parseFloat(duration) * 1000;
   });
   expect(animationDurationMs).toBeLessThanOrEqual(0.01);
+});
+
+test('provides a searchable complete guide and a skippable responsive tour', async ({ page }) => {
+  await loginAsInvestigator(page);
+  await page.goto('/guide');
+
+  await expect(page.getByRole('heading', { level: 1, name: /คู่มือที่พาคุณทำงาน/ })).toBeVisible();
+  await expect(page.locator('article')).toHaveCount(15);
+  await page.getByRole('searchbox', { name: 'ค้นหาคู่มือ' }).fill('Passkey');
+  await expect(page.getByRole('heading', { level: 3, name: 'Passkey และการสแกนชีวมิติ' })).toBeVisible();
+  await expect(page.getByText('พบ 2 จาก 15 หัวข้อ')).toBeVisible();
+
+  await page.setViewportSize({ width: 390, height: 844 });
+  const guideButton = page.getByRole('button', { name: 'เปิดทัวร์แนะนำการใช้งาน' });
+  await guideButton.click();
+  const tour = page.getByRole('dialog', { name: 'เริ่มใช้ LawiRisk-SSK อย่างเป็นระบบ' });
+  await expect(tour).toBeVisible();
+
+  const tourBox = await tour.boundingBox();
+  expect(tourBox).not.toBeNull();
+  expect(tourBox!.x).toBeGreaterThanOrEqual(0);
+  expect(tourBox!.y).toBeGreaterThanOrEqual(0);
+  expect(tourBox!.x + tourBox!.width).toBeLessThanOrEqual(390);
+  expect(tourBox!.y + tourBox!.height).toBeLessThanOrEqual(844);
+
+  await page.getByRole('button', { name: 'ข้ามทัวร์' }).click();
+  await expect(tour).toBeHidden();
+  await expect(guideButton).toBeFocused();
 });
 
 test('allows only reviewed external sources and fails closed for insecure transport', async ({ page }) => {
@@ -129,6 +180,9 @@ test('queues multiple evidence files and reports browser validation per file', a
   await loginAsInvestigator(page);
   await page.goto('/evidence');
   const chooser = page.locator('input[type="file"][multiple]');
+  await expect(page.getByText(/ไฟล์ละไม่เกิน 200 MB/)).toBeVisible();
+  await expect(page.getByText('fb_ad_screenshot.png')).toBeVisible();
+  await expect(chooser).toBeEnabled();
   await chooser.setInputFiles([
     { name: 'capture-one.png', mimeType: 'image/png', buffer: Buffer.from([0x89, 0x50, 0x4e, 0x47, 1, 2, 3, 4]) },
     { name: 'capture-two.png', mimeType: 'image/png', buffer: Buffer.from([0x89, 0x50, 0x4e, 0x47, 5, 6, 7, 8]) },
@@ -168,6 +222,27 @@ test('exports an authenticated immutable PDF snapshot', async ({ page }) => {
   const bytes = await response.body();
   expect(bytes.subarray(0, 5).toString('ascii')).toBe('%PDF-');
   expect(bytes.byteLength).toBeGreaterThan(1_000);
+});
+
+test('checks report prerequisites before generating and hides invalid actions from viewers', async ({ page }) => {
+  await loginAsInvestigator(page);
+  await page.goto('/reports');
+  await page.getByLabel('เลือกสำนวนคดี').selectOption('case-1');
+  await expect(page.getByText('พร้อมสร้างรายงาน', { exact: true })).toBeVisible();
+  const generateButton = page.getByRole('button', { name: 'สร้างเอกสารรายงาน' });
+  await expect(generateButton).toBeEnabled();
+  await generateButton.click();
+  await expect(page.getByText('หลักฐานต้นฉบับที่อยู่ในขอบเขต')).toBeVisible();
+
+  await page.context().clearCookies();
+  await page.context().addCookies([
+    { name: 'mock-auth-logged-in', value: 'true', url: testBaseUrl },
+    { name: 'mock-auth-role', value: 'VIEWER', url: testBaseUrl },
+  ]);
+  await page.goto('/reports');
+  await page.getByLabel('เลือกสำนวนคดี').selectOption('case-1');
+  await expect(page.getByText('บัญชีนี้ไม่มีสิทธิ์สร้างรายงาน')).toBeVisible();
+  await expect(page.getByRole('button', { name: 'สร้างเอกสารรายงาน' })).toBeDisabled();
 });
 
 test('lets a citizen search, submit an anonymous complaint, and track it', async ({ page }) => {

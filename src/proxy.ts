@@ -15,6 +15,7 @@ const protectedPrefixes = [
   '/sources',
   '/universe',
   '/security',
+  '/guide',
   '/admin',
 ];
 
@@ -90,6 +91,7 @@ export const config = {
     '/sources/:path*',
     '/universe/:path*',
     '/security/:path*',
+    '/guide/:path*',
     '/admin/:path*',
   ],
 };

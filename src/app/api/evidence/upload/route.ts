@@ -9,7 +9,7 @@ import { CASE_WRITE_ROLES } from '@/lib/roles';
 import { createServer, createServiceClient } from '@/lib/supabase-server';
 import { hasTrustedBrowserOrigin } from '@/lib/request-security';
 
-const MAX_FILE_SIZE = 20 * 1024 * 1024;
+const MAX_FILE_SIZE = 200 * 1024 * 1024;
 const caseIdSchema = z.string().trim().min(1).max(100);
 const allowedTypes = {
   pdf: { mime: 'application/pdf', magic: (bytes: Buffer) => bytes.subarray(0, 4).toString('hex') === '25504446' },
@@ -39,9 +39,18 @@ export async function POST(request: NextRequest) {
       );
     }
 
+    if (String(auth.identity.mode) === 'supabase') {
+      return apiError(
+        'RESUMABLE_UPLOAD_REQUIRED',
+        'กรุณาใช้ช่องทางอัปโหลดแบบแบ่งส่วนสำหรับไฟล์หลักฐาน ระบบจะไม่รับไฟล์ผ่าน Worker โดยตรง',
+        409,
+        traceId,
+      );
+    }
+
     const contentLength = Number(request.headers.get('content-length') || '0');
     if (contentLength > MAX_FILE_SIZE + 1024 * 1024) {
-      return apiError('FILE_TOO_LARGE', 'ขนาดไฟล์เกินกำหนด 20 MB', 413, traceId);
+      return apiError('FILE_TOO_LARGE', 'ขนาดไฟล์เกินกำหนด 200 MB', 413, traceId);
     }
     const formData = await request.formData();
     const file = formData.get('file');
@@ -50,7 +59,7 @@ export async function POST(request: NextRequest) {
       return apiError('INVALID_REQUEST', 'กรุณาเลือกไฟล์และสำนวนคดีให้ครบถ้วน', 400, traceId);
     }
     if (file.size === 0 || file.size > MAX_FILE_SIZE || file.name.length > 255) {
-      return apiError('INVALID_FILE_SIZE', 'ไฟล์ต้องมีขนาดมากกว่า 0 และไม่เกิน 20 MB', 400, traceId);
+      return apiError('INVALID_FILE_SIZE', 'ไฟล์ต้องมีขนาดมากกว่า 0 และไม่เกิน 200 MB', 400, traceId);
     }
 
     const caseId = parsedCaseId.data;

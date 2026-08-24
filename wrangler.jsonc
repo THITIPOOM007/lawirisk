@@ -25,7 +25,8 @@
       "preview_urls": false,
       "vars": {
         "NEXT_PUBLIC_DEMO_MODE": "false",
-        "GEMINI_MODEL": "gemini-2.5-flash"
+        "GEMINI_MODEL": "gemini-2.5-flash",
+        "MALWARE_SCANNER_TIMEOUT_MS": "180000"
       },
       "secrets": {
         "required": [
@@ -33,7 +34,12 @@
           "NEXT_PUBLIC_SUPABASE_ANON_KEY",
           "SUPABASE_SERVICE_ROLE_KEY",
           "PRIVATE_EVIDENCE_BUCKET",
+          "MALWARE_SCANNER_URL",
+          "MALWARE_SCANNER_TOKEN",
           "GEMINI_API_KEY",
+          "N8N_AUTOMATION_WEBHOOK_URL",
+          "N8N_DISPATCH_TOKEN",
+          "N8N_CALLBACK_TOKEN",
           "APP_ORIGIN"
         ]
       }

@@ -16,6 +16,22 @@ describe('release security regressions', () => {
     expect(route).not.toContain('fallback proceed');
   });
 
+  it('keeps 200 MB evidence off the Worker body and quarantined until NAS verification', () => {
+    const reserve = source('src/app/api/v1/evidence/uploads/route.ts');
+    const complete = source('src/app/api/v1/evidence/uploads/[id]/complete/route.ts');
+    const contract = source('src/lib/evidence-upload-contract.ts');
+    const migration = source('supabase/migrations/202608240002_evidence_upload_200mb.sql');
+    expect(reserve).toContain('createSignedUploadUrl');
+    expect(reserve).toContain('resumable_endpoint');
+    expect(reserve).not.toContain('request.formData()');
+    expect(complete).toContain('createSignedUrl(evidence.file_path, 300)');
+    expect(complete).toContain('scanEvidenceReference');
+    expect(complete).toContain("upload_state: 'STORED'");
+    expect(contract).toContain('200 * 1024 * 1024');
+    expect(migration).toContain('209715200');
+    expect(migration).toContain("record.upload_state <> 'RESERVED'");
+  });
+
   it('never promotes unavailable scanner results to clean', () => {
     const evidenceRoute = source('src/app/api/evidence/upload/route.ts');
     const publicRoute = source('src/app/api/v1/public/complaints/route.ts');
@@ -65,5 +81,12 @@ describe('release security regressions', () => {
     expect(migration).toContain('GRANT EXECUTE ON FUNCTION public.complete_webauthn_login');
     expect(migration).toContain('TO service_role');
     expect(migration).toContain('remove_own_webauthn_credential');
+  });
+
+  it('protects cross-case scans with origin validation, input validation and rate limiting', () => {
+    const route = source('src/app/api/v1/matches/scan/route.ts');
+    expect(route).toContain('hasTrustedBrowserOrigin(request)');
+    expect(route).toContain('scanSchema.safeParse');
+    expect(route).toContain('consumeRateLimit');
   });
 });

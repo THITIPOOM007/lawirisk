@@ -18,7 +18,6 @@ export async function GET(request: NextRequest) {
   const { data, error } = await supabase
     .from('evidence_files')
     .select('id,case_id,filename,file_size,mime_type,sha256,status,upload_state,malware_scan_status,created_by,created_at,uploaded_at')
-    .eq('upload_state', 'STORED')
     .order('created_at', { ascending: false })
     .limit(200);
   if (error) return NextResponse.json({ error: { code: 'EVIDENCE_LIST_FAILED', message: 'โหลดทะเบียนหลักฐานไม่สำเร็จ' } }, { status: 503 });

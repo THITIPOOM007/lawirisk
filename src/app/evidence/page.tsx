@@ -3,6 +3,7 @@
 import React, { useEffect, useState } from 'react';
 import { FileText, Upload, Check, AlertCircle, FileCheck, Loader2, Database, RefreshCw, Camera, X } from 'lucide-react';
 import { getCases, getEvidence, saveEvidence, Case, EvidenceFile } from '@/lib/demo-data';
+import type { EvidenceUploadGrant } from '@/lib/evidence-resumable-upload';
 import { validateFileInBrowser } from '@/lib/file-validator';
 import { isDemoModeEnabled } from '@/lib/supabase';
 
@@ -18,14 +19,16 @@ export default function EvidencePage() {
   type QueueItem = {
     id: string;
     file: File;
-    status: 'validating' | 'ready' | 'uploading' | 'success' | 'failed';
+    status: 'validating' | 'ready' | 'uploading' | 'scanning' | 'quarantined' | 'success' | 'failed';
     sha256?: string;
     magicBytes?: string;
+    progress?: number;
     error?: string;
   };
   const [fileQueue, setFileQueue] = useState<QueueItem[]>([]);
   const [isDragging, setIsDragging] = useState(false);
   const [isUploading, setIsUploading] = useState(false);
+  const [retryingEvidenceId, setRetryingEvidenceId] = useState('');
   const [errorMessage, setErrorMessage] = useState('');
   const [successMessage, setSuccessMessage] = useState('');
 
@@ -61,8 +64,10 @@ export default function EvidencePage() {
       status: 'validating' as const,
     }));
     setFileQueue((current) => [...current, ...pending]);
-    await Promise.all(pending.map(async (item) => {
-      const validation = await validateFileInBrowser(item.file);
+    for (const item of pending) {
+      const validation = await validateFileInBrowser(item.file, {
+        onProgress: (progress) => setFileQueue((current) => current.map((queued) => queued.id === item.id ? { ...queued, progress } : queued)),
+      });
       setFileQueue((current) => current.map((queued) => queued.id === item.id ? {
         ...queued,
         status: validation.isValid ? 'ready' : 'failed',
@@ -70,7 +75,7 @@ export default function EvidencePage() {
         magicBytes: validation.magicBytes,
         error: validation.isValid ? undefined : validation.error || 'ไฟล์ไม่ผ่านการตรวจสอบ',
       } : queued));
-    }));
+    }
   };
 
   const handleFileChange = (event: React.ChangeEvent<HTMLInputElement>) => {
@@ -111,7 +116,7 @@ export default function EvidencePage() {
       return;
     }
 
-    const readyFiles = fileQueue.filter((item) => item.status === 'ready' || item.status === 'failed');
+    const readyFiles = fileQueue.filter((item) => item.status === 'ready');
     if (readyFiles.length === 0) {
       setErrorMessage('กรุณาเลือกไฟล์หลักฐานและรอให้ตรวจสอบเสร็จ');
       return;
@@ -119,38 +124,116 @@ export default function EvidencePage() {
 
     setIsUploading(true);
     let succeeded = 0;
+    let quarantined = 0;
     let failed = fileQueue.filter((item) => item.status === 'failed').length;
     for (const queued of fileQueue) {
       if (queued.status !== 'ready') continue;
-      setFileQueue((current) => current.map((item) => item.id === queued.id ? { ...item, status: 'uploading' } : item));
+      setFileQueue((current) => current.map((item) => item.id === queued.id ? { ...item, status: 'uploading', progress: 0, error: undefined } : item));
       try {
-        const validation = await validateFileInBrowser(queued.file);
-        if (!validation.isValid) throw new Error(validation.error || 'การตรวจสอบซ้ำก่อนอัปโหลดไม่ผ่าน');
-        const body = new FormData();
-        body.append('file', queued.file);
-        body.append('case_id', selectedCaseId);
-        const response = await fetch('/api/evidence/upload', { method: 'POST', body });
-        const payload = await response.json().catch(() => null) as {
+        if (!queued.sha256) throw new Error('ไม่พบ SHA-256 ของไฟล์ กรุณานำไฟล์ออกแล้วเลือกใหม่');
+        if (isDemoModeEnabled()) {
+          const body = new FormData();
+          body.append('file', queued.file);
+          body.append('case_id', selectedCaseId);
+          const response = await fetch('/api/evidence/upload', { method: 'POST', body });
+          const payload = await response.json().catch(() => null) as { success?: boolean; data?: EvidenceFile; error?: { message?: string } } | null;
+          if (!response.ok || !payload?.success || !payload.data) throw new Error(payload?.error?.message || 'ไม่สามารถจัดเก็บหลักฐานได้');
+          saveEvidence(payload.data);
+          setEvidenceList((current) => [payload.data!, ...current.filter((item) => item.id !== payload.data!.id)]);
+          setFileQueue((current) => current.map((item) => item.id === queued.id ? { ...item, status: 'success', progress: 100 } : item));
+          succeeded += 1;
+          continue;
+        }
+
+        const reserveResponse = await fetch('/api/v1/evidence/uploads', {
+          method: 'POST',
+          credentials: 'same-origin',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            case_id: selectedCaseId,
+            filename: queued.file.name,
+            file_size: queued.file.size,
+            mime_type: queued.file.type,
+            sha256: queued.sha256,
+          }),
+        });
+        const reservePayload = await reserveResponse.json().catch(() => null) as { success?: boolean; data?: EvidenceUploadGrant; error?: { message?: string } } | null;
+        if (!reserveResponse.ok || !reservePayload?.success || !reservePayload.data) {
+          throw new Error(reservePayload?.error?.message || 'ไม่สามารถเริ่มการอัปโหลดแบบต่อเนื่องได้');
+        }
+        const { uploadEvidenceResumable } = await import('@/lib/evidence-resumable-upload');
+        await uploadEvidenceResumable({
+          file: queued.file,
+          grant: reservePayload.data,
+          onProgress: (progress) => setFileQueue((current) => current.map((item) => item.id === queued.id ? { ...item, progress } : item)),
+        });
+        setFileQueue((current) => current.map((item) => item.id === queued.id ? { ...item, status: 'scanning', progress: 100 } : item));
+
+        const completeResponse = await fetch(`/api/v1/evidence/uploads/${reservePayload.data.evidence_id}/complete`, {
+          method: 'POST',
+          credentials: 'same-origin',
+        });
+        const completePayload = await completeResponse.json().catch(() => null) as {
           success?: boolean;
-          data?: EvidenceFile;
+          data?: (EvidenceFile & { retryable?: boolean }) | { evidence_id: string; retryable: true; malware_scan_status: string };
           error?: { message?: string };
+          message?: string;
         } | null;
-        if (!response.ok || !payload?.success || !payload.data) throw new Error(payload?.error?.message || 'ไม่สามารถจัดเก็บหลักฐานได้');
-        if (isDemoModeEnabled()) saveEvidence(payload.data);
-        setEvidenceList((current) => [payload.data!, ...current.filter((item) => item.id !== payload.data!.id)]);
-        setFileQueue((current) => current.map((item) => item.id === queued.id ? { ...item, status: 'success' } : item));
-        succeeded += 1;
+        if (!completeResponse.ok || !completePayload?.success || !completePayload.data) {
+          throw new Error(completePayload?.error?.message || 'ยืนยันและสแกนหลักฐานไม่สำเร็จ');
+        }
+        if ('id' in completePayload.data) {
+          const evidence = completePayload.data;
+          setEvidenceList((current) => [evidence, ...current.filter((item) => item.id !== evidence.id)]);
+          const clean = evidence.malware_scan_status === 'CLEAN';
+          setFileQueue((current) => current.map((item) => item.id === queued.id ? {
+            ...item,
+            status: clean ? 'success' : 'quarantined',
+            error: clean ? undefined : completePayload.message || 'ไฟล์ถูกกักกันและยังนำไปใช้งานไม่ได้',
+          } : item));
+          if (clean) succeeded += 1;
+          else quarantined += 1;
+        } else {
+          quarantined += 1;
+          setFileQueue((current) => current.map((item) => item.id === queued.id ? {
+            ...item,
+            status: 'quarantined',
+            error: completePayload.message || 'อัปโหลดครบแล้ว แต่ยังรอเครื่องสแกน',
+          } : item));
+        }
       } catch (caught: unknown) {
         failed += 1;
         setFileQueue((current) => current.map((item) => item.id === queued.id ? { ...item, status: 'failed', error: caught instanceof Error ? caught.message : 'อัปโหลดไม่สำเร็จ' } : item));
       }
     }
     setIsUploading(false);
-    if (succeeded > 0) {
-      setSuccessMessage(`จัดเก็บสำเร็จ ${succeeded} ไฟล์${failed > 0 ? ` · ไม่สำเร็จ ${failed} ไฟล์ (ตรวจสอบรายไฟล์ด้านล่าง)` : ' และส่งเข้าสู่ขั้นตอนสแกนความปลอดภัยแล้ว'}`);
+    if (succeeded > 0 || quarantined > 0) {
+      setSuccessMessage(`สแกนผ่าน ${succeeded} ไฟล์${quarantined > 0 ? ` · กักกัน/รอสแกน ${quarantined} ไฟล์` : ''}${failed > 0 ? ` · ไม่สำเร็จ ${failed} ไฟล์` : ''}`);
       window.dispatchEvent(new Event('ev-data-change'));
     }
-    if (succeeded === 0) setErrorMessage(`ยังไม่มีไฟล์ที่จัดเก็บสำเร็จ${failed ? ` · พบปัญหา ${failed} ไฟล์` : ''}`);
+    if (succeeded === 0 && quarantined === 0) setErrorMessage(`ยังไม่มีไฟล์ที่จัดเก็บสำเร็จ${failed ? ` · พบปัญหา ${failed} ไฟล์` : ''}`);
+  };
+
+  const retryEvidenceScan = async (evidenceId: string) => {
+    setRetryingEvidenceId(evidenceId);
+    setErrorMessage('');
+    setSuccessMessage('');
+    try {
+      const response = await fetch(`/api/v1/evidence/uploads/${evidenceId}/complete`, { method: 'POST', credentials: 'same-origin' });
+      const payload = await response.json().catch(() => null) as { success?: boolean; data?: EvidenceFile | { evidence_id: string }; message?: string; error?: { message?: string } } | null;
+      if (!response.ok || !payload?.success || !payload.data) throw new Error(payload?.error?.message || 'ลองสแกนอีกครั้งไม่สำเร็จ');
+      if ('id' in payload.data) {
+        const evidence = payload.data;
+        setEvidenceList((current) => current.map((item) => item.id === evidence.id ? evidence : item));
+      } else {
+        setReloadToken((value) => value + 1);
+      }
+      setSuccessMessage(payload.message || 'ส่งไฟล์เข้าสู่การตรวจซ้ำแล้ว');
+    } catch (caught: unknown) {
+      setErrorMessage(caught instanceof Error ? caught.message : 'ลองสแกนอีกครั้งไม่สำเร็จ');
+    } finally {
+      setRetryingEvidenceId('');
+    }
   };
 
   return (
@@ -212,7 +295,7 @@ export default function EvidencePage() {
 
               <div>
                 <label className="block text-xs font-semibold text-slate-400 uppercase tracking-wider">
-                  ไฟล์หลักฐาน (PDF, PNG, JPG · ไฟล์ละไม่เกิน 20MB · สูงสุด 20 ไฟล์)
+                  ไฟล์หลักฐาน (PDF, PNG, JPG · ไฟล์ละไม่เกิน 200 MB · สูงสุด 20 ไฟล์)
                 </label>
                 <div
                   onDrop={handleDrop}
@@ -245,11 +328,17 @@ export default function EvidencePage() {
 
               {fileQueue.length > 0 && (
                 <div className="space-y-2 rounded-2xl border border-slate-900 bg-slate-950/60 p-3">
-                  <div className="flex items-center justify-between px-1"><span className="text-[10px] font-bold uppercase tracking-wider text-slate-500">คิวตรวจ Magic Bytes + SHA-256</span><span className="text-[10px] text-slate-600">{fileQueue.length}/20 ไฟล์</span></div>
+                  <div className="flex items-center justify-between px-1"><span className="text-[10px] font-bold uppercase tracking-wider text-slate-500">ตรวจไฟล์ · อัปโหลดต่อเนื่อง · สแกน NAS</span><span className="text-[10px] text-slate-600">{fileQueue.length}/20 ไฟล์</span></div>
                   {fileQueue.map((item) => (
                     <div key={item.id} className="flex items-start gap-2 rounded-xl border border-white/[0.05] bg-white/[0.02] p-2.5">
-                      <span className="mt-0.5">{item.status === 'validating' || item.status === 'uploading' ? <Loader2 className="h-4 w-4 animate-spin text-indigo-300" /> : item.status === 'failed' ? <AlertCircle className="h-4 w-4 text-rose-400" /> : <Check className="h-4 w-4 text-emerald-400" />}</span>
-                      <div className="min-w-0 flex-1"><p className="truncate text-xs font-medium text-slate-200">{item.file.name}</p><p className={`mt-0.5 text-[9px] ${item.status === 'failed' ? 'text-rose-300' : 'text-slate-600'}`}>{item.status === 'validating' ? 'กำลังตรวจชนิดไฟล์และคำนวณแฮช…' : item.status === 'uploading' ? 'กำลังสำรองต้นฉบับและสแกนฝั่งเซิร์ฟเวอร์…' : item.status === 'success' ? 'จัดเก็บต้นฉบับสำเร็จ' : item.status === 'failed' ? item.error : `พร้อมอัปโหลด · ${(item.file.size / 1024 / 1024).toFixed(2)} MB · SHA ${item.sha256?.slice(0, 10)}…`}</p></div>
+                      <span className="mt-0.5">{item.status === 'validating' || item.status === 'uploading' || item.status === 'scanning' ? <Loader2 className="h-4 w-4 animate-spin text-indigo-300" /> : item.status === 'failed' ? <AlertCircle className="h-4 w-4 text-rose-400" /> : item.status === 'quarantined' ? <AlertCircle className="h-4 w-4 text-amber-300" /> : <Check className="h-4 w-4 text-emerald-400" />}</span>
+                      <div className="min-w-0 flex-1">
+                        <p className="truncate text-xs font-medium text-slate-200">{item.file.name}</p>
+                        <p className={`mt-0.5 text-[9px] ${item.status === 'failed' ? 'text-rose-300' : item.status === 'quarantined' ? 'text-amber-300' : 'text-slate-600'}`}>
+                          {item.status === 'validating' ? `กำลังคำนวณ SHA-256 แบบแบ่งส่วน ${item.progress || 0}%` : item.status === 'uploading' ? `กำลังอัปโหลดตรงไปพื้นที่ private ${item.progress || 0}%` : item.status === 'scanning' ? 'อัปโหลดครบแล้ว · NAS กำลังตรวจ SHA-256, ชนิดไฟล์ และมัลแวร์…' : item.status === 'success' ? 'สแกนผ่าน · พร้อมใช้ในขั้นตอนถัดไป' : item.status === 'quarantined' || item.status === 'failed' ? item.error : `พร้อมอัปโหลด · ${(item.file.size / 1024 / 1024).toFixed(2)} MB · SHA ${item.sha256?.slice(0, 10)}…`}
+                        </p>
+                        {(item.status === 'validating' || item.status === 'uploading') && <div className="mt-2 h-1.5 overflow-hidden rounded-full bg-slate-800" role="progressbar" aria-label={`ความคืบหน้า ${item.file.name}`} aria-valuemin={0} aria-valuemax={100} aria-valuenow={item.progress || 0}><div className="h-full rounded-full bg-gradient-to-r from-indigo-500 to-cyan-400 transition-[width]" style={{ width: `${item.progress || 0}%` }} /></div>}
+                      </div>
                       {item.status !== 'uploading' && item.status !== 'success' && <button type="button" onClick={() => removeQueuedFile(item.id)} disabled={isUploading} aria-label={`นำ ${item.file.name} ออกจากคิว`} className="grid h-7 w-7 shrink-0 place-items-center rounded-lg text-slate-600 hover:bg-rose-300/[0.06] hover:text-rose-300"><X className="h-3.5 w-3.5" /></button>}
                     </div>
                   ))}
@@ -264,7 +353,7 @@ export default function EvidencePage() {
                 {isUploading ? (
                   <>
                     <Loader2 className="h-5 w-5 mr-2 animate-spin shrink-0" />
-                    กำลังประมวลผล...
+                    กำลังอัปโหลดและตรวจความปลอดภัย...
                   </>
                 ) : (
                   <>
@@ -319,9 +408,16 @@ export default function EvidencePage() {
                             {file.sha256.substring(0, 10)}...{file.sha256.substring(file.sha256.length - 6)}
                           </td>
                           <td className="py-4 text-right">
-                            <span className={`inline-block px-2.5 py-1 text-[10px] font-semibold border rounded-lg ${file.malware_scan_status === 'CLEAN' ? 'bg-emerald-500/10 text-emerald-400 border-emerald-500/20' : file.malware_scan_status === 'INFECTED' ? 'bg-rose-500/10 text-rose-400 border-rose-500/20' : 'bg-amber-500/10 text-amber-300 border-amber-500/20'}`}>
-                              {file.malware_scan_status === 'CLEAN' ? 'สแกนแล้ว · ปลอดภัย' : file.malware_scan_status === 'INFECTED' ? 'กักกัน · พบความเสี่ยง' : 'ยังไม่ถือว่าปลอดภัย'}
-                            </span>
+                            <div className="flex flex-col items-end gap-2">
+                              <span className={`inline-block px-2.5 py-1 text-[10px] font-semibold border rounded-lg ${file.malware_scan_status === 'CLEAN' ? 'bg-emerald-500/10 text-emerald-400 border-emerald-500/20' : file.malware_scan_status === 'INFECTED' ? 'bg-rose-500/10 text-rose-400 border-rose-500/20' : 'bg-amber-500/10 text-amber-300 border-amber-500/20'}`}>
+                                {file.malware_scan_status === 'CLEAN' ? 'สแกนแล้ว · ปลอดภัย' : file.malware_scan_status === 'INFECTED' ? 'กักกัน · พบความเสี่ยง' : file.upload_state === 'RESERVED' ? 'อัปโหลดแล้ว · รอสแกน' : 'ยังไม่ถือว่าปลอดภัย'}
+                              </span>
+                              {file.malware_scan_status !== 'CLEAN' && file.malware_scan_status !== 'INFECTED' && (
+                                <button type="button" onClick={() => void retryEvidenceScan(file.id)} disabled={Boolean(retryingEvidenceId)} className="inline-flex min-h-8 items-center rounded-lg border border-amber-300/15 px-2.5 text-[10px] font-semibold text-amber-200 hover:bg-amber-300/[0.06] disabled:opacity-50">
+                                  {retryingEvidenceId === file.id ? <Loader2 className="mr-1.5 h-3 w-3 animate-spin" /> : <RefreshCw className="mr-1.5 h-3 w-3" />}ลองสแกนอีกครั้ง
+                                </button>
+                              )}
+                            </div>
                           </td>
                         </tr>
                       );

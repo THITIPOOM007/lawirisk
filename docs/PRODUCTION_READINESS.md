@@ -77,13 +77,13 @@
 
 ## Malware scanner gate
 
-บริการ scanner ต้องรับ `multipart/form-data` field `file` และตอบ:
+เส้นทางจริงต้องใช้ `POST /scan-reference` รับ signed private URL + expected size/SHA-256/MIME และสตรีมไฟล์สูงสุด 200 MB โดย allowlist เฉพาะ Supabase HTTPS hostname ผลตอบกลับต้องเป็น:
 
 ```json
-{"verdict":"CLEAN","scanner":"product-name","signature_version":"version"}
+{"verdict":"CLEAN","scanner":"product-name","signature_version":"version","sha256":"64-lowercase-hex","size_bytes":1234,"detected_mime":"application/pdf"}
 ```
 
-ทดสอบ clean fixture, EICAR fixture, timeout, 5xx และ invalid JSON ผลทุกกรณีที่ไม่ใช่ `CLEAN` ต้องเปิด/ประมวลผลไฟล์ไม่ได้ จากนั้นกำหนด retention/quarantine และ incident procedure กับทีม security
+ยืนยันว่า Supabase organization เป็น Pro ขึ้นไป (Free จำกัดไฟล์ 50 MB) แล้วตั้ง global และ bucket limit ไม่น้อยกว่า 200 MB, ใช้ TUS signed upload จาก browser และตั้ง scanner timeout 180 วินาที ทดสอบ clean 200 MB, EICAR fixture, hash/size/magic mismatch, SSRF/redirect, timeout, 5xx และ invalid JSON ผลทุกกรณีที่ไม่ใช่ `CLEAN` ต้องเปิด/ประมวลผลไฟล์ไม่ได้ จากนั้นกำหนด retention/quarantine และ incident procedure กับทีม security
 
 ## Cloudflare gates
 

@@ -5,6 +5,8 @@ import { describe, expect, it } from 'vitest';
 const migration = fs.readFileSync(path.join(process.cwd(), 'supabase/migrations/202608180001_production_readiness.sql'), 'utf8');
 const geminiMigration = fs.readFileSync(path.join(process.cwd(), 'supabase/migrations/202608190001_gemini_extraction.sql'), 'utf8');
 const automationMigration = fs.readFileSync(path.join(process.cwd(), 'supabase/migrations/202608190002_n8n_automation.sql'), 'utf8');
+const manualIntakeMigration = fs.readFileSync(path.join(process.cwd(), 'supabase/migrations/202608240001_manual_intake_scan_readiness.sql'), 'utf8');
+const largeEvidenceMigration = fs.readFileSync(path.join(process.cwd(), 'supabase/migrations/202608240002_evidence_upload_200mb.sql'), 'utf8');
 
 describe('production migration invariants', () => {
   it('makes evidence originals and audit history immutable', () => {
@@ -46,5 +48,21 @@ describe('production migration invariants', () => {
     expect(automationMigration).toContain('DELETE FROM public.automation_job_inputs WHERE job_id = job.id');
     expect(automationMigration).toContain("auth.role() <> 'service_role'");
     expect(automationMigration).toContain('GRANT EXECUTE ON FUNCTION public.claim_automation_job');
+  });
+
+  it('lets text-only manual intake reach triage without bypassing attachment scanning', () => {
+    expect(manualIntakeMigration).toContain('CREATE OR REPLACE FUNCTION public.create_manual_intake');
+    expect(manualIntakeMigration).toContain("'CLEAN', 'PENDING'");
+    expect(manualIntakeMigration).toContain('FROM public.intake_attachments AS attachment');
+    expect(manualIntakeMigration).toContain('WHERE attachment.envelope_id = envelope.id');
+    expect(manualIntakeMigration).toContain('REVOKE ALL ON FUNCTION public.create_manual_intake');
+  });
+
+  it('raises only the private evidence lifecycle to 200 MB and preserves audited reservation boundaries', () => {
+    expect(largeEvidenceMigration).toContain('SET file_size_limit = 209715200');
+    expect(largeEvidenceMigration).toContain('p_file_size NOT BETWEEN 1 AND 209715200');
+    expect(largeEvidenceMigration).toContain("record.upload_state <> 'RESERVED'");
+    expect(largeEvidenceMigration).toContain("'EVIDENCE_UPLOAD_CANCELLED'");
+    expect(largeEvidenceMigration).toContain('REVOKE ALL ON FUNCTION public.finalize_evidence_upload');
   });
 });

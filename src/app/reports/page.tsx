@@ -1,7 +1,8 @@
 'use client';
 
 import { useEffect, useState } from 'react';
-import { Check, Copy, FileBarChart, Loader2, RefreshCw } from 'lucide-react';
+import Link from 'next/link';
+import { Check, CircleAlert, Copy, FileBarChart, Loader2, RefreshCw, ShieldCheck } from 'lucide-react';
 import type { Case } from '@/lib/demo-data';
 
 type ReportRecord = {
@@ -12,6 +13,15 @@ type ReportRecord = {
   content: string;
   snapshot_sha256?: string | null;
   created_at?: string;
+};
+
+type ReportReadiness = {
+  eligible: boolean;
+  code: 'READY' | 'CLEAN_EVIDENCE_REQUIRED' | 'VERIFIED_SOURCE_REQUIRED' | 'FORBIDDEN' | 'READINESS_FAILED';
+  message: string;
+  clean_evidence_count?: number;
+  source_mention_count?: number;
+  relationship_reference_count?: number;
 };
 
 export default function ReportsPage() {
@@ -25,6 +35,8 @@ export default function ReportsPage() {
   const [isGenerating, setIsGenerating] = useState(false);
   const [error, setError] = useState('');
   const [copied, setCopied] = useState(false);
+  const [readiness, setReadiness] = useState<ReportReadiness | null>(null);
+  const [isCheckingReadiness, setIsCheckingReadiness] = useState(false);
 
   const load = async () => {
     setIsLoading(true);
@@ -64,6 +76,37 @@ export default function ReportsPage() {
     return () => controller.abort();
   }, []);
 
+  useEffect(() => {
+    if (!selectedCaseId) return;
+
+    const controller = new AbortController();
+    fetch(`/api/v1/reports/readiness?case_id=${encodeURIComponent(selectedCaseId)}`, {
+      credentials: 'same-origin',
+      signal: controller.signal,
+    }).then(async (response) => {
+      const body = await response.json();
+      if (!response.ok) {
+        const code = response.status === 403 ? 'FORBIDDEN' : 'READINESS_FAILED';
+        setReadiness({ eligible: false, code, message: body.error?.message || 'ตรวจความพร้อมสำหรับสร้างรายงานไม่สำเร็จ' });
+        return;
+      }
+      setReadiness(body.data as ReportReadiness);
+    }).catch((caught: unknown) => {
+      if (caught instanceof DOMException && caught.name === 'AbortError') return;
+      setReadiness({ eligible: false, code: 'READINESS_FAILED', message: 'ตรวจความพร้อมสำหรับสร้างรายงานไม่สำเร็จ กรุณาลองใหม่' });
+    }).finally(() => {
+      if (!controller.signal.aborted) setIsCheckingReadiness(false);
+    });
+    return () => controller.abort();
+  }, [selectedCaseId]);
+
+  const selectCase = (caseId: string) => {
+    setSelectedCaseId(caseId);
+    setReadiness(null);
+    setIsCheckingReadiness(Boolean(caseId));
+    setError('');
+  };
+
   const generate = async (event: React.FormEvent) => {
     event.preventDefault();
     if (!selectedCaseId) return setError('กรุณาเลือกสำนวนคดี');
@@ -76,7 +119,12 @@ export default function ReportsPage() {
         body: JSON.stringify({ case_id: selectedCaseId, report_type: reportType, ...(title.trim() ? { title: title.trim() } : {}) }),
       });
       const body = await response.json();
-      if (!response.ok) throw new Error(body.error?.message || 'สร้างรายงานไม่สำเร็จ');
+      if (!response.ok) {
+        if (response.status === 409) {
+          setReadiness({ eligible: false, code: 'VERIFIED_SOURCE_REQUIRED', message: body.error?.message || 'ข้อมูลต้นทางยังไม่พร้อมสร้างรายงาน' });
+        }
+        throw new Error(body.error?.message || 'สร้างรายงานไม่สำเร็จ');
+      }
       const report = body.data as ReportRecord;
       setActiveReport(report);
       setReports((current) => [report, ...current.filter((item) => item.id !== report.id)]);
@@ -110,10 +158,27 @@ export default function ReportsPage() {
         <div className="space-y-6">
           <form onSubmit={generate} className="space-y-5 rounded-3xl border border-slate-900 bg-slate-900/30 p-6">
             <h2 className="font-bold text-white">สร้างรายงานสรุป (Snapshot)</h2>
-            <label className="block text-xs font-semibold text-slate-300">เลือกสำนวนคดี<select value={selectedCaseId} onChange={(event) => setSelectedCaseId(event.target.value)} required className="mt-2 w-full rounded-xl border border-slate-800 bg-slate-950 p-3 text-sm text-white"><option value="">เลือกสำนวนคดี</option>{cases.map((item) => <option key={item.id} value={item.id}>{item.number} — {item.title}</option>)}</select></label>
+            <label className="block text-xs font-semibold text-slate-300">เลือกสำนวนคดี<select value={selectedCaseId} onChange={(event) => selectCase(event.target.value)} required className="mt-2 w-full rounded-xl border border-slate-800 bg-slate-950 p-3 text-sm text-white"><option value="">เลือกสำนวนคดี</option>{cases.map((item) => <option key={item.id} value={item.id}>{item.number} — {item.title}</option>)}</select></label>
             <label className="block text-xs font-semibold text-slate-300">ประเภทรายงาน<select value={reportType} onChange={(event) => setReportType(event.target.value as 'SUMMARY' | 'OVERLAP')} className="mt-2 w-full rounded-xl border border-slate-800 bg-slate-950 p-3 text-sm text-white"><option value="SUMMARY">รายงานสรุปสาระสำคัญของสำนวนคดี</option><option value="OVERLAP">รายงานการวิเคราะห์ความเชื่อมโยงข้ามคดี</option></select></label>
             <label className="block text-xs font-semibold text-slate-300">หัวข้อรายงาน (ไม่บังคับ)<input value={title} onChange={(event) => setTitle(event.target.value)} maxLength={200} placeholder="ระบุชื่อเอกสารรายงาน..." className="mt-2 w-full rounded-xl border border-slate-800 bg-slate-950 p-3 text-sm text-white" /></label>
-            <button disabled={isGenerating || !selectedCaseId} className="flex w-full items-center justify-center rounded-xl bg-indigo-600 px-4 py-3 text-sm font-bold text-white disabled:opacity-50 cursor-pointer">{isGenerating && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}สร้างเอกสารรายงาน</button>
+            {selectedCaseId && (
+              <div aria-live="polite" className={`rounded-2xl border p-4 ${readiness?.eligible ? 'border-emerald-400/20 bg-emerald-400/[0.06]' : 'border-amber-400/20 bg-amber-400/[0.06]'}`}>
+                {isCheckingReadiness ? (
+                  <p className="flex items-center text-xs text-slate-400"><Loader2 className="mr-2 h-4 w-4 animate-spin" />กำลังตรวจความพร้อมของหลักฐานและแหล่งอ้างอิง...</p>
+                ) : readiness ? (
+                  <div className="flex items-start gap-3">
+                    {readiness.eligible ? <ShieldCheck className="mt-0.5 h-4 w-4 shrink-0 text-emerald-300" /> : <CircleAlert className="mt-0.5 h-4 w-4 shrink-0 text-amber-300" />}
+                    <div className="min-w-0">
+                      <p className={`text-xs font-bold ${readiness.eligible ? 'text-emerald-200' : 'text-amber-200'}`}>{readiness.eligible ? 'พร้อมสร้างรายงาน' : 'ยังสร้างรายงานไม่ได้'}</p>
+                      <p className="mt-1 text-[11px] leading-5 text-slate-400">{readiness.message}</p>
+                      {!readiness.eligible && readiness.code === 'CLEAN_EVIDENCE_REQUIRED' && <Link href="/evidence" className="mt-2 inline-flex text-[11px] font-bold text-teal-300 hover:underline">ไปอัปโหลดและตรวจหลักฐาน →</Link>}
+                      {!readiness.eligible && readiness.code === 'VERIFIED_SOURCE_REQUIRED' && <Link href="/review" className="mt-2 inline-flex text-[11px] font-bold text-teal-300 hover:underline">ไปสกัดข้อมูลและตรวจทาน →</Link>}
+                    </div>
+                  </div>
+                ) : null}
+              </div>
+            )}
+            <button disabled={isGenerating || !selectedCaseId || isCheckingReadiness || !readiness?.eligible} className="flex w-full cursor-pointer items-center justify-center rounded-xl bg-indigo-600 px-4 py-3 text-sm font-bold text-white disabled:cursor-not-allowed disabled:opacity-50">{isGenerating && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}สร้างเอกสารรายงาน</button>
             <p className="text-[11px] leading-relaxed text-slate-500">รายงานนี้จัดทำขึ้นเพื่อสนับสนุนการสืบสวนและรวบรวมพยานหลักฐานทางคดี</p>
           </form>
           <section className="rounded-3xl border border-slate-900 bg-slate-900/20 p-5">

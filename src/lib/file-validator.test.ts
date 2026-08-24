@@ -2,17 +2,17 @@ import { describe, it, expect } from 'vitest';
 import { validateFileInBrowser } from './file-validator';
 
 describe('file-validator', () => {
-  it('should reject file exceeding 20MB', async () => {
+  it('should reject file exceeding 200MB', async () => {
     // Create mock file with large size
     const mockFile = {
       name: 'large_file.pdf',
-      size: 21 * 1024 * 1024, // 21 MB
+      size: 201 * 1024 * 1024,
       type: 'application/pdf',
     } as unknown as File;
 
     const result = await validateFileInBrowser(mockFile);
     expect(result.isValid).toBe(false);
-    expect(result.error).toContain('ไม่เกิน 20 MB');
+    expect(result.error).toContain('ไม่เกิน 200 MB');
   });
 
   it('should reject unsupported file extension', async () => {
