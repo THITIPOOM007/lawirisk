@@ -30,7 +30,7 @@ export function buildCaseReport(input: {
     ? 'รายงานสรุปข้อมูลคดีจากแหล่งอ้างอิงที่ยืนยันแล้ว'
     : 'รายงานจุดทับซ้อนเพื่อการตรวจสอบโดยเจ้าหน้าที่';
   const evidenceLines = input.evidence.length
-    ? input.evidence.map((item) => `- ${item.filename} | SHA-256 ${item.sha256} | สแกน ${item.malware_scan_status || 'ไม่ทราบ'}`).join('\n')
+    ? input.evidence.map((item) => `- ${item.filename} | SHA-256 ${item.sha256} | สถานะไฟล์ ${item.malware_scan_status || 'ไม่ทราบ'}`).join('\n')
     : '- ไม่มีหลักฐานที่เข้าถึงได้';
   const entityLines = input.sourcedEntities.length
     ? input.sourcedEntities.map((item) => `- ${item.type}: ${item.value}`).join('\n')

@@ -25,7 +25,7 @@ export interface EvidenceFile {
   sha256: string;
   status: 'PENDING' | 'PROCESSING' | 'PROCESSED' | 'FAILED';
   upload_state?: 'RESERVED' | 'STORED' | 'FAILED';
-  malware_scan_status?: 'PENDING' | 'CLEAN' | 'INFECTED' | 'UNAVAILABLE' | 'ERROR';
+  malware_scan_status?: 'PENDING' | 'CLEAN' | 'NOT_SCANNED' | 'INFECTED' | 'UNAVAILABLE' | 'ERROR';
   created_by: string | null;
   created_at: string;
 }
@@ -122,7 +122,7 @@ export interface IntakeEnvelope {
   urgency_reason?: string;
   jurisdiction_region?: string;
   jurisdiction_agency?: string;
-  malware_scan_status: 'CLEAN' | 'PENDING' | 'INFECTED' | 'UNAVAILABLE' | 'ERROR';
+  malware_scan_status: 'CLEAN' | 'NOT_SCANNED' | 'PENDING' | 'INFECTED' | 'UNAVAILABLE' | 'ERROR';
   privacy_risk_status: 'PENDING' | 'LOW' | 'MEDIUM' | 'HIGH';
   idempotency_key?: string;
   created_at: string;
@@ -145,7 +145,7 @@ export interface IntakeAttachment {
   mime_type: string;
   sha256: string;
   storage_path: string;
-  malware_scan_status: 'PENDING' | 'CLEAN' | 'INFECTED' | 'UNAVAILABLE' | 'ERROR';
+  malware_scan_status: 'PENDING' | 'CLEAN' | 'NOT_SCANNED' | 'INFECTED' | 'UNAVAILABLE' | 'ERROR';
   malware_scan_details?: string;
 }
 
@@ -213,7 +213,7 @@ export const INITIAL_INTAKE_ENVELOPES: IntakeEnvelope[] = [
     urgency_reason: 'พบคลิปโฆษณาจำหน่ายยาและเครื่องมือแพทย์จัดฟันโดยไม่มีใบอนุญาต คาดว่ามีเหยื่อติดเชื้อในช่องปาก',
     jurisdiction_region: 'เขตสุขภาพที่ 10',
     jurisdiction_agency: 'สสจ.ศรีสะเกษ',
-    malware_scan_status: 'CLEAN',
+    malware_scan_status: 'NOT_SCANNED',
     privacy_risk_status: 'MEDIUM',
     created_at: '2026-07-31T01:00:00Z',
     updated_at: '2026-07-31T01:10:00Z'
@@ -227,7 +227,7 @@ export const INITIAL_INTAKE_ENVELOPES: IntakeEnvelope[] = [
     urgency_reason: 'แจ้งเบาะแสน้ำดื่มยี่ห้อ ไอร่า (Aira) ผลิตในพื้นที่ไม่ผ่านเกณฑ์ความสะอาด',
     jurisdiction_region: 'เขตสุขภาพที่ 10',
     jurisdiction_agency: 'สสจ.ศรีสะเกษ',
-    malware_scan_status: 'CLEAN',
+    malware_scan_status: 'NOT_SCANNED',
     privacy_risk_status: 'LOW',
     created_at: '2026-07-31T02:30:00Z',
     updated_at: '2026-07-31T02:35:00Z'
@@ -267,7 +267,7 @@ export const INITIAL_INTAKE_ATTACHMENTS: IntakeAttachment[] = [
     mime_type: 'image/png',
     sha256: '89504E47d32b509ef8c8d6263bb496a718b5774a3db0ffcb4159518e974e4600',
     storage_path: '/vault/intake/att-1.png',
-    malware_scan_status: 'CLEAN'
+    malware_scan_status: 'NOT_SCANNED'
   },
   {
     id: 'att-2',
@@ -360,7 +360,7 @@ export const INITIAL_EVIDENCE: EvidenceFile[] = [
     sha256: '89504E47d32b509ef8c8d6263bb496a718b5774a3db0ffcb4159518e974e4600',
     status: 'PROCESSED',
     upload_state: 'STORED',
-    malware_scan_status: 'CLEAN',
+    malware_scan_status: 'NOT_SCANNED',
     created_by: 'ร.ต.อ. สมชาย',
     created_at: '2026-07-25T11:15:00Z',
   }

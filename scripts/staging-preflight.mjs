@@ -6,8 +6,6 @@ const required = [
   'NEXT_PUBLIC_SUPABASE_ANON_KEY',
   'SUPABASE_SERVICE_ROLE_KEY',
   'PRIVATE_EVIDENCE_BUCKET',
-  'MALWARE_SCANNER_URL',
-  'MALWARE_SCANNER_TOKEN',
   'APP_ORIGIN',
   'N8N_AUTOMATION_WEBHOOK_URL',
   'N8N_DISPATCH_TOKEN',
@@ -35,7 +33,7 @@ record(
   'dispatch and callback tokens must be different',
 );
 
-for (const name of ['NEXT_PUBLIC_SUPABASE_URL', 'MALWARE_SCANNER_URL', 'APP_ORIGIN', 'N8N_AUTOMATION_WEBHOOK_URL']) {
+for (const name of ['NEXT_PUBLIC_SUPABASE_URL', 'APP_ORIGIN', 'N8N_AUTOMATION_WEBHOOK_URL']) {
   try {
     const url = new URL(valueOf(name));
     record(`${name}_HTTPS`, url.protocol === 'https:', url.protocol === 'https:' ? url.hostname : 'must use https');
@@ -79,20 +77,6 @@ if (runNetworkChecks && results.every((item) => item.ok)) {
     url: `${supabaseUrl}/auth/v1/admin/users?page=1&per_page=1`,
     options: { headers: { apikey: serviceKey, Authorization: `Bearer ${serviceKey}` } },
   }, (response) => ({ ok: response.ok, detail: `HTTP ${response.status}` }));
-
-  const scannerBody = new FormData();
-  scannerBody.set('file', new Blob(['LawiRisk-SSK staging scanner connectivity probe'], { type: 'text/plain' }), 'safe-probe.txt');
-  await checkHttp('MALWARE_SCANNER_SAFE_PROBE', {
-    url: valueOf('MALWARE_SCANNER_URL'),
-    options: {
-      method: 'POST',
-      headers: { Authorization: `Bearer ${valueOf('MALWARE_SCANNER_TOKEN')}` },
-      body: scannerBody,
-    },
-  }, (response, body) => ({
-    ok: response.ok && body?.verdict === 'CLEAN' && typeof body?.scanner === 'string' && typeof body?.signature_version === 'string',
-    detail: response.ok ? `verdict ${body?.verdict || 'invalid'}` : `HTTP ${response.status}`,
-  }));
 
   await checkHttp('STAGING_HEALTH', {
     url: `${valueOf('APP_ORIGIN').replace(/\/$/, '')}/api/health`,

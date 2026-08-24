@@ -90,7 +90,7 @@ export async function POST(
       urgency_reason: payload.urgency_reason || `นำเข้ารายการร้องเรียนจากหน่วยงาน ${partnerId}`,
       jurisdiction_region: payload.region || 'เขตสุขภาพที่ 10',
       jurisdiction_agency: payload.agency || `สสจ.${partnerId.split('-')[1]}`,
-      malware_scan_status: 'PENDING',
+      malware_scan_status: 'NOT_SCANNED',
       privacy_risk_status: 'PENDING',
       idempotency_key: `partner:${partnerId}:${idempotencyKey}`,
       created_at: new Date().toISOString(),

@@ -17,6 +17,7 @@ import {
   TriangleAlert,
   Workflow,
 } from 'lucide-react';
+import { isEvidenceUsable } from '@/lib/evidence-file-status';
 
 type AutomationStatus = 'QUEUED' | 'DISPATCHED' | 'RUNNING' | 'SUCCEEDED' | 'FAILED';
 type AutomationJob = {
@@ -115,7 +116,7 @@ export default function AutomationPage() {
     [evidence, selectedCaseId],
   );
   const cleanEvidence = useMemo(
-    () => caseEvidence.filter((item) => item.upload_state === 'STORED' && item.malware_scan_status === 'CLEAN'),
+    () => caseEvidence.filter((item) => isEvidenceUsable(item.upload_state, item.malware_scan_status)),
     [caseEvidence],
   );
   const evidenceById = useMemo(() => new Map(evidence.map((item) => [item.id, item])), [evidence]);
@@ -124,7 +125,7 @@ export default function AutomationPage() {
   const createJob = async (event: React.FormEvent) => {
     event.preventDefault();
     if (!selectedCaseId || !form.evidence_id) {
-      setError('กรุณาเลือกคดีและหลักฐานที่สแกนเป็น CLEAN');
+      setError('กรุณาเลือกคดีและหลักฐานที่จัดเก็บและตรวจรูปแบบไฟล์แล้ว');
       return;
     }
     setIsSubmitting(true);

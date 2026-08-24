@@ -35,14 +35,14 @@ pnpm build:vinext
 
 - API ตรวจ session/role ซ้ำจาก server และ PostgreSQL RLS เป็นแนวป้องกันหลัก
 - mutation จาก browser ตรวจ Origin และใช้ shared rate limit ใน PostgreSQL
-- หลักฐานรองรับ PDF/PNG/JPEG สูงสุด 200 MB อัปโหลดตรงแบบ TUS resumable ไป private Storage แล้วให้ NAS ตรวจ MIME, magic bytes, SHA-256 และมัลแวร์ซ้ำก่อนปลดจากพื้นที่กักกัน
+- หลักฐานรองรับ PDF/PNG/JPEG สูงสุด 200 MB อัปโหลดตรงแบบ TUS resumable ไป private Storage แล้วตรวจขนาด MIME และ magic bytes จาก object ก่อนยืนยัน
 - หน้า Evidence รองรับลากวาง/เลือกพร้อมกันสูงสุด 20 ไฟล์และถ่ายภาพจากกล้องมือถือ โดยรายงานผลสำเร็จ/ล้มเหลวแยกรายไฟล์
-- object path ไม่เปิดเผยต่อ client; ดาวน์โหลดผ่าน signed URL 60 วินาที เฉพาะไฟล์ `STORED/CLEAN`
+- object path ไม่เปิดเผยต่อ client; ดาวน์โหลดผ่าน signed URL 60 วินาที เฉพาะไฟล์ `STORED/CLEAN` เดิมหรือ `STORED/NOT_SCANNED`
 - metadata ต้นฉบับและ audit เป็น append-only/immutable ด้วย database trigger
-- extraction/match เป็นข้อเสนอ; การยืนยันต้องมี source และหลักฐานที่สแกน `CLEAN`
+- extraction/match เป็นข้อเสนอ; การยืนยันต้องมี source และหลักฐานที่จัดเก็บและตรวจรูปแบบสมบูรณ์
 - การเข้าใช้ระบบและลงนามรับรองรองรับ WebAuthn Passkey (Windows Hello, Face ID, Touch ID, security key) พร้อมหน้าจัดการอุปกรณ์; ข้อมูลชีวมิติอยู่บนอุปกรณ์และ production ไม่มี simulated passkey fallback
-- public portal รองรับค้นหา ส่งคำร้องแบบไม่เปิดเผยตัว และติดตามด้วย opaque token; ไฟล์ที่ไม่ใช่ `CLEAN` ถูกกักกัน
-- Gemini text/Vision extraction ทำงานฝั่งเซิร์ฟเวอร์กับข้อความหรือภาพ/PDF ที่เป็น `CLEAN` ผลถูก validate และบันทึกเป็น `SUGGESTED`; manual fallback ยังคงใช้งานได้
+- public portal รองรับค้นหา ส่งคำร้องแบบไม่เปิดเผยตัว และติดตามด้วย opaque token; ไฟล์แนบอยู่ใน private Storage และผ่านการตรวจชนิด/โครงสร้าง
+- Gemini text/Vision extraction ทำงานฝั่งเซิร์ฟเวอร์กับข้อความหรือภาพ/PDF ที่พร้อมใช้งาน ผลถูก validate และบันทึกเป็น `SUGGESTED`; manual fallback ยังคงใช้งานได้
 - รายงานเก็บ source snapshot และ SHA-256; ไม่มี source จะสร้างไม่ได้
 - CSV import เป็น UTF-8 สูงสุด 2 MB/1,000 แถว และบันทึก batch ผ่าน RPC ธุรกรรมเดียว
 - Kouprey ใช้ HMAC/timestamp/nonce/idempotency; Partner API ใช้ bearer key/idempotency และไม่มี production demo fallback

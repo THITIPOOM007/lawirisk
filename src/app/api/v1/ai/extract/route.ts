@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { authorizeStaff } from '@/lib/api-auth';
 import { apiError, authError } from '@/lib/api-errors';
+import { isEvidenceUsable } from '@/lib/evidence-file-status';
 import { GeminiExtractionError, extractEntitiesWithGemini } from '@/lib/providers/gemini-extraction';
 import { consumeRateLimit } from '@/lib/rate-limit';
 import { hasTrustedBrowserOrigin } from '@/lib/request-security';
@@ -66,8 +67,8 @@ export async function POST(request: NextRequest) {
     .eq('case_id', payload.case_id)
     .maybeSingle();
   if (evidence.error || !evidence.data) return apiError('EVIDENCE_NOT_AVAILABLE', 'ไม่พบหลักฐานในขอบเขตที่ได้รับอนุญาต', 404);
-  if (evidence.data.upload_state !== 'STORED' || evidence.data.malware_scan_status !== 'CLEAN') {
-    return apiError('EVIDENCE_NOT_CLEAN', 'ต้องสแกนหลักฐานเป็น CLEAN ก่อนส่งข้อความให้ AI', 409);
+  if (!isEvidenceUsable(evidence.data.upload_state, evidence.data.malware_scan_status)) {
+    return apiError('EVIDENCE_NOT_READY', 'หลักฐานต้องจัดเก็บและตรวจรูปแบบไฟล์ให้สมบูรณ์ก่อนส่งให้ AI', 409);
   }
 
   let base64Image: string | undefined;

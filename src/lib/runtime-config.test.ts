@@ -20,9 +20,6 @@ describe('runtime-config', () => {
     delete process.env.NEXT_PUBLIC_DEMO_MODE;
     delete process.env.SUPABASE_SERVICE_ROLE_KEY;
     delete process.env.PRIVATE_EVIDENCE_BUCKET;
-    delete process.env.MALWARE_SCANNER_URL;
-    delete process.env.MALWARE_SCANNER_TRANSPORT;
-    delete process.env.MALWARE_SCANNER_TOKEN;
     delete process.env.GEMINI_API_KEY;
     delete process.env.N8N_AUTOMATION_WEBHOOK_URL;
     delete process.env.N8N_DISPATCH_TOKEN;
@@ -92,17 +89,8 @@ describe('runtime-config', () => {
     expect(readiness.blockers).toContain('SERVICE_ROLE_NOT_CONFIGURED');
   });
 
-  it('accepts the fixed private VPC scanner endpoint with a strong token', () => {
-    process.env.MALWARE_SCANNER_TRANSPORT = 'vpc';
-    process.env.MALWARE_SCANNER_URL = 'http://scanner-api:8080';
-    process.env.MALWARE_SCANNER_TOKEN = 'a'.repeat(32);
-    expect(getRuntimeReadiness().checks.malwareScanner).toBe(true);
-  });
-
-  it('rejects an arbitrary plaintext endpoint in VPC mode', () => {
-    process.env.MALWARE_SCANNER_TRANSPORT = 'vpc';
-    process.env.MALWARE_SCANNER_URL = 'http://192.168.90.48:18080';
-    process.env.MALWARE_SCANNER_TOKEN = 'a'.repeat(32);
-    expect(getRuntimeReadiness().checks.malwareScanner).toBe(false);
+  it('reports built-in file validation without external scanner configuration', () => {
+    expect(getRuntimeReadiness().checks.fileValidation).toBe(true);
+    expect(getRuntimeReadiness().blockers).not.toContain('MALWARE_SCANNER_NOT_CONFIGURED');
   });
 });

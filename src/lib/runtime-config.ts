@@ -12,24 +12,6 @@ const hasSecureHttpsUrl = (name: string) => {
   }
 };
 
-const hasValidMalwareScannerConfig = () => {
-  if (!hasStrongSecret('MALWARE_SCANNER_TOKEN')) return false;
-  if (process.env.MALWARE_SCANNER_TRANSPORT?.trim() !== 'vpc') {
-    return hasSecureHttpsUrl('MALWARE_SCANNER_URL');
-  }
-  try {
-    const url = new URL(process.env.MALWARE_SCANNER_URL?.trim() || '');
-    return url.protocol === 'http:'
-      && url.hostname === 'scanner-api'
-      && url.port === '8080'
-      && url.pathname === '/'
-      && !url.username
-      && !url.password;
-  } catch {
-    return false;
-  }
-};
-
 export function isSupabaseServerConfigured() {
   return hasValue('NEXT_PUBLIC_SUPABASE_URL') && hasValue('NEXT_PUBLIC_SUPABASE_ANON_KEY');
 }
@@ -51,7 +33,7 @@ export type RuntimeReadiness = {
     supabase: boolean;
     serviceRole: boolean;
     privateEvidenceBucket: boolean;
-    malwareScanner: boolean;
+    fileValidation: boolean;
     gemini: boolean;
     n8nAutomation: boolean;
     kouprey: boolean;
@@ -66,7 +48,7 @@ export function getRuntimeReadiness(): RuntimeReadiness {
     supabase,
     serviceRole: isSupabaseServiceConfigured(),
     privateEvidenceBucket: hasValue('PRIVATE_EVIDENCE_BUCKET'),
-    malwareScanner: hasValidMalwareScannerConfig(),
+    fileValidation: true,
     gemini: hasValue('GEMINI_API_KEY'),
     n8nAutomation: hasSecureHttpsUrl('N8N_AUTOMATION_WEBHOOK_URL')
       && hasStrongSecret('N8N_DISPATCH_TOKEN')
@@ -79,7 +61,6 @@ export function getRuntimeReadiness(): RuntimeReadiness {
   if (!checks.supabase) blockers.push('SUPABASE_NOT_CONFIGURED');
   if (!checks.serviceRole) blockers.push('SERVICE_ROLE_NOT_CONFIGURED');
   if (!checks.privateEvidenceBucket) blockers.push('PRIVATE_BUCKET_NOT_CONFIGURED');
-  if (!checks.malwareScanner) blockers.push('MALWARE_SCANNER_NOT_CONFIGURED');
   if (!checks.n8nAutomation) blockers.push('N8N_AUTOMATION_NOT_CONFIGURED');
   if (!checks.gemini) blockers.push('GEMINI_NOT_CONFIGURED');
 

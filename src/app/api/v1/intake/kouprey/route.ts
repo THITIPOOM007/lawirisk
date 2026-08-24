@@ -107,7 +107,7 @@ export async function POST(request: NextRequest) {
       urgency_reason: payload.urgency_reason || 'นำเข้าจากระบบ Kouprey Plus',
       jurisdiction_region: payload.region || 'เขตสุขภาพที่ 10',
       jurisdiction_agency: payload.agency || 'สสจ.ศรีสะเกษ',
-      malware_scan_status: 'PENDING',
+      malware_scan_status: 'NOT_SCANNED',
       privacy_risk_status: 'PENDING',
       idempotency_key: idempotencyKey,
       created_at: new Date().toISOString(),

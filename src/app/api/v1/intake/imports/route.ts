@@ -62,7 +62,7 @@ export async function POST(request: NextRequest) {
         saveIntakeEnvelope({
           id: envelopeId, channel_id: 'ch-import', status: 'TRIAGE_PENDING', complainant_mode: row.complainant_mode,
           urgency: row.urgency, urgency_reason: row.urgency_reason, jurisdiction_region: row.region,
-          jurisdiction_agency: row.agency, malware_scan_status: 'CLEAN', privacy_risk_status: 'PENDING', created_at: now, updated_at: now,
+          jurisdiction_agency: row.agency, malware_scan_status: 'NOT_SCANNED', privacy_risk_status: 'PENDING', created_at: now, updated_at: now,
         });
         saveIntakeMessage({ id: `msg-${crypto.randomUUID()}`, envelope_id: envelopeId, raw_payload: JSON.stringify({ batch_id: batchId, row_index: row.row_index, document_ref: row.document_ref }) });
       }

@@ -30,7 +30,7 @@ export async function GET(
       reportTitle = `รายงานสรุปคดีสาธิต #${reportId}`;
       caseNumber = 'ค.123/2569';
       reportType = 'SUMMARY';
-      contentText = 'รายงานสรุปข้อมูลคดีจากแหล่งอ้างอิงที่ยืนยันแล้ว (โหมดสาธิต)\n- หลักฐาน fb_ad_screenshot.png | SHA-256 89504E47... | สแกน CLEAN\n- PERSON: นางสาวปนัดดา คำนนท์\n- PHONE: 062-4149791';
+      contentText = 'รายงานสรุปข้อมูลคดีจากแหล่งอ้างอิงที่ยืนยันแล้ว (โหมดสาธิต)\n- หลักฐาน fb_ad_screenshot.png | SHA-256 89504E47... | ตรวจรูปแบบแล้ว\n- PERSON: นางสาวปนัดดา คำนนท์\n- PHONE: 062-4149791';
       snapshotHash = crypto.createHash('sha256').update(contentText).digest('hex');
     } else {
       const supabase = await createServer();

@@ -104,7 +104,7 @@ export default function IntakeDetailPage() {
         return;
       }
 
-      setUploadStatus('กำลังส่งไฟล์ขึ้นระบบและรัน Malware Scanner...');
+      setUploadStatus('กำลังส่งไฟล์ขึ้นพื้นที่ส่วนตัวและตรวจรูปแบบไฟล์...');
       const formData = new FormData();
       formData.set('file', file);
 
@@ -416,10 +416,15 @@ export default function IntakeDetailPage() {
                             <ShieldAlert className="h-3.5 w-3.5 mr-1" />
                             ไฟล์ไม่ปลอดภัย
                           </span>
-                        ) : (
+                        ) : att.malware_scan_status === 'CLEAN' ? (
                           <span className="inline-flex items-center px-2.5 py-1 border border-emerald-500/20 bg-emerald-500/5 text-emerald-400 rounded-xl text-[10px] font-semibold">
                             <ShieldCheck className="h-3.5 w-3.5 mr-1" />
-                            ปลอดภัย (Clean)
+                            สแกนแล้ว (เดิม)
+                          </span>
+                        ) : (
+                          <span className="inline-flex items-center px-2.5 py-1 border border-cyan-500/20 bg-cyan-500/5 text-cyan-300 rounded-xl text-[10px] font-semibold">
+                            <ShieldCheck className="h-3.5 w-3.5 mr-1" />
+                            ตรวจรูปแบบไฟล์แล้ว
                           </span>
                         )}
                       </div>

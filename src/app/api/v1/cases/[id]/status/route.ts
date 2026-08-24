@@ -4,6 +4,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { z } from 'zod';
 import { authorizeStaff } from '@/lib/api-auth';
 import { apiError, authError, requestId } from '@/lib/api-errors';
+import { isEvidenceUsable } from '@/lib/evidence-file-status';
 import { consumeRateLimit } from '@/lib/rate-limit';
 import { CASE_WRITE_ROLES, ADMIN_ROLES } from '@/lib/roles';
 import { createServer } from '@/lib/supabase-server';
@@ -104,15 +105,15 @@ export async function PATCH(
     if (status === 'CLOSED' && caseData.status !== 'CLOSED') {
       const blockers: string[] = [];
 
-      // Gate 1: All evidence must be STORED and CLEAN
+      // Gate 1: All evidence must be stored and pass structural validation.
       const { data: evidenceFiles, error: evidenceError } = await supabase
         .from('evidence_files')
         .select('id, upload_state, malware_scan_status')
         .eq('case_id', caseId);
 
       if (!evidenceError && evidenceFiles) {
-        const notClean = evidenceFiles.some((f) => f.upload_state !== 'STORED' || f.malware_scan_status !== 'CLEAN');
-        if (notClean) blockers.push('EVIDENCE_NOT_CLEAN');
+        const notReady = evidenceFiles.some((f) => !isEvidenceUsable(f.upload_state, f.malware_scan_status));
+        if (notReady) blockers.push('EVIDENCE_NOT_READY');
       }
 
       // Gate 2: No pending suggestions
@@ -183,4 +184,3 @@ export async function PATCH(
     return apiError('INTERNAL_ERROR', 'เกิดข้อผิดพลาดในการเปลี่ยนสถานะสำนวน', 500, traceId);
   }
 }
-

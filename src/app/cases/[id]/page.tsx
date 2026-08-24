@@ -23,6 +23,7 @@ import {
   XCircle,
 } from 'lucide-react';
 import type { Case, EvidenceFile } from '@/lib/demo-data';
+import { evidenceSafetyLabel, isEvidenceUsable } from '@/lib/evidence-file-status';
 
 type CaseMember = {
   id: string;
@@ -39,7 +40,7 @@ type CaseMember = {
 };
 
 const CLOSURE_GATE_LABELS: Record<string, string> = {
-  EVIDENCE_NOT_CLEAN: 'ไฟล์หลักฐานทั้งหมดต้องอยู่ในสถานะ STORED และผ่านการสแกนไวรัส (CLEAN)',
+  EVIDENCE_NOT_READY: 'ไฟล์หลักฐานทั้งหมดต้องจัดเก็บและตรวจรูปแบบไฟล์ให้สมบูรณ์',
   PENDING_SUGGESTIONS: 'ต้องไม่มีข้อเสนอ Entity ที่รอการตรวจทาน (SUGGESTED)',
   PENDING_MATCHES: 'ต้องไม่มีความเชื่อมโยงข้ามคดีที่รอการตรวจสอบ (PENDING)',
   ACTIVE_AUTOMATION: 'ต้องไม่มีงานดึงข้อความอัตโนมัติที่กำลังทำงานอยู่ (QUEUED/DISPATCHED/RUNNING)',
@@ -416,7 +417,7 @@ export default function CaseDetailsPage() {
         <div className="mt-5 space-y-3">
           {evidence.length ? (
             evidence.map((item) => {
-              const downloadable = item.upload_state === 'STORED' && item.malware_scan_status === 'CLEAN';
+              const downloadable = isEvidenceUsable(item.upload_state, item.malware_scan_status);
               return (
                 <article key={item.id} className="grid gap-4 rounded-2xl border border-slate-900 bg-slate-950/50 p-4 md:grid-cols-[minmax(0,1fr)_auto] md:items-center">
                   <div className="min-w-0">
@@ -427,8 +428,8 @@ export default function CaseDetailsPage() {
                     <p className="mt-2 break-all font-mono text-[10px] text-slate-600">SHA-256 {item.sha256}</p>
                     <div className="mt-2 flex flex-wrap gap-2 text-[10px]">
                       <span className="rounded-md border border-slate-800 px-2 py-1 text-slate-400">{item.upload_state || 'UNKNOWN'}</span>
-                      <span className={`rounded-md border px-2 py-1 ${item.malware_scan_status === 'CLEAN' ? 'border-emerald-500/20 text-emerald-300' : 'border-amber-500/20 text-amber-200'}`}>
-                        SCAN {item.malware_scan_status || 'UNKNOWN'}
+                      <span className={`rounded-md border px-2 py-1 ${downloadable ? 'border-emerald-500/20 text-emerald-300' : 'border-amber-500/20 text-amber-200'}`}>
+                        {evidenceSafetyLabel(item.malware_scan_status)}
                       </span>
                     </div>
                   </div>

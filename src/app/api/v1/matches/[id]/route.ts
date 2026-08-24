@@ -27,7 +27,7 @@ export async function PATCH(request: NextRequest, { params }: { params: Promise<
   });
   if (error) {
     const messages: Record<string, string> = {
-      MATCH_SOURCE_REQUIRED: 'ยืนยันไม่ได้เพราะยังไม่มีแหล่งอ้างอิงจากหลักฐานที่สแกนเป็น CLEAN',
+      MATCH_SOURCE_REQUIRED: 'ยืนยันไม่ได้เพราะยังไม่มีแหล่งอ้างอิงจากหลักฐานที่จัดเก็บและตรวจรูปแบบแล้ว',
       PERSON_NAME_ONLY_MATCH_FORBIDDEN: 'ห้ามยืนยันจากชื่อบุคคลเพียงอย่างเดียว ต้องมีสัญญาณสมทบ',
       MATCH_NOT_REVIEWABLE: 'รายการนี้ถูกตรวจทานแล้วหรือคุณไม่มีสิทธิ์เข้าถึง',
     };

@@ -10,28 +10,27 @@
 - Worker ที่ไม่มี secret ตอบ health 503 และ redirect หน้าป้องกันไป login แบบ fail closed
 - security headers, private signed download, shared rate limit, Origin check, immutable evidence/audit, human review, source snapshot และ transactional CSV import มี implementation แล้ว
 - Passkey รองรับ enrollment, passwordless login, device revocation และ biometric step-up โดยเก็บเฉพาะ FIDO2 public key/counter ไม่เก็บภาพใบหน้าหรือลายนิ้วมือ
-- Evidence intake รองรับ drag/drop หลายไฟล์และกล้องมือถือ; Vision OCR อ่านภาพ/PDF ที่เป็น `STORED/CLEAN` และทุกผลยังคงเป็น `SUGGESTED` รอมนุษย์รับรอง
+- Evidence intake รองรับ drag/drop หลายไฟล์และกล้องมือถือ; Vision OCR อ่านภาพ/PDF ที่เป็น `STORED/CLEAN` เดิมหรือ `STORED/NOT_SCANNED` และทุกผลยังคงเป็น `SUGGESTED` รอมนุษย์รับรอง
 
 ยังห้ามใช้ข้อมูลจริงจนกว่า live gates ด้านล่างจะผ่านและมีผู้รับผิดชอบลงนาม
 
 ## สิ่งที่เจ้าของโครงการต้องเตรียมเพื่อเริ่ม staging
 
-เตรียม 5 เรื่องนี้ก่อน แล้วทีมเทคนิคจะเดิน live gates ต่อได้โดยไม่ต้องส่ง secret ผ่านแชต:
+เตรียม 4 เรื่องนี้ก่อน แล้วทีมเทคนิคจะเดิน live gates ต่อได้โดยไม่ต้องส่ง secret ผ่านแชต:
 
 1. **Supabase:** สร้าง project สำหรับ staging แยกจาก production, ระบุผู้ดูแล DB และเปิดสิทธิ์ให้ผู้ทำ migration; นำ URL/key ไปใส่ใน secret manager ของ staging โดยตรง
 2. **Cloudflare:** เตรียมบัญชี/zone, subdomain สำหรับ staging และผู้ที่มีสิทธิ์ deploy Worker กับตั้ง secret
-3. **Malware scanner:** ระบุ service endpoint, token และผู้รับผิดชอบ incident; service ต้องผ่าน clean/EICAR/timeout/invalid-response tests
-4. **นโยบายข้อมูล:** ยืนยัน data residency, ระยะเก็บหลักฐานและ audit, ผู้อนุมัติสิทธิ์, backup/PITR และช่องทางแจ้งเหตุ
-5. **บัญชีทดสอบ:** เตรียมผู้ใช้ทดสอบอย่างน้อย ADMIN, INVESTIGATOR สองคนที่เห็นคนละคดี, REVIEWER และ VIEWER
+3. **นโยบายข้อมูล:** ยืนยัน data residency, ระยะเก็บหลักฐานและ audit, ผู้อนุมัติสิทธิ์, backup/PITR และช่องทางแจ้งเหตุ
+4. **บัญชีทดสอบ:** เตรียมผู้ใช้ทดสอบอย่างน้อย ADMIN, INVESTIGATOR สองคนที่เห็นคนละคดี, REVIEWER และ VIEWER
 
-ห้ามส่ง `SUPABASE_SERVICE_ROLE_KEY`, scanner token, partner key หรือ secret ใด ๆ ในแชต/อีเมล ให้ผู้มีสิทธิ์กรอกใน Supabase/Cloudflare secret manager หรือไฟล์ local ที่ไม่ถูก commit เท่านั้น หลังเตรียมครบให้แจ้งเฉพาะว่า “พร้อม” พร้อมชื่อ staging domain และรายชื่อผู้รับผิดชอบแต่ละส่วน
+ห้ามส่ง `SUPABASE_SERVICE_ROLE_KEY`, partner key หรือ secret ใด ๆ ในแชต/อีเมล ให้ผู้มีสิทธิ์กรอกใน Supabase/Cloudflare secret manager หรือไฟล์ local ที่ไม่ถูก commit เท่านั้น
 
 ## Automation ที่เตรียมไว้แล้ว
 
 - Supabase CLI และ local configuration: `pnpm exec supabase --version`
 - ตรวจ migration ก่อน apply: `pnpm supabase:migrate:dry`
 - ตรวจค่าระบบโดยไม่ยิง network: `pnpm staging:preflight`
-- ตรวจ Supabase/scanner/health จริง: `pnpm staging:preflight:network`
+- ตรวจ Supabase/health จริง: `pnpm staging:preflight:network`
 - ตรวจแผนบัญชี 5 บทบาท: `pnpm staging:users:plan`
 - ส่ง invitation และกำหนด role หลังแก้ `ops/staging-users.json`: `pnpm staging:users:apply`
 - ทดสอบ Cloudflare deployment โดยไม่ deploy: `pnpm exec vinext-cloudflare deploy --env staging --dry-run`
@@ -47,7 +46,6 @@
 | `NEXT_PUBLIC_SUPABASE_ANON_KEY` | Supabase project | เปิดเผยฝั่ง browserได้; RLS ต้องคุมสิทธิ์ |
 | `SUPABASE_SERVICE_ROLE_KEY` | ผู้ดูแล secret | server-only; ห้ามใส่ Git/`NEXT_PUBLIC_*` |
 | `PRIVATE_EVIDENCE_BUCKET` | ผู้ดูแล Supabase | ใช้ `evidence-vault`; ต้อง private |
-| `MALWARE_SCANNER_URL/TOKEN` | ทีม security | multipart `file`; strict JSON ตาม `.env.example` |
 | `APP_ORIGIN` | ทีมโดเมน | origin จริง เช่น `https://evidence.example.go.th` |
 | `KOUPREY_SECRET_KEY` | เจ้าของ Kouprey | long random shared secret; วางแผน rotation |
 | `PARTNER_API_KEYS` | เจ้าของ integrations | JSON map partner id → long random bearer key |
@@ -64,9 +62,9 @@
    - Investigator A อ่าน case B ไม่ได้
    - VIEWER/REVIEWER เขียน case/evidence/import ไม่ได้
    - direct insert evidence ถูกปฏิเสธ; member upload ผ่าน reserve/finalize RPC ได้
-   - signed URL ออกได้เฉพาะ member และหลักฐาน `STORED/CLEAN`
+   - signed URL ออกได้เฉพาะ member และหลักฐาน `STORED/CLEAN` เดิมหรือ `STORED/NOT_SCANNED`
    - audit update/delete และ stored evidence delete ถูกปฏิเสธ
-   - suggestion จากหลักฐานไม่ clean ยืนยันไม่ได้
+   - suggestion จากหลักฐานที่ยังไม่พร้อมใช้งานยืนยันไม่ได้
    - ลงทะเบียน/ล็อกอิน/เพิกถอน Passkey ได้จริงบน Windows Hello, Face ID/Touch ID และ security key อย่างน้อยสองชนิด พร้อมตรวจ counter replay และ Audit Log
    - PERSON match ที่อาศัยชื่ออย่างเดียวถูกปฏิเสธ
    - report ที่ไม่มี source mention/reference ถูกปฏิเสธ
@@ -75,15 +73,9 @@
 
 เครื่องที่ทำ audit ครั้งนี้มี Supabase CLI แต่ไม่มี Docker, linked staging project หรือ credentials จึงยังไม่ได้พิสูจน์ migration/RLS กับ PostgreSQL จริง จุดนี้เป็น release blocker
 
-## Malware scanner gate
+## File validation gate
 
-เส้นทางจริงต้องใช้ `POST /scan-reference` รับ signed private URL + expected size/SHA-256/MIME และสตรีมไฟล์สูงสุด 200 MB โดย allowlist เฉพาะ Supabase HTTPS hostname ผลตอบกลับต้องเป็น:
-
-```json
-{"verdict":"CLEAN","scanner":"product-name","signature_version":"version","sha256":"64-lowercase-hex","size_bytes":1234,"detected_mime":"application/pdf"}
-```
-
-ยืนยันว่า Supabase organization เป็น Pro ขึ้นไป (Free จำกัดไฟล์ 50 MB) แล้วตั้ง global และ bucket limit ไม่น้อยกว่า 200 MB, ใช้ TUS signed upload จาก browser และตั้ง scanner timeout 180 วินาที ทดสอบ clean 200 MB, EICAR fixture, hash/size/magic mismatch, SSRF/redirect, timeout, 5xx และ invalid JSON ผลทุกกรณีที่ไม่ใช่ `CLEAN` ต้องเปิด/ประมวลผลไฟล์ไม่ได้ จากนั้นกำหนด retention/quarantine และ incident procedure กับทีม security
+ยืนยันว่า Supabase organization และ global upload limit รองรับไฟล์ 200 MB, bucket `evidence-vault` จำกัดไม่เกิน 200 MB และยังเป็น private จากนั้นทดสอบ TUS resume, ขนาด 0/เกิน 200 MB, extension/MIME/magic-byte mismatch, object หาย, range request ล้มเหลว และไฟล์ 200 MB จริง สถานะใหม่ต้องเป็น `NOT_SCANNED` อย่างตรงไปตรงมา ไม่แสดงว่า CLEAN
 
 ## Cloudflare gates
 
@@ -98,7 +90,7 @@ vinext ใช้ Workers Cache, ไม่ใช้ Data Cache/KV และไม
 
 ## External capability still requiring a decision
 
-- Gemini text/Vision extraction เชื่อมผ่าน route ฝั่งเซิร์ฟเวอร์แล้ว: ถ้ามีข้อความจะวิเคราะห์ข้อความนั้น ถ้าเว้นว่างจะดาวน์โหลดต้นฉบับภาพ/PDF ที่เป็น `STORED/CLEAN` จาก private bucket เพื่อทำ Vision OCR ตรวจผลด้วย schema และบันทึกเป็น `SUGGESTED`; งาน batch/background ใช้ automation job/n8n contract ที่มีอยู่ ส่วน demo ใช้ deterministic fixture ที่ติดป้ายชัดและไม่เรียก provider ภายนอก ยังต้องสรุป data residency, DPA, retention และ evaluation set ก่อนเปิด Gemini กับข้อมูลจริง
+- Gemini text/Vision extraction เชื่อมผ่าน route ฝั่งเซิร์ฟเวอร์แล้ว: ถ้ามีข้อความจะวิเคราะห์ข้อความนั้น ถ้าเว้นว่างจะดาวน์โหลดต้นฉบับภาพ/PDF ที่พร้อมใช้งานจาก private bucket เพื่อทำ Vision OCR ตรวจผลด้วย schema และบันทึกเป็น `SUGGESTED`; งาน batch/background ใช้ automation job/n8n contract ที่มีอยู่ ส่วน demo ใช้ deterministic fixtureที่ติดป้ายชัดและไม่เรียก provider ภายนอก ยังต้องสรุป data residency, DPA, retention และ evaluation set ก่อนเปิด Gemini กับข้อมูลจริง
 - Kouprey/Partner endpoints พร้อม contract แต่ต้องมี production key, partner test fixture และการซ้อม key rotation/replay response
 - Email ingestion ไม่มี SMTP/mail provider เชื่อมจริง จึงยังไม่ควรประกาศช่องทางอีเมลว่าเปิดใช้งาน
 - FDA SKYNET/Privus เปิดใช้ในโหมด manual-only ผ่าน stable HTTPS entry point; ไม่เก็บ eGov credential/callback URL และต้องนำ official export กลับเข้า Evidence Intake

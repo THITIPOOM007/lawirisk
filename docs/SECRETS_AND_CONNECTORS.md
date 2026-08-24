@@ -19,18 +19,14 @@ server-side provider adapter.
 
 ## Cloudflare staging
 
-Set every required secret interactively so the value is not placed in shell history. At minimum, configure the scanner and provider secrets before deployment:
+Set every required secret interactively so the value is not placed in shell history. Configure provider secrets before deployment:
 
 ```powershell
-pnpm exec wrangler secret put MALWARE_SCANNER_URL --env staging
-pnpm exec wrangler secret put MALWARE_SCANNER_TOKEN --env staging
 pnpm exec wrangler secret put GEMINI_API_KEY --env staging
 pnpm exec wrangler secret put N8N_AUTOMATION_WEBHOOK_URL --env staging
 pnpm exec wrangler secret put N8N_DISPATCH_TOKEN --env staging
 pnpm exec wrangler secret put N8N_CALLBACK_TOKEN --env staging
 ```
-
-`MALWARE_SCANNER_URL` ให้ใส่ HTTPS origin ของ tunnel (ใส่ `/scan` ต่อท้ายก็ได้ ระบบจะเลือก `/scan-reference` สำหรับไฟล์จริงเอง) และตั้ง `MALWARE_SCANNER_TIMEOUT_MS=180000` เป็น Worker var สำหรับไฟล์สูงสุด 200 MB ห้ามส่ง signed Storage URL หรือ scanner token ไปยัง browser/log
 
 The renamed staging Worker is `lawirisk-ssk`, so its expected workers.dev URL
 after a successful deployment is:

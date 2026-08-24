@@ -17,9 +17,9 @@ type ReportRecord = {
 
 type ReportReadiness = {
   eligible: boolean;
-  code: 'READY' | 'CLEAN_EVIDENCE_REQUIRED' | 'VERIFIED_SOURCE_REQUIRED' | 'FORBIDDEN' | 'READINESS_FAILED';
+  code: 'READY' | 'USABLE_EVIDENCE_REQUIRED' | 'VERIFIED_SOURCE_REQUIRED' | 'FORBIDDEN' | 'READINESS_FAILED';
   message: string;
-  clean_evidence_count?: number;
+  usable_evidence_count?: number;
   source_mention_count?: number;
   relationship_reference_count?: number;
 };
@@ -171,7 +171,7 @@ export default function ReportsPage() {
                     <div className="min-w-0">
                       <p className={`text-xs font-bold ${readiness.eligible ? 'text-emerald-200' : 'text-amber-200'}`}>{readiness.eligible ? 'พร้อมสร้างรายงาน' : 'ยังสร้างรายงานไม่ได้'}</p>
                       <p className="mt-1 text-[11px] leading-5 text-slate-400">{readiness.message}</p>
-                      {!readiness.eligible && readiness.code === 'CLEAN_EVIDENCE_REQUIRED' && <Link href="/evidence" className="mt-2 inline-flex text-[11px] font-bold text-teal-300 hover:underline">ไปอัปโหลดและตรวจหลักฐาน →</Link>}
+                      {!readiness.eligible && readiness.code === 'USABLE_EVIDENCE_REQUIRED' && <Link href="/evidence" className="mt-2 inline-flex text-[11px] font-bold text-teal-300 hover:underline">ไปอัปโหลดและตรวจหลักฐาน →</Link>}
                       {!readiness.eligible && readiness.code === 'VERIFIED_SOURCE_REQUIRED' && <Link href="/review" className="mt-2 inline-flex text-[11px] font-bold text-teal-300 hover:underline">ไปสกัดข้อมูลและตรวจทาน →</Link>}
                     </div>
                   </div>

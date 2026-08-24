@@ -68,7 +68,7 @@ export default function PublicPortalPage() {
   const [fileError, setFileError] = useState('');
   const [isSubmittingComplaint, setIsSubmittingComplaint] = useState(false);
   const [complaintSuccessToken, setComplaintSuccessToken] = useState('');
-  const [complaintScanStatus, setComplaintScanStatus] = useState<string | null>(null);
+  const [complaintValidationStatus, setComplaintValidationStatus] = useState<string | null>(null);
   const [complaintError, setComplaintError] = useState('');
 
   // Tracking State
@@ -164,7 +164,7 @@ export default function PublicPortalPage() {
       const body = await res.json();
       if (!res.ok) throw new Error(typeof body.error === 'string' ? body.error : body.error?.message || 'บันทึกคำร้องไม่สำเร็จ');
       setComplaintSuccessToken(body.data.trackingToken);
-      setComplaintScanStatus(typeof body.data.attachmentScanStatus === 'string' ? body.data.attachmentScanStatus : null);
+      setComplaintValidationStatus(typeof body.data.attachmentValidationStatus === 'string' ? body.data.attachmentValidationStatus : null);
       setTopic('');
       setDescription('');
       setComplainantName('');
@@ -414,10 +414,10 @@ export default function PublicPortalPage() {
                 </div>
                 <h3 className="text-xl font-bold text-white">บันทึกเรื่องร้องเรียนเรียบร้อยแล้ว</h3>
                 <p className="text-xs text-slate-300 max-w-md mx-auto">
-                  {complaintScanStatus === 'CLEAN'
-                    ? 'รับข้อมูลและจัดเก็บไฟล์ในคลังส่วนตัวแล้ว ผลสแกนความปลอดภัยเป็น CLEAN'
-                    : complaintScanStatus
-                      ? `รับข้อมูลและจัดเก็บไฟล์แล้ว ผลสแกนปัจจุบันคือ ${complaintScanStatus} จึงยังไม่นำไฟล์ไปประมวลผล`
+                  {complaintValidationStatus === 'VALIDATED'
+                    ? 'รับข้อมูล จัดเก็บไฟล์ในคลังส่วนตัว และตรวจรูปแบบไฟล์แล้ว'
+                    : complaintValidationStatus
+                      ? `รับข้อมูลและจัดเก็บไฟล์แล้ว สถานะการตรวจไฟล์คือ ${complaintValidationStatus}`
                       : 'รับข้อมูลคำร้องเข้าสู่ระบบแล้ว เจ้าหน้าที่จะดำเนินการคัดกรองตามขั้นตอนต่อไป'}
                 </p>
                 <div className="p-4 bg-slate-950 border border-white/[0.1] rounded-2xl inline-block">
@@ -429,7 +429,7 @@ export default function PublicPortalPage() {
                     type="button"
                     onClick={() => {
                       setComplaintSuccessToken('');
-                      setComplaintScanStatus(null);
+                      setComplaintValidationStatus(null);
                       setActiveTab('TRACK');
                       setTrackTokenInput(complaintSuccessToken);
                     }}
@@ -709,7 +709,7 @@ export default function PublicPortalPage() {
                     1. รับเรื่องในระบบ
                   </div>
                   <div className={`p-3 rounded-xl border ${trackingResult.progressStep >= 2 ? 'border-teal-400 bg-teal-950/40 text-teal-300 font-bold' : 'border-white/[0.05] text-slate-600'}`}>
-                    2. สแกน & คัดกรอง
+                    2. ตรวจไฟล์ & คัดกรอง
                   </div>
                   <div className={`p-3 rounded-xl border ${trackingResult.progressStep >= 3 ? 'border-teal-400 bg-teal-950/40 text-teal-300 font-bold' : 'border-white/[0.05] text-slate-600'}`}>
                     3. บรรจุเข้าสำนวนคดี

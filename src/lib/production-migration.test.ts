@@ -7,6 +7,7 @@ const geminiMigration = fs.readFileSync(path.join(process.cwd(), 'supabase/migra
 const automationMigration = fs.readFileSync(path.join(process.cwd(), 'supabase/migrations/202608190002_n8n_automation.sql'), 'utf8');
 const manualIntakeMigration = fs.readFileSync(path.join(process.cwd(), 'supabase/migrations/202608240001_manual_intake_scan_readiness.sql'), 'utf8');
 const largeEvidenceMigration = fs.readFileSync(path.join(process.cwd(), 'supabase/migrations/202608240002_evidence_upload_200mb.sql'), 'utf8');
+const scannerRemovalMigration = fs.readFileSync(path.join(process.cwd(), 'supabase/migrations/202608240003_remove_scanner_dependency.sql'), 'utf8');
 
 describe('production migration invariants', () => {
   it('makes evidence originals and audit history immutable', () => {
@@ -64,5 +65,14 @@ describe('production migration invariants', () => {
     expect(largeEvidenceMigration).toContain("record.upload_state <> 'RESERVED'");
     expect(largeEvidenceMigration).toContain("'EVIDENCE_UPLOAD_CANCELLED'");
     expect(largeEvidenceMigration).toContain('REVOKE ALL ON FUNCTION public.finalize_evidence_upload');
+  });
+
+  it('removes the scanner dependency without claiming new files are clean', () => {
+    expect(scannerRemovalMigration).toContain("malware_scan_status = 'NOT_SCANNED'");
+    expect(scannerRemovalMigration).toContain('FILE_VALIDATION_ONLY');
+    expect(scannerRemovalMigration).toContain('validate');
+    expect(scannerRemovalMigration).toContain("legacy_infected_files_preserved', true");
+    expect(scannerRemovalMigration).toContain("IN ('CLEAN', 'NOT_SCANNED')");
+    expect(scannerRemovalMigration).not.toContain("SET malware_scan_status = 'CLEAN'");
   });
 });

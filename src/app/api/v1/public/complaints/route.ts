@@ -4,7 +4,7 @@ import { z } from 'zod';
 import { saveIntakeEnvelope, saveIntakeMessage, saveIntakeParticipant, saveIntakeAttachment } from '@/lib/demo-data';
 import { isDemoServerEnabled, isSupabaseServiceConfigured } from '@/lib/runtime-config';
 import { createServiceClient } from '@/lib/supabase-server';
-import { scanEvidenceFile } from '@/lib/malware-scanner';
+import { UNSCANNED_EVIDENCE_STATUS } from '@/lib/evidence-file-status';
 import { consumeRateLimit } from '@/lib/rate-limit';
 import { hasTrustedBrowserOrigin } from '@/lib/request-security';
 
@@ -152,15 +152,13 @@ export async function POST(request: NextRequest) {
       fileExtension = ext === 'jpeg' ? 'jpg' : ext;
     }
 
-    const attachmentScan = attachedFile ? await scanEvidenceFile(attachedFile) : null;
-
     // Generate Public Tracking Token (e.g. TRK-2026-AB12CD)
     const randomCode = crypto.randomBytes(6).toString('hex').toUpperCase();
     const trackingToken = `TRK-${new Date().getFullYear()}-${randomCode}`;
     const envelopeId = crypto.randomUUID();
     const now = new Date().toISOString();
     const urgency = category === 'HEALTH_HAZARD' || category === 'ONLINE_FRAUD' ? 'HIGH' : 'NORMAL';
-    const intakeStatus = attachedFile && attachmentScan?.status !== 'CLEAN' ? 'QUARANTINED' : 'TRIAGE_PENDING';
+    const intakeStatus = 'TRIAGE_PENDING';
 
     if (!hasSupabase) {
       saveIntakeEnvelope({
@@ -171,7 +169,7 @@ export async function POST(request: NextRequest) {
         urgency,
         urgency_reason: `[ประชาชนแจ้งเรื่อง: ${trackingToken}] ${topic}: ${description.slice(0, 200)}`,
         jurisdiction_region: region || 'ส่วนกลาง',
-        malware_scan_status: attachmentScan?.status || 'CLEAN',
+        malware_scan_status: UNSCANNED_EVIDENCE_STATUS,
         privacy_risk_status: isAnonymous ? 'LOW' : 'MEDIUM',
         created_at: now,
         updated_at: now,
@@ -213,7 +211,7 @@ export async function POST(request: NextRequest) {
           mime_type: fileMime,
           sha256: fileSha256,
           storage_path: `intake/${envelopeId}/${crypto.randomUUID()}.${fileExtension}`,
-          malware_scan_status: attachmentScan?.status || 'PENDING',
+          malware_scan_status: UNSCANNED_EVIDENCE_STATUS,
         });
       }
     } else {
@@ -236,7 +234,7 @@ export async function POST(request: NextRequest) {
         urgency,
         urgency_reason: `[ประชาชนแจ้งเรื่อง: ${trackingToken}] ${topic}: ${description.slice(0, 200)}`,
         jurisdiction_region: region || 'ส่วนกลาง',
-        malware_scan_status: attachmentScan?.status || 'CLEAN',
+        malware_scan_status: UNSCANNED_EVIDENCE_STATUS,
         privacy_risk_status: isAnonymous ? 'LOW' : 'MEDIUM',
       });
       if (envelopeError) throw envelopeError;
@@ -304,13 +302,6 @@ export async function POST(request: NextRequest) {
         } else {
           uploadedStoragePath = storagePath;
           uploadedBucketName = bucketName;
-          const scanStatus = attachmentScan?.status || 'UNAVAILABLE';
-          const scanDetails = attachmentScan && 'reason' in attachmentScan
-            ? { reason: attachmentScan.reason }
-            : attachmentScan
-              ? { scanner: attachmentScan.scanner, signature_version: attachmentScan.signatureVersion }
-              : { reason: 'SCANNER_NOT_RUN' };
-
           const { error: attachmentError } = await supabase.from('intake_attachments').insert({
             id: attachmentId,
             envelope_id: envelopeId,
@@ -319,8 +310,9 @@ export async function POST(request: NextRequest) {
             mime_type: fileMime,
             sha256: fileSha256,
             storage_path: storagePath,
-            malware_scan_status: scanStatus,
-            malware_scan_details: scanDetails,
+            malware_scan_status: UNSCANNED_EVIDENCE_STATUS,
+            file_validation_details: { mode: 'FILE_VALIDATION_ONLY', signature_verified: true, sha256_source: 'SERVER_COMPUTED' },
+            file_validated_at: new Date().toISOString(),
           });
           if (attachmentError) {
             await supabase.storage.from(bucketName).remove([storagePath]);
@@ -340,7 +332,7 @@ export async function POST(request: NextRequest) {
           envelope_id: envelopeId,
           tracking_token: trackingToken,
           has_attachment: Boolean(attachedFile),
-          scan_status: attachmentScan?.status || 'NOT_APPLICABLE',
+          file_validation_status: attachedFile ? 'VALIDATED' : 'NOT_APPLICABLE',
         },
       });
       if (auditError) {
@@ -360,15 +352,13 @@ export async function POST(request: NextRequest) {
         success: true,
         data: {
           trackingToken,
-          message: attachmentScan?.status === 'CLEAN'
-            ? 'บันทึกเรื่องร้องเรียนและไฟล์ที่ผ่านผลสแกน CLEAN แล้ว'
-            : attachedFile
-              ? 'บันทึกเรื่องร้องเรียนและจัดเก็บไฟล์แล้ว แต่ไฟล์ยังไม่ผ่านผลสแกน CLEAN จึงยังไม่ถูกนำไปประมวลผล'
-              : 'บันทึกเรื่องร้องเรียนแล้ว เจ้าหน้าที่จะดำเนินการคัดกรองต่อไป',
+          message: attachedFile
+            ? 'บันทึกเรื่องร้องเรียนและตรวจรูปแบบไฟล์แนบแล้ว เจ้าหน้าที่สามารถคัดกรองต่อได้'
+            : 'บันทึกเรื่องร้องเรียนแล้ว เจ้าหน้าที่จะดำเนินการคัดกรองต่อไป',
           receivedAt: now,
           status: intakeStatus,
           hasAttachment: Boolean(attachedFile),
-          attachmentScanStatus: attachmentScan?.status || null,
+          attachmentValidationStatus: attachedFile ? 'VALIDATED' : null,
         },
       },
       { status: 201 },

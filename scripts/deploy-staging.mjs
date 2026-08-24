@@ -4,7 +4,6 @@ const projectRef = process.env.SUPABASE_PROJECT_REF?.trim() || 'keenndeevrwmembp
 const requiredCloudflareSecrets = [
   'APP_ORIGIN',
   'GEMINI_API_KEY',
-  'MALWARE_SCANNER_TOKEN',
   'N8N_AUTOMATION_WEBHOOK_URL',
   'N8N_CALLBACK_TOKEN',
   'N8N_DISPATCH_TOKEN',

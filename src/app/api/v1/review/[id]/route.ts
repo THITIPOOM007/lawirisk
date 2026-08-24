@@ -54,7 +54,7 @@ export async function PATCH(request: NextRequest, { params }: { params: Promise<
   });
   if (error) {
     const messages: Record<string, string> = {
-      SUGGESTION_SOURCE_NOT_CLEAN: 'ยังยืนยันไม่ได้จนกว่าหลักฐานต้นทางจะสแกนเป็น CLEAN',
+      SUGGESTION_SOURCE_NOT_CLEAN: 'ยังยืนยันไม่ได้จนกว่าหลักฐานต้นทางจะจัดเก็บและตรวจรูปแบบสมบูรณ์',
       SUGGESTION_NOT_REVIEWABLE: 'ข้อเสนอนี้ถูกตรวจทานแล้วหรือคุณไม่มีสิทธิ์เข้าถึง',
     };
     const response = apiError(error.message, messages[error.message] || 'บันทึกผลตรวจทานไม่สำเร็จ', 409);

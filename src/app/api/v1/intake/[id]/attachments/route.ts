@@ -3,10 +3,10 @@ import { NextRequest, NextResponse } from 'next/server';
 import { z } from 'zod';
 import { authorizeStaff } from '@/lib/api-auth';
 import { apiError, authError, requestId } from '@/lib/api-errors';
-import { scanEvidenceFile } from '@/lib/malware-scanner';
+import { UNSCANNED_EVIDENCE_STATUS } from '@/lib/evidence-file-status';
 import { consumeRateLimit } from '@/lib/rate-limit';
 import { INTAKE_WRITE_ROLES } from '@/lib/roles';
-import { createServer, createServiceClient } from '@/lib/supabase-server';
+import { createServer } from '@/lib/supabase-server';
 import { hasTrustedBrowserOrigin } from '@/lib/request-security';
 
 const MAX_FILE_SIZE = 20 * 1024 * 1024;
@@ -70,14 +70,11 @@ export async function POST(
       return apiError('FILE_SIGNATURE_MISMATCH', 'โครงสร้างไฟล์ไม่ตรงกับชนิดที่ระบุ', 400, traceId);
     }
     const sha256 = crypto.createHash('sha256').update(buffer).digest('hex');
-    const scan = await scanEvidenceFile(file); // Reusing the same scanner function
 
     if (auth.identity.mode === 'demo') {
       return NextResponse.json({
         success: true,
-        message: scan.status === 'CLEAN'
-          ? 'รับไฟล์ในโหมดสาธิตและสแกนแล้ว'
-          : 'รับไฟล์ในโหมดสาธิตแล้ว แต่ยังไม่ถือว่าปลอดภัย',
+        message: 'รับไฟล์ในโหมดสาธิตและตรวจรูปแบบไฟล์แล้ว',
         data: {
           id: `att-${crypto.randomUUID()}`,
           envelope_id: envelopeId,
@@ -85,9 +82,9 @@ export async function POST(
           file_size: file.size,
           mime_type: rule.mime,
           sha256,
-          status: scan.status === 'INFECTED' ? 'FAILED' : 'PENDING',
+          status: 'PENDING',
           upload_state: 'STORED',
-          malware_scan_status: scan.status,
+          malware_scan_status: UNSCANNED_EVIDENCE_STATUS,
           created_by: auth.identity.name,
           created_at: new Date().toISOString(),
         },
@@ -150,38 +147,10 @@ export async function POST(
     // Fetch the updated record since the RPC returns VOID
     const { data: record } = await supabase.from('intake_attachments').select('*').eq('id', attachmentId).single();
     
-    try {
-      const service = createServiceClient();
-      const scanDetails = 'reason' in scan
-        ? { reason: scan.reason }
-        : { scanner: scan.scanner, signature_version: scan.signatureVersion };
-      await service.from('intake_attachments').update({
-        malware_scan_status: scan.status,
-        malware_scan_details: scanDetails,
-        malware_scanned_at: new Date().toISOString(),
-        ...(scan.status === 'INFECTED' ? { status: 'FAILED' } : {}),
-      }).eq('id', attachmentId);
-      await service.from('audit_logs').insert({
-        profile_id: auth.identity.id,
-        action: 'INTAKE_ATTACHMENT_MALWARE_SCAN',
-        details: { attachment_id: attachmentId, envelope_id: envelopeId, verdict: scan.status },
-      });
-    } catch (error: unknown) {
-      console.error('Intake attachment scan status persistence failed', {
-        traceId,
-        attachmentId,
-        error: error instanceof Error ? error.name : 'UnknownError',
-      });
-    }
-
     const safeRecord = record as Record<string, unknown> || {};
     return NextResponse.json({
       success: true,
-      message: scan.status === 'CLEAN'
-        ? 'จัดเก็บและสแกนไฟล์แนบแล้ว'
-        : scan.status === 'INFECTED'
-          ? 'จัดเก็บไฟล์แนบในพื้นที่ส่วนตัวและตรวจพบความเสี่ยง ห้ามนำไปประมวลผล'
-          : 'จัดเก็บไฟล์แนบแล้ว แต่ผลสแกนยังไม่พร้อม จึงยังห้ามนำไปประมวลผล',
+      message: 'จัดเก็บและตรวจรูปแบบไฟล์แนบแล้ว พร้อมใช้งานในขั้นตอนถัดไป',
       data: {
         id: safeRecord.id || attachmentId,
         envelope_id: safeRecord.envelope_id || envelopeId,
@@ -189,9 +158,9 @@ export async function POST(
         file_size: safeRecord.file_size || file.size,
         mime_type: safeRecord.mime_type || rule.mime,
         sha256: safeRecord.sha256 || sha256,
-        status: scan.status === 'INFECTED' ? 'FAILED' : (safeRecord.status || 'PENDING'),
+        status: safeRecord.status || 'PENDING',
         upload_state: safeRecord.upload_state || 'STORED',
-        malware_scan_status: scan.status,
+        malware_scan_status: UNSCANNED_EVIDENCE_STATUS,
         created_at: safeRecord.created_at || new Date().toISOString(),
       },
     }, { status: 201, headers: { 'X-Request-ID': traceId } });

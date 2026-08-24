@@ -87,7 +87,7 @@ export async function POST(request: NextRequest) {
   if (queued.error || !queued.data) {
     const code = queued.error?.message || 'AUTOMATION_QUEUE_FAILED';
     const message = code === 'AUTOMATION_EVIDENCE_NOT_CLEAN'
-      ? 'ต้องสแกนหลักฐานเป็น CLEAN ก่อนเริ่มงานอัตโนมัติ'
+      ? 'ต้องใช้หลักฐานที่จัดเก็บและตรวจรูปแบบไฟล์สมบูรณ์ก่อนเริ่มงานอัตโนมัติ'
       : 'สร้างงานอัตโนมัติไม่สำเร็จ';
     return apiError(code, message, code === 'AUTOMATION_EVIDENCE_NOT_CLEAN' ? 409 : 503);
   }

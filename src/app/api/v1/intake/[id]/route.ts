@@ -116,7 +116,7 @@ export async function PATCH(request: NextRequest, context: { params: Promise<{ i
     ].find((code) => error.message?.includes(code));
     if (knownConflict) {
       return NextResponse.json(
-        { error: { code: knownConflict, message: 'ยังไม่สามารถดำเนินการคำร้องได้ กรุณาตรวจผลสแกนและข้อมูลปลายทางให้ครบถ้วน' } },
+        { error: { code: knownConflict, message: 'ยังไม่สามารถดำเนินการคำร้องได้ กรุณาตรวจสถานะไฟล์และข้อมูลปลายทางให้ครบถ้วน' } },
         { status: 409 },
       );
     }

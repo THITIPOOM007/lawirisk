@@ -33,15 +33,15 @@ export async function GET(request: NextRequest) {
 
   if (!caseIdSchema.safeParse(caseId).success) return apiError('NOT_FOUND', 'ไม่พบสำนวนคดี', 404);
   const supabase = await createServer();
-  const [caseResult, cleanEvidenceResult, entitiesResult, relationshipsResult] = await Promise.all([
+  const [caseResult, usableEvidenceResult, entitiesResult, relationshipsResult] = await Promise.all([
     supabase.from('cases').select('id').eq('id', caseId).maybeSingle(),
-    supabase.from('evidence_files').select('*', { count: 'exact', head: true }).eq('case_id', caseId).eq('upload_state', 'STORED').eq('malware_scan_status', 'CLEAN'),
+    supabase.from('evidence_files').select('*', { count: 'exact', head: true }).eq('case_id', caseId).eq('upload_state', 'STORED').in('malware_scan_status', ['CLEAN', 'NOT_SCANNED']),
     supabase.from('extracted_entities').select('id').eq('case_id', caseId),
     supabase.from('entity_relationships').select('id').eq('case_id', caseId).eq('status', 'VERIFIED'),
   ]);
 
   if (caseResult.error || !caseResult.data) return apiError('NOT_FOUND', 'ไม่พบสำนวนคดีหรือไม่มีสิทธิ์เข้าถึง', 404);
-  if (cleanEvidenceResult.error || entitiesResult.error || relationshipsResult.error) {
+  if (usableEvidenceResult.error || entitiesResult.error || relationshipsResult.error) {
     return apiError('REPORT_READINESS_FAILED', 'ตรวจความพร้อมสำหรับสร้างรายงานไม่สำเร็จ', 503);
   }
 
@@ -60,19 +60,19 @@ export async function GET(request: NextRequest) {
     return apiError('REPORT_READINESS_FAILED', 'ตรวจแหล่งอ้างอิงสำหรับรายงานไม่สำเร็จ', 503);
   }
 
-  const cleanEvidenceCount = cleanEvidenceResult.count || 0;
+  const usableEvidenceCount = usableEvidenceResult.count || 0;
   const sourceMentionCount = mentionsResult.count || 0;
   const relationshipReferenceCount = referencesResult.count || 0;
   const eligible = sourceMentionCount > 0 || relationshipReferenceCount > 0;
   const code = eligible
     ? 'READY'
-    : cleanEvidenceCount === 0
-      ? 'CLEAN_EVIDENCE_REQUIRED'
+    : usableEvidenceCount === 0
+      ? 'USABLE_EVIDENCE_REQUIRED'
       : 'VERIFIED_SOURCE_REQUIRED';
   const message = eligible
     ? 'พร้อมสร้างรายงานที่ตรวจสอบย้อนกลับได้'
-    : cleanEvidenceCount === 0
-      ? 'ต้องมีหลักฐานที่จัดเก็บและสแกนเป็น CLEAN อย่างน้อย 1 ไฟล์ก่อน'
+    : usableEvidenceCount === 0
+      ? 'ต้องมีหลักฐานที่จัดเก็บและตรวจรูปแบบไฟล์สมบูรณ์อย่างน้อย 1 ไฟล์ก่อน'
       : 'ต้องสกัดข้อมูลและรับรอง source mention หรือ relationship reference อย่างน้อย 1 รายการก่อน';
 
   return NextResponse.json({
@@ -80,7 +80,7 @@ export async function GET(request: NextRequest) {
       eligible,
       code,
       message,
-      clean_evidence_count: cleanEvidenceCount,
+      usable_evidence_count: usableEvidenceCount,
       source_mention_count: sourceMentionCount,
       relationship_reference_count: relationshipReferenceCount,
     },

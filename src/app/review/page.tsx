@@ -4,6 +4,7 @@ import { useCallback, useEffect, useMemo, useState } from 'react';
 import { ExternalLink, Eye, Fingerprint, Loader2, RefreshCw, Save, ShieldAlert, Sparkles, X } from 'lucide-react';
 import type { Case, EvidenceFile } from '@/lib/demo-data';
 import { BiometricStepUpModal } from '@/components/BiometricStepUpModal';
+import { evidenceSafetyLabel, isEvidenceUsable } from '@/lib/evidence-file-status';
 
 type SuggestionStatus = 'SUGGESTED' | 'CONFIRMED' | 'REJECTED' | 'UNCERTAIN';
 type Suggestion = {
@@ -84,7 +85,7 @@ export default function ReviewPage() {
   }, []);
 
   const caseEvidence = useMemo(() => evidence.filter((item) => !selectedCaseId || item.case_id === selectedCaseId), [evidence, selectedCaseId]);
-  const cleanCaseEvidence = useMemo(() => caseEvidence.filter((item) => item.malware_scan_status === 'CLEAN'), [caseEvidence]);
+  const cleanCaseEvidence = useMemo(() => caseEvidence.filter((item) => isEvidenceUsable(item.upload_state, item.malware_scan_status)), [caseEvidence]);
   const visibleSuggestions = useMemo(() => suggestions.filter((item) => !selectedCaseId || item.case_id === selectedCaseId), [suggestions, selectedCaseId]);
 
   const createAiSuggestions = async (event: React.FormEvent) => {
@@ -246,7 +247,7 @@ export default function ReviewPage() {
         </div>
         <p className="mt-2 text-xs text-slate-500">ใช้สำหรับบันทึกความเชื่อมโยงโดยตรงจากเอกสารต้นฉบับ</p>
         <div className="mt-5 grid gap-4 md:grid-cols-2 xl:grid-cols-3">
-          <label className="text-xs text-slate-300">ไฟล์หลักฐานอ้างอิง<select required disabled={!selectedCaseId} value={manual.evidence_id} onChange={(event) => setManual((current) => ({ ...current, evidence_id: event.target.value }))} className="mt-2 w-full rounded-xl border border-slate-800 bg-slate-950 p-3 text-sm text-white"><option value="">เลือกไฟล์หลักฐาน</option>{caseEvidence.map((item) => <option key={item.id} value={item.id}>{item.filename} · {item.malware_scan_status || 'PENDING'}</option>)}</select></label>
+          <label className="text-xs text-slate-300">ไฟล์หลักฐานอ้างอิง<select required disabled={!selectedCaseId} value={manual.evidence_id} onChange={(event) => setManual((current) => ({ ...current, evidence_id: event.target.value }))} className="mt-2 w-full rounded-xl border border-slate-800 bg-slate-950 p-3 text-sm text-white"><option value="">เลือกไฟล์หลักฐาน</option>{caseEvidence.map((item) => <option key={item.id} value={item.id}>{item.filename} · {evidenceSafetyLabel(item.malware_scan_status)}</option>)}</select></label>
           <label className="text-xs text-slate-300">หน้าเอกสาร<input required type="number" min="1" max="100000" value={manual.page_number} onChange={(event) => setManual((current) => ({ ...current, page_number: event.target.value }))} className="mt-2 w-full rounded-xl border border-slate-800 bg-slate-950 p-3 text-sm text-white" /></label>
           <label className="text-xs text-slate-300">ประเภทข้อมูล<select value={manual.entity_type} onChange={(event) => setManual((current) => ({ ...current, entity_type: event.target.value }))} className="mt-2 w-full rounded-xl border border-slate-800 bg-slate-950 p-3 text-sm text-white">{entityTypes.map((type) => <option key={type}>{type}</option>)}</select></label>
           <label className="text-xs text-slate-300 md:col-span-2">ข้อความต้นทางในหลักฐาน<textarea required maxLength={4000} rows={3} value={manual.source_text} onChange={(event) => setManual((current) => ({ ...current, source_text: event.target.value }))} className="mt-2 w-full rounded-xl border border-slate-800 bg-slate-950 p-3 text-sm text-white" /></label>
@@ -311,7 +312,7 @@ export default function ReviewPage() {
                         </button>
                         <button
                           type="button"
-                          disabled={submitting === item.id || source?.malware_scan_status !== 'CLEAN'}
+                          disabled={submitting === item.id || !isEvidenceUsable(source?.upload_state, source?.malware_scan_status)}
                           onClick={() => setStepUpTarget({ item, decision: 'CONFIRMED' })}
                           className="flex items-center justify-center rounded-xl bg-teal-400 p-2 text-xs font-bold text-slate-950 hover:bg-teal-300 disabled:opacity-50 transition shadow-[0_0_15px_rgba(45,212,191,0.2)] cursor-pointer"
                         >

@@ -65,7 +65,7 @@ References:
 ## Deferred next slice
 
 V1 deliberately processes selected text. Full-file OCR remains deferred until a
-malware scanner and approved OCR provider are configured. The next slice will
+private evidence storage, stored-object validation and approved OCR provider are configured. The next slice will
 read a private evidence object inside LawiRisk, persist page-level OCR source
 mentions, and queue extraction automatically without sending raw binary data to
 n8n.

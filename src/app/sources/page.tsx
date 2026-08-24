@@ -129,7 +129,7 @@ export default function SourcesPage() {
           {[
             ['01', 'ค้นในระบบต้นทาง', 'ใช้บัญชีของเจ้าหน้าที่และค้นตามวัตถุประสงค์ที่ได้รับมอบหมาย'],
             ['02', 'ส่งออกผลทางการ', 'เก็บเลขอ้างอิง วันเวลา และบริบทที่จำเป็นใน PDF/ภาพ'],
-            ['03', 'นำเข้าคลังหลักฐาน', 'เลือกคดี ตรวจชนิดไฟล์ คำนวณ SHA-256 และสแกนมัลแวร์'],
+            ['03', 'นำเข้าคลังหลักฐาน', 'เลือกคดี ตรวจชนิดไฟล์ คำนวณ SHA-256 และจัดเก็บในพื้นที่ส่วนตัว'],
             ['04', 'มนุษย์ตรวจยืนยัน', 'อ้าง source mention ก่อนยืนยันข้อเสนอ ความสัมพันธ์ หรือรายงาน'],
           ].map(([number, title, detail]) => (
             <li key={number} className="rounded-2xl border border-white/[0.06] bg-white/[0.022] p-4"><span className="font-mono text-[10px] font-bold text-teal-300/70">{number}</span><h3 className="mt-3 text-sm font-semibold text-slate-200">{title}</h3><p className="mt-2 text-[11px] leading-5 text-slate-600">{detail}</p></li>

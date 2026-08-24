@@ -448,7 +448,7 @@ export default function IntakeQueuePage() {
                 <tr className="text-slate-400 text-left font-medium">
                   <th className="pb-3">ช่องทาง & วันเวลา</th>
                   <th className="pb-3">ความเร่งด่วน</th>
-                  <th className="pb-3">สแกนมัลแวร์</th>
+                  <th className="pb-3">การตรวจไฟล์</th>
                   <th className="pb-3">ผู้ร้องเรียน</th>
                   <th className="pb-3">ข้อมูลย่อสาระสำคัญ</th>
                   <th className="pb-3 text-right">การคัดกรอง</th>
@@ -487,17 +487,22 @@ export default function IntakeQueuePage() {
                         {env.malware_scan_status === 'INFECTED' ? (
                           <span className="inline-flex items-center px-2 py-0.5 border border-rose-500/35 bg-rose-500/10 text-rose-400 rounded text-[10px] font-semibold animate-pulse">
                             <ShieldAlert className="h-3.5 w-3.5 mr-1" />
-                            ติดมัลแวร์
+                            ความเสี่ยงเดิม
                           </span>
                         ) : env.malware_scan_status === 'CLEAN' ? (
                           <span className="inline-flex items-center px-2 py-0.5 border border-emerald-500/20 bg-emerald-500/5 text-emerald-400 rounded text-[10px] font-semibold">
                             <CheckCircle className="h-3.5 w-3.5 mr-1" />
-                            ปลอดภัย
+                            สแกนแล้ว (เดิม)
+                          </span>
+                        ) : env.malware_scan_status === 'NOT_SCANNED' ? (
+                          <span className="inline-flex items-center px-2 py-0.5 border border-cyan-500/20 bg-cyan-500/5 text-cyan-300 rounded text-[10px] font-semibold">
+                            <CheckCircle className="h-3.5 w-3.5 mr-1" />
+                            ตรวจรูปแบบแล้ว
                           </span>
                         ) : (
                           <span className="inline-flex items-center px-2 py-0.5 border border-amber-500/25 bg-amber-500/10 text-amber-300 rounded text-[10px] font-semibold">
                             <Clock3 className="h-3.5 w-3.5 mr-1" />
-                            {env.malware_scan_status === 'PENDING' ? 'รอตรวจ' : 'ตรวจไม่สำเร็จ'}
+                            ยังไม่พร้อม
                           </span>
                         )}
                       </td>

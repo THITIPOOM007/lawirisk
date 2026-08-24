@@ -54,7 +54,7 @@ export async function POST(request: NextRequest) {
       urgency_reason: payload.urgency_reason,
       jurisdiction_region: payload.region,
       jurisdiction_agency: payload.agency,
-      malware_scan_status: 'CLEAN',
+      malware_scan_status: 'NOT_SCANNED',
       privacy_risk_status: 'PENDING',
       created_at: now,
       updated_at: now,

@@ -4,6 +4,7 @@ import React, { useEffect, useState } from 'react';
 import { FileText, Upload, Check, AlertCircle, FileCheck, Loader2, Database, RefreshCw, Camera, X } from 'lucide-react';
 import { getCases, getEvidence, saveEvidence, Case, EvidenceFile } from '@/lib/demo-data';
 import type { EvidenceUploadGrant } from '@/lib/evidence-resumable-upload';
+import { evidenceSafetyLabel, isEvidenceUsable } from '@/lib/evidence-file-status';
 import { validateFileInBrowser } from '@/lib/file-validator';
 import { isDemoModeEnabled } from '@/lib/supabase';
 
@@ -19,7 +20,7 @@ export default function EvidencePage() {
   type QueueItem = {
     id: string;
     file: File;
-    status: 'validating' | 'ready' | 'uploading' | 'scanning' | 'quarantined' | 'success' | 'failed';
+    status: 'validating' | 'ready' | 'uploading' | 'finalizing' | 'pending' | 'success' | 'failed';
     sha256?: string;
     magicBytes?: string;
     progress?: number;
@@ -124,7 +125,7 @@ export default function EvidencePage() {
 
     setIsUploading(true);
     let succeeded = 0;
-    let quarantined = 0;
+    let pending = 0;
     let failed = fileQueue.filter((item) => item.status === 'failed').length;
     for (const queued of fileQueue) {
       if (queued.status !== 'ready') continue;
@@ -167,7 +168,7 @@ export default function EvidencePage() {
           grant: reservePayload.data,
           onProgress: (progress) => setFileQueue((current) => current.map((item) => item.id === queued.id ? { ...item, progress } : item)),
         });
-        setFileQueue((current) => current.map((item) => item.id === queued.id ? { ...item, status: 'scanning', progress: 100 } : item));
+        setFileQueue((current) => current.map((item) => item.id === queued.id ? { ...item, status: 'finalizing', progress: 100 } : item));
 
         const completeResponse = await fetch(`/api/v1/evidence/uploads/${reservePayload.data.evidence_id}/complete`, {
           method: 'POST',
@@ -180,25 +181,25 @@ export default function EvidencePage() {
           message?: string;
         } | null;
         if (!completeResponse.ok || !completePayload?.success || !completePayload.data) {
-          throw new Error(completePayload?.error?.message || 'ยืนยันและสแกนหลักฐานไม่สำเร็จ');
+          throw new Error(completePayload?.error?.message || 'ยืนยันหลักฐานไม่สำเร็จ');
         }
         if ('id' in completePayload.data) {
           const evidence = completePayload.data;
           setEvidenceList((current) => [evidence, ...current.filter((item) => item.id !== evidence.id)]);
-          const clean = evidence.malware_scan_status === 'CLEAN';
+          const usable = isEvidenceUsable(evidence.upload_state, evidence.malware_scan_status);
           setFileQueue((current) => current.map((item) => item.id === queued.id ? {
             ...item,
-            status: clean ? 'success' : 'quarantined',
-            error: clean ? undefined : completePayload.message || 'ไฟล์ถูกกักกันและยังนำไปใช้งานไม่ได้',
+            status: usable ? 'success' : 'pending',
+            error: usable ? undefined : completePayload.message || 'ไฟล์ยังรอการยืนยันจากพื้นที่จัดเก็บ',
           } : item));
-          if (clean) succeeded += 1;
-          else quarantined += 1;
+          if (usable) succeeded += 1;
+          else pending += 1;
         } else {
-          quarantined += 1;
+          pending += 1;
           setFileQueue((current) => current.map((item) => item.id === queued.id ? {
             ...item,
-            status: 'quarantined',
-            error: completePayload.message || 'อัปโหลดครบแล้ว แต่ยังรอเครื่องสแกน',
+            status: 'pending',
+            error: completePayload.message || 'อัปโหลดครบแล้ว แต่ยังรอการยืนยันไฟล์',
           } : item));
         }
       } catch (caught: unknown) {
@@ -207,30 +208,30 @@ export default function EvidencePage() {
       }
     }
     setIsUploading(false);
-    if (succeeded > 0 || quarantined > 0) {
-      setSuccessMessage(`สแกนผ่าน ${succeeded} ไฟล์${quarantined > 0 ? ` · กักกัน/รอสแกน ${quarantined} ไฟล์` : ''}${failed > 0 ? ` · ไม่สำเร็จ ${failed} ไฟล์` : ''}`);
+    if (succeeded > 0 || pending > 0) {
+      setSuccessMessage(`จัดเก็บพร้อมใช้ ${succeeded} ไฟล์${pending > 0 ? ` · รอยืนยัน ${pending} ไฟล์` : ''}${failed > 0 ? ` · ไม่สำเร็จ ${failed} ไฟล์` : ''}`);
       window.dispatchEvent(new Event('ev-data-change'));
     }
-    if (succeeded === 0 && quarantined === 0) setErrorMessage(`ยังไม่มีไฟล์ที่จัดเก็บสำเร็จ${failed ? ` · พบปัญหา ${failed} ไฟล์` : ''}`);
+    if (succeeded === 0 && pending === 0) setErrorMessage(`ยังไม่มีไฟล์ที่จัดเก็บสำเร็จ${failed ? ` · พบปัญหา ${failed} ไฟล์` : ''}`);
   };
 
-  const retryEvidenceScan = async (evidenceId: string) => {
+  const retryEvidenceValidation = async (evidenceId: string) => {
     setRetryingEvidenceId(evidenceId);
     setErrorMessage('');
     setSuccessMessage('');
     try {
       const response = await fetch(`/api/v1/evidence/uploads/${evidenceId}/complete`, { method: 'POST', credentials: 'same-origin' });
       const payload = await response.json().catch(() => null) as { success?: boolean; data?: EvidenceFile | { evidence_id: string }; message?: string; error?: { message?: string } } | null;
-      if (!response.ok || !payload?.success || !payload.data) throw new Error(payload?.error?.message || 'ลองสแกนอีกครั้งไม่สำเร็จ');
+      if (!response.ok || !payload?.success || !payload.data) throw new Error(payload?.error?.message || 'ยืนยันไฟล์อีกครั้งไม่สำเร็จ');
       if ('id' in payload.data) {
         const evidence = payload.data;
         setEvidenceList((current) => current.map((item) => item.id === evidence.id ? evidence : item));
       } else {
         setReloadToken((value) => value + 1);
       }
-      setSuccessMessage(payload.message || 'ส่งไฟล์เข้าสู่การตรวจซ้ำแล้ว');
+      setSuccessMessage(payload.message || 'ยืนยันไฟล์จากพื้นที่จัดเก็บแล้ว');
     } catch (caught: unknown) {
-      setErrorMessage(caught instanceof Error ? caught.message : 'ลองสแกนอีกครั้งไม่สำเร็จ');
+      setErrorMessage(caught instanceof Error ? caught.message : 'ยืนยันไฟล์อีกครั้งไม่สำเร็จ');
     } finally {
       setRetryingEvidenceId('');
     }
@@ -328,14 +329,14 @@ export default function EvidencePage() {
 
               {fileQueue.length > 0 && (
                 <div className="space-y-2 rounded-2xl border border-slate-900 bg-slate-950/60 p-3">
-                  <div className="flex items-center justify-between px-1"><span className="text-[10px] font-bold uppercase tracking-wider text-slate-500">ตรวจไฟล์ · อัปโหลดต่อเนื่อง · สแกน NAS</span><span className="text-[10px] text-slate-600">{fileQueue.length}/20 ไฟล์</span></div>
+                  <div className="flex items-center justify-between px-1"><span className="text-[10px] font-bold uppercase tracking-wider text-slate-500">ตรวจรูปแบบ · SHA-256 · อัปโหลดต่อเนื่อง</span><span className="text-[10px] text-slate-600">{fileQueue.length}/20 ไฟล์</span></div>
                   {fileQueue.map((item) => (
                     <div key={item.id} className="flex items-start gap-2 rounded-xl border border-white/[0.05] bg-white/[0.02] p-2.5">
-                      <span className="mt-0.5">{item.status === 'validating' || item.status === 'uploading' || item.status === 'scanning' ? <Loader2 className="h-4 w-4 animate-spin text-indigo-300" /> : item.status === 'failed' ? <AlertCircle className="h-4 w-4 text-rose-400" /> : item.status === 'quarantined' ? <AlertCircle className="h-4 w-4 text-amber-300" /> : <Check className="h-4 w-4 text-emerald-400" />}</span>
+                      <span className="mt-0.5">{item.status === 'validating' || item.status === 'uploading' || item.status === 'finalizing' ? <Loader2 className="h-4 w-4 animate-spin text-indigo-300" /> : item.status === 'failed' ? <AlertCircle className="h-4 w-4 text-rose-400" /> : item.status === 'pending' ? <AlertCircle className="h-4 w-4 text-amber-300" /> : <Check className="h-4 w-4 text-emerald-400" />}</span>
                       <div className="min-w-0 flex-1">
                         <p className="truncate text-xs font-medium text-slate-200">{item.file.name}</p>
-                        <p className={`mt-0.5 text-[9px] ${item.status === 'failed' ? 'text-rose-300' : item.status === 'quarantined' ? 'text-amber-300' : 'text-slate-600'}`}>
-                          {item.status === 'validating' ? `กำลังคำนวณ SHA-256 แบบแบ่งส่วน ${item.progress || 0}%` : item.status === 'uploading' ? `กำลังอัปโหลดตรงไปพื้นที่ private ${item.progress || 0}%` : item.status === 'scanning' ? 'อัปโหลดครบแล้ว · NAS กำลังตรวจ SHA-256, ชนิดไฟล์ และมัลแวร์…' : item.status === 'success' ? 'สแกนผ่าน · พร้อมใช้ในขั้นตอนถัดไป' : item.status === 'quarantined' || item.status === 'failed' ? item.error : `พร้อมอัปโหลด · ${(item.file.size / 1024 / 1024).toFixed(2)} MB · SHA ${item.sha256?.slice(0, 10)}…`}
+                        <p className={`mt-0.5 text-[9px] ${item.status === 'failed' ? 'text-rose-300' : item.status === 'pending' ? 'text-amber-300' : 'text-slate-600'}`}>
+                          {item.status === 'validating' ? `กำลังคำนวณ SHA-256 แบบแบ่งส่วน ${item.progress || 0}%` : item.status === 'uploading' ? `กำลังอัปโหลดตรงไปพื้นที่ private ${item.progress || 0}%` : item.status === 'finalizing' ? 'อัปโหลดครบแล้ว · กำลังตรวจขนาด ชนิด และโครงสร้างไฟล์…' : item.status === 'success' ? 'ตรวจรูปแบบแล้ว · พร้อมใช้ในขั้นตอนถัดไป' : item.status === 'pending' || item.status === 'failed' ? item.error : `พร้อมอัปโหลด · ${(item.file.size / 1024 / 1024).toFixed(2)} MB · SHA ${item.sha256?.slice(0, 10)}…`}
                         </p>
                         {(item.status === 'validating' || item.status === 'uploading') && <div className="mt-2 h-1.5 overflow-hidden rounded-full bg-slate-800" role="progressbar" aria-label={`ความคืบหน้า ${item.file.name}`} aria-valuemin={0} aria-valuemax={100} aria-valuenow={item.progress || 0}><div className="h-full rounded-full bg-gradient-to-r from-indigo-500 to-cyan-400 transition-[width]" style={{ width: `${item.progress || 0}%` }} /></div>}
                       </div>
@@ -409,12 +410,12 @@ export default function EvidencePage() {
                           </td>
                           <td className="py-4 text-right">
                             <div className="flex flex-col items-end gap-2">
-                              <span className={`inline-block px-2.5 py-1 text-[10px] font-semibold border rounded-lg ${file.malware_scan_status === 'CLEAN' ? 'bg-emerald-500/10 text-emerald-400 border-emerald-500/20' : file.malware_scan_status === 'INFECTED' ? 'bg-rose-500/10 text-rose-400 border-rose-500/20' : 'bg-amber-500/10 text-amber-300 border-amber-500/20'}`}>
-                                {file.malware_scan_status === 'CLEAN' ? 'สแกนแล้ว · ปลอดภัย' : file.malware_scan_status === 'INFECTED' ? 'กักกัน · พบความเสี่ยง' : file.upload_state === 'RESERVED' ? 'อัปโหลดแล้ว · รอสแกน' : 'ยังไม่ถือว่าปลอดภัย'}
+                              <span className={`inline-block px-2.5 py-1 text-[10px] font-semibold border rounded-lg ${isEvidenceUsable(file.upload_state, file.malware_scan_status) ? 'bg-emerald-500/10 text-emerald-400 border-emerald-500/20' : file.malware_scan_status === 'INFECTED' ? 'bg-rose-500/10 text-rose-400 border-rose-500/20' : 'bg-amber-500/10 text-amber-300 border-amber-500/20'}`}>
+                                {evidenceSafetyLabel(file.malware_scan_status)}
                               </span>
-                              {file.malware_scan_status !== 'CLEAN' && file.malware_scan_status !== 'INFECTED' && (
-                                <button type="button" onClick={() => void retryEvidenceScan(file.id)} disabled={Boolean(retryingEvidenceId)} className="inline-flex min-h-8 items-center rounded-lg border border-amber-300/15 px-2.5 text-[10px] font-semibold text-amber-200 hover:bg-amber-300/[0.06] disabled:opacity-50">
-                                  {retryingEvidenceId === file.id ? <Loader2 className="mr-1.5 h-3 w-3 animate-spin" /> : <RefreshCw className="mr-1.5 h-3 w-3" />}ลองสแกนอีกครั้ง
+                              {!isEvidenceUsable(file.upload_state, file.malware_scan_status) && file.malware_scan_status !== 'INFECTED' && (
+                                <button type="button" onClick={() => void retryEvidenceValidation(file.id)} disabled={Boolean(retryingEvidenceId)} className="inline-flex min-h-8 items-center rounded-lg border border-amber-300/15 px-2.5 text-[10px] font-semibold text-amber-200 hover:bg-amber-300/[0.06] disabled:opacity-50">
+                                  {retryingEvidenceId === file.id ? <Loader2 className="mr-1.5 h-3 w-3 animate-spin" /> : <RefreshCw className="mr-1.5 h-3 w-3" />}ยืนยันไฟล์อีกครั้ง
                                 </button>
                               )}
                             </div>

@@ -16,7 +16,7 @@ describe('release security regressions', () => {
     expect(route).not.toContain('fallback proceed');
   });
 
-  it('keeps 200 MB evidence off the Worker body and quarantined until NAS verification', () => {
+  it('keeps 200 MB evidence off the Worker body and validates the stored object before finalization', () => {
     const reserve = source('src/app/api/v1/evidence/uploads/route.ts');
     const complete = source('src/app/api/v1/evidence/uploads/[id]/complete/route.ts');
     const contract = source('src/lib/evidence-upload-contract.ts');
@@ -25,20 +25,23 @@ describe('release security regressions', () => {
     expect(reserve).toContain('resumable_endpoint');
     expect(reserve).not.toContain('request.formData()');
     expect(complete).toContain('createSignedUrl(evidence.file_path, 300)');
-    expect(complete).toContain('scanEvidenceReference');
-    expect(complete).toContain("upload_state: 'STORED'");
+    expect(complete).toContain('validateStoredFileReference');
+    expect(complete).toContain("supabase.rpc('finalize_evidence_upload'");
+    expect(complete).not.toContain('MALWARE_SCANNER');
     expect(contract).toContain('200 * 1024 * 1024');
     expect(migration).toContain('209715200');
     expect(migration).toContain("record.upload_state <> 'RESERVED'");
   });
 
-  it('never promotes unavailable scanner results to clean', () => {
+  it('records unscanned files honestly and never rewrites infected legacy files', () => {
     const evidenceRoute = source('src/app/api/evidence/upload/route.ts');
     const publicRoute = source('src/app/api/v1/public/complaints/route.ts');
-    expect(evidenceRoute).not.toContain("scan.status === 'INFECTED' ? 'INFECTED' : 'CLEAN'");
-    expect(publicRoute).not.toContain("scan.status === 'INFECTED' ? 'INFECTED' : 'CLEAN'");
-    expect(evidenceRoute).toContain('malware_scan_status: scan.status');
-    expect(publicRoute).toContain("malware_scan_status: attachmentScan?.status || 'CLEAN'");
+    const migration = source('supabase/migrations/202608240003_remove_scanner_dependency.sql');
+    expect(evidenceRoute).toContain('UNSCANNED_EVIDENCE_STATUS');
+    expect(publicRoute).toContain('UNSCANNED_EVIDENCE_STATUS');
+    expect(migration).toContain("malware_scan_status = 'NOT_SCANNED'");
+    expect(migration).toContain("malware_scan_status = 'INFECTED'");
+    expect(migration).not.toContain("SET malware_scan_status = 'CLEAN'");
   });
 
   it('does not mutate malware verdicts from an intake GET or triage fallback', () => {

@@ -15,7 +15,7 @@ Baseline recorded 2026-08-23.
 ## Live-environment tests still required
 
 - Supabase migration/RLS matrix using ADMIN, two isolated INVESTIGATOR users, REVIEWER and VIEWER.
-- Private object storage, signed download and malware scanner clean/EICAR/timeout/invalid-response fixtures.
+- Private object storage, signed download and stored-object size/MIME/magic-byte validation fixtures.
 - Physical/platform WebAuthn registration and one-time step-up consumption on the staging RP domain.
 - n8n callback, retry/idempotency and outage exercises against the real orchestrator.
 - PDF visual inspection with Thai case fixtures in the deployed runtime.

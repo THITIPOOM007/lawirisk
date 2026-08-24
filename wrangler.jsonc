@@ -25,24 +25,14 @@
       "preview_urls": false,
       "vars": {
         "NEXT_PUBLIC_DEMO_MODE": "false",
-        "GEMINI_MODEL": "gemini-2.5-flash",
-        "MALWARE_SCANNER_TRANSPORT": "vpc",
-        "MALWARE_SCANNER_URL": "http://scanner-api:8080",
-        "MALWARE_SCANNER_TIMEOUT_MS": "180000"
+        "GEMINI_MODEL": "gemini-2.5-flash"
       },
-      "vpc_services": [
-        {
-          "binding": "MALWARE_SCANNER_VPC",
-          "service_id": "01a032f9-ac2d-78d2-ac83-0eaaca0cd4b2"
-        }
-      ],
       "secrets": {
         "required": [
           "NEXT_PUBLIC_SUPABASE_URL",
           "NEXT_PUBLIC_SUPABASE_ANON_KEY",
           "SUPABASE_SERVICE_ROLE_KEY",
           "PRIVATE_EVIDENCE_BUCKET",
-          "MALWARE_SCANNER_TOKEN",
           "GEMINI_API_KEY",
           "N8N_AUTOMATION_WEBHOOK_URL",
           "N8N_DISPATCH_TOKEN",

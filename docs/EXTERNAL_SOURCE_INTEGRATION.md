@@ -24,7 +24,7 @@ LawiRisk-SSK does not render a login form, store a credential, or launch the por
 
 1. Search only under the officer's authorized purpose and source account.
 2. Export the smallest official result needed, preserving the record reference and capture timestamp.
-3. Import the file through Evidence Intake to validate type/magic bytes/size, compute SHA-256, store privately, and scan malware.
+3. Import the file through Evidence Intake to validate type/magic bytes/size, compute SHA-256, and store it privately.
 4. Treat derived values as suggestions until an authorized human reviews the exact source mention.
 5. Never copy an external password, access token, OAuth code, citizen identifier, or raw result into chat, application logs, URL query strings, or Git.
 
