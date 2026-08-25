@@ -538,83 +538,107 @@ textarea:focus-visible {
 }
 
 /* -------------------------------------------------------------
- * LIGHT THEME & CONTRAST ENHANCEMENTS
+ * EYE-FRIENDLY, SOOTHING LIGHT THEME & HIGH CONTRAST
  * ------------------------------------------------------------- */
 html.light {
   color: #0f172a;
 }
 
 html.light body {
-  background:
-    radial-gradient(circle at 50% -30%, rgba(13, 148, 136, 0.06), transparent 42rem),
-    #f8fafc;
-  color: #0f172a;
+  background: #f1f5f9 !important;
+  color: #0f172a !important;
 }
 
 html.light .app-backdrop {
-  background:
-    radial-gradient(ellipse 54% 42% at 7% -8%, rgba(13, 148, 136, 0.08), transparent 64%),
-    radial-gradient(ellipse 48% 38% at 98% 0%, rgba(99, 102, 241, 0.07), transparent 68%),
-    radial-gradient(ellipse 40% 30% at 68% 104%, rgba(14, 165, 233, 0.06), transparent 70%),
-    linear-gradient(145deg, #ffffff 0%, #f8fafc 54%, #f1f5f9 100%);
+  background: #f1f5f9 !important;
+  animation: none !important;
 }
 
-html.light .app-backdrop::before {
-  opacity: 0.15;
-  background-image:
-    linear-gradient(rgba(15, 23, 42, 0.06) 1px, transparent 1px),
-    linear-gradient(90deg, rgba(15, 23, 42, 0.06) 1px, transparent 1px);
+html.light .app-backdrop::before,
+html.light .app-backdrop::after {
+  display: none !important;
 }
 
 html.light .nav-rail {
-  background: rgba(255, 255, 255, 0.95) !important;
-  border-right: 1px solid rgba(226, 232, 240, 0.9) !important;
-  box-shadow: 18px 0 50px rgba(15, 23, 42, 0.05);
+  background: #ffffff !important;
+  border-right: 1px solid #e2e8f0 !important;
+  box-shadow: 2px 0 10px rgba(0, 0, 0, 0.03) !important;
 }
 
-html.light .glass-panel {
-  background:
-    linear-gradient(145deg, rgba(255, 255, 255, 0.95), rgba(248, 250, 252, 0.9)) padding-box,
-    linear-gradient(135deg, rgba(226, 232, 240, 0.9), rgba(13, 148, 136, 0.15) 45%, rgba(99, 102, 241, 0.12)) border-box;
-  box-shadow:
-    0 18px 50px rgba(15, 23, 42, 0.06),
-    inset 0 1px rgba(255, 255, 255, 0.9);
+html.light header {
+  background: #ffffff !important;
+  border-bottom: 1px solid #e2e8f0 !important;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.03) !important;
 }
 
-html.light .soft-panel {
-  border-color: rgba(226, 232, 240, 0.9) !important;
-  background: linear-gradient(145deg, rgba(255, 255, 255, 0.95), rgba(248, 250, 252, 0.9)) !important;
-  box-shadow: inset 0 1px rgba(255, 255, 255, 0.8), 0 10px 30px rgba(15, 23, 42, 0.04);
-}
-
+html.light .glass-panel,
+html.light .soft-panel,
 html.light .hud-panel {
-  border-color: rgba(13, 148, 136, 0.25) !important;
-  background: linear-gradient(135deg, rgba(255, 255, 255, 0.98) 0%, rgba(248, 250, 252, 0.95) 100%) !important;
-  box-shadow: 0 16px 40px rgba(15, 23, 42, 0.06), inset 0 1px rgba(255, 255, 255, 1);
+  background: #ffffff !important;
+  border: 1px solid #e2e8f0 !important;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.04) !important;
+  backdrop-filter: none !important;
 }
 
 html.light .hud-panel::before,
 html.light .hud-panel::after {
-  border-color: rgba(13, 148, 136, 0.6);
+  display: none !important;
+}
+
+html.light .interactive-card {
+  background: #ffffff !important;
+  border: 1px solid #e2e8f0 !important;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.04) !important;
+}
+
+html.light .interactive-card:hover {
+  border-color: #cbd5e1 !important;
+  box-shadow: 0 8px 20px rgba(0, 0, 0, 0.06) !important;
+}
+
+html.light .primary-action {
+  background: #0d9488 !important;
+  color: #ffffff !important;
+  box-shadow: 0 2px 6px rgba(13, 148, 136, 0.25) !important;
+}
+
+html.light .primary-action:hover {
+  background: #0f766e !important;
+  box-shadow: 0 4px 12px rgba(13, 148, 136, 0.35) !important;
 }
 
 html.light .secondary-action {
-  background: rgba(15, 23, 42, 0.035) !important;
-  border-color: rgba(15, 23, 42, 0.12) !important;
-  color: #334155 !important;
+  background: #f8fafc !important;
+  border: 1px solid #cbd5e1 !important;
+  color: #1e293b !important;
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.03) !important;
 }
 
 html.light .secondary-action:hover {
-  border-color: rgba(13, 148, 136, 0.4) !important;
+  border-color: #0d9488 !important;
   color: #0f766e !important;
-  background: rgba(13, 148, 136, 0.06) !important;
+  background: #f0fdfa !important;
 }
 
-html.light header {
-  background: rgba(255, 255, 255, 0.9) !important;
-  border-bottom-color: rgba(226, 232, 240, 0.9) !important;
+/* Override blinding neon gradient text in light mode */
+html.light .bg-clip-text {
+  background-image: none !important;
+  -webkit-background-clip: initial !important;
+  background-clip: initial !important;
+  -webkit-text-fill-color: initial !important;
+  color: #0f766e !important;
 }
 
+html.light h1,
+html.light h2,
+html.light h3,
+html.light h4,
+html.light h5,
+html.light h6 {
+  color: #0f172a !important;
+}
+
+/* High-contrast, glare-free text in light mode */
 html.light .text-slate-100,
 html.light .text-white {
   color: #0f172a !important;
@@ -625,16 +649,36 @@ html.light .text-slate-300 {
   color: #1e293b !important;
 }
 
-html.light .text-slate-400 {
+html.light .text-slate-400,
+html.light .text-slate-500 {
   color: #475569 !important;
 }
 
-html.light .text-slate-500 {
+html.light .text-slate-600,
+html.light .text-slate-700 {
   color: #64748b !important;
 }
 
-html.light .text-slate-600 {
-  color: #64748b !important;
+html.light .text-teal-300,
+html.light .text-teal-400,
+html.light .text-cyan-200,
+html.light .text-cyan-300 {
+  color: #0f766e !important;
+}
+
+html.light .text-amber-200,
+html.light .text-amber-300 {
+  color: #b45309 !important;
+}
+
+html.light .text-emerald-300,
+html.light .text-emerald-400 {
+  color: #047857 !important;
+}
+
+html.light .text-indigo-300,
+html.light .text-indigo-400 {
+  color: #4338ca !important;
 }
 
 html.light .bg-slate-950,
@@ -649,7 +693,7 @@ html.light .bg-slate-950\/60,
 html.light .bg-slate-950\/70,
 html.light .bg-slate-900\/50,
 html.light .bg-slate-900\/30 {
-  background-color: rgba(248, 250, 252, 0.95) !important;
+  background-color: #f8fafc !important;
 }
 
 html.light .bg-slate-800,
@@ -666,7 +710,7 @@ html.light .border-white\/\[0\.06\],
 html.light .border-white\/\[0\.07\],
 html.light .border-white\/\[0\.08\],
 html.light .border-white\/\[0\.1\] {
-  border-color: rgba(15, 23, 42, 0.12) !important;
+  border-color: #e2e8f0 !important;
 }
 
 html.light input,
@@ -674,11 +718,59 @@ html.light select,
 html.light textarea {
   background-color: #ffffff !important;
   color: #0f172a !important;
-  border-color: rgba(15, 23, 42, 0.18) !important;
+  border: 1px solid #cbd5e1 !important;
 }
 
 html.light input::placeholder,
 html.light textarea::placeholder {
   color: #94a3b8 !important;
 }
+
+/* Badges and live pills */
+html.light .cyber-badge-teal {
+  background: #f0fdfa !important;
+  border-color: #99f6e4 !important;
+  color: #0f766e !important;
+}
+
+html.light .cyber-badge-amber {
+  background: #fffbeb !important;
+  border-color: #fde68a !important;
+  color: #92400e !important;
+}
+
+html.light .cyber-badge-rose {
+  background: #fff1f2 !important;
+  border-color: #fecdd3 !important;
+  color: #9f1239 !important;
+}
+
+html.light .bg-emerald-950\/40 {
+  background-color: #ecfdf5 !important;
+  border-color: #a7f3d0 !important;
+  color: #065f46 !important;
+}
+
+html.light .waveform-bar {
+  background: #059669 !important;
+}
+
+html.light .signal-radar {
+  border-color: #cbd5e1 !important;
+  background: #f8fafc !important;
+  box-shadow: none !important;
+}
+
+html.light .floating-orb {
+  background: #ffffff !important;
+  border-color: #e2e8f0 !important;
+  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.04) !important;
+  animation: none !important;
+}
+
+html.light .floating-orb > span:first-child {
+  background: transparent !important;
+}
+
+
 
