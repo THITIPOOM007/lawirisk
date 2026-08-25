@@ -21,12 +21,15 @@ import {
   Link2,
   LogOut,
   Menu,
+  Moon,
+  Network,
   PanelLeftClose,
   ScanSearch,
   Settings,
   ShieldCheck,
   Sparkles,
-  Network,
+  Sun,
+  Type,
   Workflow,
   X,
 } from 'lucide-react';
@@ -105,6 +108,24 @@ const getAuthSnapshot = () => {
 };
 
 const getServerAuthSnapshot = () => 'INVESTIGATOR\u0000ร.ต.อ. สมชาย (พนักงานสืบสวน)';
+const subscribeToTheme = (onStoreChange: () => void) => {
+  window.addEventListener('ev-theme-change', onStoreChange);
+  return () => window.removeEventListener('ev-theme-change', onStoreChange);
+};
+
+const getThemeSnapshot = () => {
+  if (typeof window === 'undefined') return 'dark';
+  return (localStorage.getItem('lawirisk-theme') as 'dark' | 'light') || 'dark';
+};
+
+const getServerThemeSnapshot = () => 'dark';
+
+const getTextSizeSnapshot = () => {
+  if (typeof window === 'undefined') return 'standard';
+  return (localStorage.getItem('lawirisk-text-size') as 'standard' | 'large') || 'standard';
+};
+
+const getServerTextSizeSnapshot = () => 'standard';
 const subscribeToHydration = () => () => {};
 
 function NavLink({ item, active, collapsed, onNavigate }: {
@@ -143,9 +164,39 @@ export default function Navigation({ children }: NavigationProps) {
   const mobileMenuButtonRef = useRef<HTMLButtonElement>(null);
   const authSnapshot = useSyncExternalStore(subscribeToAuth, getAuthSnapshot, getServerAuthSnapshot);
   const isHydrated = useSyncExternalStore(subscribeToHydration, () => true, () => false);
+  const theme = useSyncExternalStore(subscribeToTheme, getThemeSnapshot, getServerThemeSnapshot);
+  const textSize = useSyncExternalStore(subscribeToTheme, getTextSizeSnapshot, getServerTextSizeSnapshot);
   const [demoRole, demoName] = authSnapshot.split('\u0000');
   const [serverIdentity, setServerIdentity] = useState<{ name: string; role: string } | null>(null);
   const usesSupabase = isSupabaseConfigured();
+
+  const toggleTheme = () => {
+    const nextTheme = theme === 'dark' ? 'light' : 'dark';
+    try {
+      localStorage.setItem('lawirisk-theme', nextTheme);
+      if (nextTheme === 'light') {
+        document.documentElement.classList.remove('dark');
+        document.documentElement.classList.add('light');
+      } else {
+        document.documentElement.classList.remove('light');
+        document.documentElement.classList.add('dark');
+      }
+      window.dispatchEvent(new Event('ev-theme-change'));
+    } catch {}
+  };
+
+  const toggleTextSize = () => {
+    const nextSize = textSize === 'standard' ? 'large' : 'standard';
+    try {
+      localStorage.setItem('lawirisk-text-size', nextSize);
+      if (nextSize === 'large') {
+        document.documentElement.classList.add('text-size-lg');
+      } else {
+        document.documentElement.classList.remove('text-size-lg');
+      }
+      window.dispatchEvent(new Event('ev-theme-change'));
+    } catch {}
+  };
 
   useEffect(() => {
     if (!usesSupabase) return;
@@ -221,7 +272,7 @@ export default function Navigation({ children }: NavigationProps) {
 
   const renderNavGroup = (label: string, items: NavItem[], collapsed: boolean, onNavigate?: () => void) => (
     <div className="space-y-1">
-      {!collapsed && <p className="px-3 pb-1 pt-3 text-[10px] font-semibold uppercase tracking-[0.18em] text-slate-600">{label}</p>}
+      {!collapsed && <p className="px-3 pb-1 pt-3 text-[11px] font-bold uppercase tracking-[0.18em] text-slate-500">{label}</p>}
       {items.map((item) => <NavLink key={item.href} item={item} active={isActive(item.href)} collapsed={collapsed} onNavigate={onNavigate} />)}
     </div>
   );
@@ -239,8 +290,8 @@ export default function Navigation({ children }: NavigationProps) {
           </span>
           {!collapsed && (
             <span className="min-w-0">
-              <span className="block bg-gradient-to-r from-cyan-200 via-white to-amber-200 bg-clip-text text-[18px] font-black tracking-[-0.035em] text-transparent">LawiRisk-SSK</span>
-              <span className="block truncate text-[8px] font-bold uppercase tracking-[0.2em] text-cyan-200/70">Evidence Intelligence</span>
+              <span className="block bg-gradient-to-r from-cyan-200 via-teal-100 to-amber-200 bg-clip-text text-[19px] font-black tracking-[-0.035em] text-transparent">LawiRisk-SSK</span>
+              <span className="block truncate text-[9px] font-bold uppercase tracking-[0.2em] text-teal-400/90">Evidence Intelligence</span>
             </span>
           )}
         </Link>
@@ -253,14 +304,14 @@ export default function Navigation({ children }: NavigationProps) {
         {isAdmin && renderNavGroup('ระบบ', [{ name: 'ตั้งค่าและสิทธิ์', href: '/admin/settings', icon: Settings }], collapsed, onNavigate)}
       </nav>
 
-      <div className="border-t border-white/[0.06] p-3">
-        <div className={`mb-2 flex items-center rounded-xl border border-white/[0.07] bg-gradient-to-br from-white/[0.045] to-transparent p-2.5 shadow-[inset_0_1px_rgba(255,255,255,0.025)] ${collapsed ? 'justify-center' : 'gap-2.5'}`}>
+      <div className="border-t border-white/[0.06] p-3 space-y-2">
+        <div className={`flex items-center rounded-xl border border-white/[0.07] bg-gradient-to-br from-white/[0.045] to-transparent p-2.5 shadow-[inset_0_1px_rgba(255,255,255,0.025)] ${collapsed ? 'justify-center' : 'gap-2.5'}`}>
           <span className="grid h-9 w-9 shrink-0 place-items-center rounded-lg border border-white/[0.06] bg-slate-800/80 text-slate-300"><CircleUserRound className="h-[18px] w-[18px]" /></span>
-          {!collapsed && <span className="min-w-0 flex-1"><span className="block truncate text-xs font-semibold text-slate-100" suppressHydrationWarning>{userName}</span><span className="block truncate text-[10px] text-slate-500" suppressHydrationWarning>{roleLabel(userRole)}</span></span>}
+          {!collapsed && <span className="min-w-0 flex-1"><span className="block truncate text-xs font-semibold text-slate-100" suppressHydrationWarning>{userName}</span><span className="block truncate text-[11px] font-medium text-slate-400" suppressHydrationWarning>{roleLabel(userRole)}</span></span>}
         </div>
-        <button type="button" onClick={handleLogout} disabled={isSigningOut} title={collapsed ? 'ออกจากระบบ' : undefined} className={`flex min-h-10 w-full items-center rounded-xl px-3 text-xs font-medium text-slate-500 transition-colors hover:bg-rose-400/[0.07] hover:text-rose-300 disabled:opacity-50 ${collapsed ? 'justify-center' : ''}`}>
+        <button type="button" onClick={handleLogout} disabled={isSigningOut} title={collapsed ? 'ออกจากระบบ' : undefined} className={`flex min-h-10 w-full items-center rounded-xl px-3 text-xs font-medium text-slate-400 transition-colors hover:bg-rose-400/[0.07] hover:text-rose-300 disabled:opacity-50 ${collapsed ? 'justify-center' : ''}`}>
           <LogOut className="h-4 w-4 shrink-0" />
-          {!collapsed && <span className="ml-2.5">{isSigningOut ? 'กำลังออกจากระบบ…' : 'ออกจากระบบ'}</span>}
+          {!collapsed && <span className="ml-2.5 font-medium">{isSigningOut ? 'กำลังออกจากระบบ…' : 'ออกจากระบบ'}</span>}
         </button>
       </div>
     </>
@@ -272,7 +323,7 @@ export default function Navigation({ children }: NavigationProps) {
       <a href="#main-content" className="sr-only z-[100] rounded-lg bg-teal-300 px-4 py-2 font-bold text-slate-950 focus:not-sr-only focus:fixed focus:left-4 focus:top-4">ข้ามไปยังเนื้อหาหลัก</a>
       <aside className={`nav-rail relative z-20 hidden shrink-0 flex-col border-r border-white/[0.055] transition-[width] duration-500 [transition-timing-function:var(--ease-out-expo)] lg:flex ${isCollapsed ? 'w-[80px]' : 'w-[280px]'}`}>
         {sidebarContent()}
-        <button type="button" onClick={() => setIsCollapsed((value) => !value)} className="absolute -right-3.5 top-[98px] grid h-8 w-8 place-items-center rounded-full border border-white/[0.1] bg-[#0b1a29]/95 text-slate-500 shadow-[0_8px_24px_rgba(0,0,0,0.3)] transition-all duration-300 hover:scale-110 hover:border-teal-300/20 hover:text-teal-300" aria-label={isCollapsed ? 'ขยายแถบเมนู' : 'ย่อแถบเมนู'}>
+        <button type="button" onClick={() => setIsCollapsed((value) => !value)} className="absolute -right-3.5 top-[98px] grid h-8 w-8 place-items-center rounded-full border border-white/[0.1] bg-[#0b1a29]/95 text-slate-400 shadow-[0_8px_24px_rgba(0,0,0,0.3)] transition-all duration-300 hover:scale-110 hover:border-teal-300/20 hover:text-teal-300" aria-label={isCollapsed ? 'ขยายแถบเมนู' : 'ย่อแถบเมนู'}>
           <PanelLeftClose className={`h-3.5 w-3.5 transition-transform ${isCollapsed ? 'rotate-180' : ''}`} />
         </button>
       </aside>
@@ -283,28 +334,53 @@ export default function Navigation({ children }: NavigationProps) {
             <button ref={mobileMenuButtonRef} type="button" disabled={!isHydrated} onClick={() => setIsMobileMenuOpen(true)} className="grid h-10 w-10 shrink-0 place-items-center rounded-xl border border-white/[0.08] bg-white/[0.035] text-slate-300 disabled:cursor-wait disabled:opacity-60 lg:hidden" aria-label="เปิดเมนูหลัก" aria-expanded={isMobileMenuOpen} aria-controls="mobile-navigation"><Menu className="h-5 w-5" /></button>
             <div className="min-w-0">
               <div className="flex items-center gap-2">
-                <p className="truncate text-[9px] font-semibold uppercase tracking-[0.22em] text-teal-300/65">{meta.eyebrow}</p>
-                <span className="hidden h-1 w-1 rounded-full bg-slate-600 sm:inline-block" />
-                <span className="hidden items-center gap-1 font-mono text-[9px] text-slate-500 sm:inline-flex">
+                <p className="truncate text-[10px] font-bold uppercase tracking-[0.22em] text-teal-300/80">{meta.eyebrow}</p>
+                <span className="hidden h-1 w-1 rounded-full bg-slate-500 sm:inline-block" />
+                <span className="hidden items-center gap-1 font-mono text-[10px] text-slate-400 sm:inline-flex">
                   <span className="h-1.5 w-1.5 rounded-full bg-emerald-400 animate-pulse" />
                   LEDGER: ONLINE
                 </span>
               </div>
-              <h2 className="mt-0.5 truncate text-base font-semibold tracking-[-0.015em] text-slate-100 sm:text-lg">{meta.title}</h2>
+              <h2 className="mt-0.5 truncate text-base font-bold tracking-[-0.015em] text-slate-100 sm:text-lg">{meta.title}</h2>
             </div>
           </div>
           <div className="flex items-center gap-2 sm:gap-3">
             {/* Live Command Guard Pill */}
-            <div className="hidden items-center gap-2.5 rounded-full border border-emerald-400/20 bg-emerald-950/40 px-3.5 py-1.5 text-[10px] font-medium text-emerald-300 shadow-[0_0_20px_rgba(52,211,153,0.1),inset_0_1px_rgba(255,255,255,0.05)] sm:flex">
+            <div className="hidden items-center gap-2.5 rounded-full border border-emerald-400/20 bg-emerald-950/40 px-3.5 py-1.5 text-[11px] font-semibold text-emerald-300 shadow-[0_0_20px_rgba(52,211,153,0.1),inset_0_1px_rgba(255,255,255,0.05)] sm:flex">
               <span className="status-pulse h-2 w-2 rounded-full bg-emerald-400 text-emerald-400" />
               <ShieldCheck className="h-3.5 w-3.5 text-emerald-400" />
-              <span className="font-mono font-semibold tracking-wider">COMMAND GUARD · ACTIVE</span>
+              <span className="font-mono font-bold tracking-wider">COMMAND GUARD · ACTIVE</span>
               <div className="flex items-center gap-0.5 h-3 ml-1">
                 <span className="waveform-bar" style={{ height: '8px' }} />
                 <span className="waveform-bar" style={{ height: '14px', animationDelay: '0.2s' }} />
                 <span className="waveform-bar" style={{ height: '10px', animationDelay: '0.4s' }} />
               </div>
             </div>
+
+            {/* Accessibility: Text Size Toggle Button */}
+            <button
+              type="button"
+              onClick={toggleTextSize}
+              title={textSize === 'large' ? 'ปรับขนาดตัวอักษรกลับเป็นมาตรฐาน' : 'ขยายขนาดตัวอักษรให้อ่านง่าย ชัดเจน (Large Text)'}
+              aria-label="สลับขนาดตัวอักษร"
+              className="secondary-action flex h-10 items-center gap-1.5 rounded-xl border border-white/[0.08] px-3 text-xs font-bold text-slate-300 hover:text-teal-300"
+            >
+              <Type className="h-4 w-4 text-teal-400" />
+              <span>{textSize === 'large' ? 'A+' : 'A'}</span>
+            </button>
+
+            {/* Theme Toggle: Dark / Light Mode */}
+            <button
+              type="button"
+              onClick={toggleTheme}
+              title={theme === 'dark' ? 'เปลี่ยนเป็นโหมดสว่าง (Light Mode)' : 'เปลี่ยนเป็นโหมดมืด (Dark Mode)'}
+              aria-label="สลับโหมดหน้าจอ สว่าง/มืด"
+              className="secondary-action grid h-10 w-10 place-items-center rounded-xl border border-white/[0.08] text-slate-300 hover:text-amber-300"
+            >
+              {theme === 'dark' ? <Sun className="h-4 w-4 text-amber-300" /> : <Moon className="h-4 w-4 text-indigo-400" />}
+            </button>
+
+            {/* Notification Bell */}
             <Link href="/intake" aria-label="เปิดคิวรับเรื่อง" className="secondary-action relative grid h-10 w-10 place-items-center rounded-xl border border-white/[0.08] text-slate-400 hover:text-slate-100">
               <Bell className="h-[18px] w-[18px]" />
               <span className="absolute right-2 top-2 h-2 w-2 rounded-full bg-teal-400 shadow-[0_0_8px_rgba(45,212,191,0.8)] animate-pulse" />
