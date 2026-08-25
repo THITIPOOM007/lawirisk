@@ -31,6 +31,10 @@ export async function uploadEvidenceResumable(options: StartUploadOptions): Prom
       signal?.removeEventListener('abort', onAbort);
       callback();
     };
+
+    // Ensure contentType is never empty — empty string causes Supabase 400
+    const contentType = file.type || 'application/octet-stream';
+
     const upload = new Upload(file, {
       endpoint: grant.resumable_endpoint,
       chunkSize: TUS_CHUNK_BYTES,
@@ -39,19 +43,30 @@ export async function uploadEvidenceResumable(options: StartUploadOptions): Prom
       metadata: {
         bucketName: grant.bucket,
         objectName: grant.object_path,
-        contentType: file.type,
+        contentType,
         cacheControl: 'no-cache',
       },
       uploadSize: file.size,
-      uploadDataDuringCreation: true,
+      uploadDataDuringCreation: false,
       removeFingerprintOnSuccess: true,
-      storeFingerprintForResuming: true,
+      // Disable fingerprint-based resume: each reserve call creates a new
+      // object path with a fresh signed token, so stale fingerprints always
+      // point to expired tokens and cause Supabase Storage to return 400.
+      storeFingerprintForResuming: false,
       onProgress: (bytesSent, bytesTotal) => {
         const percentage = bytesTotal > 0 ? Math.min(100, Math.round((bytesSent / bytesTotal) * 100)) : 0;
         onProgress?.(percentage, bytesSent, bytesTotal);
       },
       onSuccess: () => finish(resolve),
-      onError: (error) => finish(() => reject(error)),
+      onError: (error) => {
+        const message = error instanceof Error ? error.message : String(error);
+        const is400 = /status:\s*400/i.test(message) || /Bad Request/i.test(message);
+        const is403 = /status:\s*403/i.test(message) || /Forbidden/i.test(message);
+        let userMessage = message;
+        if (is400) userMessage = 'พื้นที่จัดเก็บปฏิเสธการอัปโหลด (400) กรุณาลองเลือกไฟล์ใหม่';
+        else if (is403) userMessage = 'ไม่มีสิทธิ์อัปโหลดไปยังพื้นที่จัดเก็บ';
+        finish(() => reject(new Error(userMessage)));
+      },
     });
 
     const onAbort = () => {
@@ -59,12 +74,7 @@ export async function uploadEvidenceResumable(options: StartUploadOptions): Prom
     };
     signal?.addEventListener('abort', onAbort, { once: true });
 
-    void upload.findPreviousUploads()
-      .then((previousUploads) => {
-        if (signal?.aborted) return onAbort();
-        if (previousUploads.length > 0) upload.resumeFromPreviousUpload(previousUploads[0]);
-        upload.start();
-      })
-      .catch((error: unknown) => finish(() => reject(error)));
+    // Always start fresh — never resume from previous uploads.
+    upload.start();
   });
 }
