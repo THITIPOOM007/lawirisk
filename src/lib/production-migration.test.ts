@@ -9,6 +9,7 @@ const manualIntakeMigration = fs.readFileSync(path.join(process.cwd(), 'supabase
 const largeEvidenceMigration = fs.readFileSync(path.join(process.cwd(), 'supabase/migrations/202608240002_evidence_upload_200mb.sql'), 'utf8');
 const scannerRemovalMigration = fs.readFileSync(path.join(process.cwd(), 'supabase/migrations/202608240003_remove_scanner_dependency.sql'), 'utf8');
 const falseQuarantineMigration = fs.readFileSync(path.join(process.cwd(), 'supabase/migrations/202608240004_release_false_quarantine.sql'), 'utf8');
+const promotedAttachmentsMigration = fs.readFileSync(path.join(process.cwd(), 'supabase/migrations/202608250001_allow_promoted_attachments.sql'), 'utf8');
 
 describe('production migration invariants', () => {
   it('makes evidence originals and audit history immutable', () => {
@@ -84,5 +85,13 @@ describe('production migration invariants', () => {
     expect(falseQuarantineMigration).toContain("object.name = attachment.storage_path");
     expect(falseQuarantineMigration).toContain("'confirmed_infected_preserved', true");
     expect(falseQuarantineMigration).not.toContain("SET malware_scan_status = 'CLEAN'");
+  });
+
+  it('allows promoted envelopes to receive additional attachment uploads', () => {
+    expect(promotedAttachmentsMigration).toContain("'PROMOTED'");
+    expect(promotedAttachmentsMigration).toContain("reserve_intake_attachment_upload");
+    expect(promotedAttachmentsMigration).toContain("SECURITY DEFINER");
+    expect(promotedAttachmentsMigration).toContain("INTAKE_ATTACHMENT_RESERVED");
+    expect(promotedAttachmentsMigration).toContain("REVOKE ALL ON FUNCTION public.reserve_intake_attachment_upload");
   });
 });

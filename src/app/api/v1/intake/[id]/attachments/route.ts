@@ -96,7 +96,7 @@ export async function POST(
     if (!accessibleEnvelope) {
       return apiError('ENVELOPE_NOT_ACCESSIBLE', 'ไม่พบซองนำเข้าหรือคุณไม่มีสิทธิ์เข้าถึง', 404, traceId);
     }
-    const attachableStatuses = ['RECEIVED', 'NORMALIZING', 'TRIAGE_PENDING', 'NEEDS_INFO'];
+    const attachableStatuses = ['RECEIVED', 'NORMALIZING', 'TRIAGE_PENDING', 'NEEDS_INFO', 'PROMOTED'];
     if (!attachableStatuses.includes(accessibleEnvelope.status)) {
        return apiError('ENVELOPE_NOT_ATTACHABLE', 'สถานะซองนำเข้าไม่สามารถแนบไฟล์ได้', 409, traceId);
     }
