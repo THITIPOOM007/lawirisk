@@ -8,6 +8,7 @@ const automationMigration = fs.readFileSync(path.join(process.cwd(), 'supabase/m
 const manualIntakeMigration = fs.readFileSync(path.join(process.cwd(), 'supabase/migrations/202608240001_manual_intake_scan_readiness.sql'), 'utf8');
 const largeEvidenceMigration = fs.readFileSync(path.join(process.cwd(), 'supabase/migrations/202608240002_evidence_upload_200mb.sql'), 'utf8');
 const scannerRemovalMigration = fs.readFileSync(path.join(process.cwd(), 'supabase/migrations/202608240003_remove_scanner_dependency.sql'), 'utf8');
+const falseQuarantineMigration = fs.readFileSync(path.join(process.cwd(), 'supabase/migrations/202608240004_release_false_quarantine.sql'), 'utf8');
 
 describe('production migration invariants', () => {
   it('makes evidence originals and audit history immutable', () => {
@@ -74,5 +75,14 @@ describe('production migration invariants', () => {
     expect(scannerRemovalMigration).toContain("legacy_infected_files_preserved', true");
     expect(scannerRemovalMigration).toContain("IN ('CLEAN', 'NOT_SCANNED')");
     expect(scannerRemovalMigration).not.toContain("SET malware_scan_status = 'CLEAN'");
+  });
+
+  it('releases scanner-only quarantine while preserving confirmed infected intake', () => {
+    expect(falseQuarantineMigration).toContain("envelope.status = 'QUARANTINED'");
+    expect(falseQuarantineMigration).toContain("SET status = 'TRIAGE_PENDING'");
+    expect(falseQuarantineMigration).toContain("attachment.malware_scan_status = 'INFECTED'");
+    expect(falseQuarantineMigration).toContain("object.name = attachment.storage_path");
+    expect(falseQuarantineMigration).toContain("'confirmed_infected_preserved', true");
+    expect(falseQuarantineMigration).not.toContain("SET malware_scan_status = 'CLEAN'");
   });
 });
