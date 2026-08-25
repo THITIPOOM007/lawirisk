@@ -18,7 +18,9 @@ import {
   Key, 
   FileCheck, 
   CheckCircle2, 
-  Code2
+  Code2,
+  FolderKanban,
+  Database
 } from 'lucide-react';
 import {
   type Case,
@@ -207,10 +209,11 @@ export default function IntakeDetailPage() {
 
   const complainant = participants.find(p => p.role === 'COMPLAINANT');
   const accused = participants.find(p => p.role === 'ACCUSED');
+  const isAlreadyTriaged = envelope.status === 'PROMOTED' || envelope.status === 'MERGED' || envelope.status === 'REJECTED';
 
   return (
     <div className="space-y-8">
-      {/* Navigation breadcrumb */}
+      {/* Navigation breadcrumb & Title */}
       <div>
         <Link href="/intake" className="inline-flex items-center text-xs text-indigo-400 hover:text-indigo-300 font-semibold mb-4 transition-colors">
           <ArrowLeft className="h-4 w-4 mr-1" /> กลับสู่ระบบรับเรื่องและคัดกรองเบาะแส
@@ -220,12 +223,36 @@ export default function IntakeDetailPage() {
             <FileText className="h-7 w-7 text-teal-300 shrink-0" />
             <span>รายละเอียดคำร้องและเบาะแส #{envelope.id.slice(0, 8)}</span>
           </h1>
-          {parsedData?.trackingToken && (
-            <div className="inline-flex items-center gap-2 bg-indigo-950/60 border border-indigo-500/30 px-3.5 py-1.5 rounded-full text-xs font-mono text-indigo-300">
-              <Key className="h-3.5 w-3.5" />
-              <span>รหัสติดตาม: {parsedData.trackingToken}</span>
-            </div>
-          )}
+          <div className="flex flex-wrap items-center gap-2">
+            <span className={`inline-flex items-center px-3 py-1.5 rounded-full text-xs font-semibold ${
+              envelope.status === 'PROMOTED'
+                ? 'bg-emerald-500/15 text-emerald-400 border border-emerald-500/30'
+                : envelope.status === 'MERGED'
+                ? 'bg-sky-500/15 text-sky-400 border border-sky-500/30'
+                : envelope.status === 'REJECTED'
+                ? 'bg-rose-500/15 text-rose-400 border border-rose-500/30'
+                : envelope.status === 'NEEDS_INFO'
+                ? 'bg-amber-500/15 text-amber-400 border border-amber-500/30'
+                : envelope.status === 'QUARANTINED'
+                ? 'bg-rose-500/20 text-rose-300 border border-rose-500/40'
+                : 'bg-indigo-500/15 text-indigo-400 border border-indigo-500/30'
+            }`}>
+              สถานะ: {
+                envelope.status === 'PROMOTED' ? 'ยกระดับเป็นคดีแล้ว (PROMOTED)' :
+                envelope.status === 'MERGED' ? 'ผนวกเข้าสำนวนเดิม (MERGED)' :
+                envelope.status === 'REJECTED' ? 'ปฏิเสธคำร้อง (REJECTED)' :
+                envelope.status === 'NEEDS_INFO' ? 'รอข้อมูลเพิ่มเติม (NEEDS_INFO)' :
+                envelope.status === 'QUARANTINED' ? 'ระงับชั่วคราว (QUARANTINED)' :
+                'รอการคัดกรอง (TRIAGE_PENDING)'
+              }
+            </span>
+            {parsedData?.trackingToken && (
+              <div className="inline-flex items-center gap-2 bg-indigo-950/60 border border-indigo-500/30 px-3.5 py-1.5 rounded-full text-xs font-mono text-indigo-300">
+                <Key className="h-3.5 w-3.5" />
+                <span>รหัสติดตาม: {parsedData.trackingToken}</span>
+              </div>
+            )}
+          </div>
         </div>
       </div>
 
@@ -487,143 +514,190 @@ export default function IntakeDetailPage() {
               การพิจารณาและสั่งการคัดกรอง
             </h3>
 
-            <form onSubmit={handleTriageSubmit} className="space-y-4 text-xs">
-              <div>
-                <label className="block text-slate-400 font-semibold mb-2">เลือกผลการพิจารณาคัดกรอง</label>
-                <div className="space-y-2">
-                  <label className="flex items-center space-x-2.5 p-3.5 bg-slate-950 rounded-2xl border border-slate-900 hover:border-slate-800 cursor-pointer">
-                    <input
-                      type="radio"
-                      name="triage_action"
-                      checked={triageAction === 'CREATE_CASE'}
-                      onChange={() => setTriageAction('CREATE_CASE')}
-                      className="text-indigo-600 focus:ring-indigo-500 bg-slate-900"
-                    />
-                    <div>
-                      <span className="font-bold text-white block">อนุมัติเปิดสำนวนคดีใหม่ (CREATE_CASE)</span>
-                      <span className="text-[10px] text-slate-500">ขึ้นทะเบียนเป็นสำนวนคดีสืบสวนใหม่ของหน่วยงาน</span>
+            {isAlreadyTriaged ? (
+              <div className="space-y-4">
+                <div className={`p-5 rounded-2xl border ${
+                  envelope.status === 'PROMOTED'
+                    ? 'bg-emerald-950/30 border-emerald-500/30 text-emerald-300'
+                    : envelope.status === 'MERGED'
+                    ? 'bg-sky-950/30 border-sky-500/30 text-sky-300'
+                    : 'bg-rose-950/30 border-rose-500/30 text-rose-300'
+                }`}>
+                  <div className="flex items-start gap-3">
+                    <CheckCircle2 className="h-5 w-5 shrink-0 mt-0.5 text-emerald-400" />
+                    <div className="space-y-1 text-xs">
+                      <h4 className="font-bold text-sm text-white">
+                        {envelope.status === 'PROMOTED' ? 'คำร้องนี้ได้รับการอนุมัติเปิดสำนวนคดีแล้ว' :
+                         envelope.status === 'MERGED' ? 'คำร้องนี้ถูกผนวกเข้ากับสำนวนคดีเดิมแล้ว' :
+                         'คำร้องนี้ถูกปฏิเสธ / สแปม'}
+                      </h4>
+                      <p className="leading-relaxed text-slate-300">
+                        {envelope.status === 'PROMOTED'
+                          ? 'ซองคำร้องและพยานหลักฐานได้รับการบรรจุเข้าสู่สารบบคดีสืบสวนเรียบร้อยแล้ว คุณสามารถจัดการงานสืบสวนต่อได้ที่หน้าสำนวนคดี'
+                          : envelope.status === 'MERGED'
+                          ? 'ข้อมูลและหลักฐานในซองนี้ถูกโอนย้ายไปยังสำนวนคดีเป้าหมายเรียบร้อยแล้ว'
+                          : 'คำร้องนี้ถูกบันทึกเป็นสแปมหรืออยู่นอกอำนาจหน้าที่ตามผลการพิจารณา'}
+                      </p>
                     </div>
-                  </label>
-
-                  <label className="flex items-center space-x-2.5 p-3.5 bg-slate-950 rounded-2xl border border-slate-900 hover:border-slate-800 cursor-pointer">
-                    <input
-                      type="radio"
-                      name="triage_action"
-                      checked={triageAction === 'MERGE_INTAKE'}
-                      onChange={() => setTriageAction('MERGE_INTAKE')}
-                      className="text-indigo-600 focus:ring-indigo-500 bg-slate-900"
-                    />
-                    <div>
-                      <span className="font-bold text-white block">ผนวกเข้ากับสำนวนคดีเดิม (MERGE_INTAKE)</span>
-                      <span className="text-[10px] text-slate-500">นำข้อมูลและพยานหลักฐานรวมเข้ากับสำนวนคดีที่มีอยู่แล้ว</span>
-                    </div>
-                  </label>
-
-                  <label className="flex items-center space-x-2.5 p-3.5 bg-slate-950 rounded-2xl border border-slate-900 hover:border-slate-800 cursor-pointer">
-                    <input
-                      type="radio"
-                      name="triage_action"
-                      checked={triageAction === 'REQUEST_MORE_INFO'}
-                      onChange={() => setTriageAction('REQUEST_MORE_INFO')}
-                      className="text-indigo-600 focus:ring-indigo-500 bg-slate-900"
-                    />
-                    <div>
-                      <span className="font-bold text-white block">ขอข้อมูลและพยานหลักฐานเพิ่มเติม (REQUEST_MORE_INFO)</span>
-                      <span className="text-[10px] text-slate-500">ประสานงานผู้ร้องเรียนเพื่อขอรายละเอียดเอกสารเพิ่มเติม</span>
-                    </div>
-                  </label>
-
-                  <label className="flex items-center space-x-2.5 p-3.5 bg-slate-950 rounded-2xl border border-slate-900 hover:border-slate-800 cursor-pointer">
-                    <input
-                      type="radio"
-                      name="triage_action"
-                      checked={triageAction === 'REJECT_SPAM'}
-                      onChange={() => setTriageAction('REJECT_SPAM')}
-                      className="text-indigo-600 focus:ring-indigo-500 bg-slate-900"
-                    />
-                    <div>
-                      <span className="font-bold text-white block">ปฏิเสธคำร้อง / ไม่เข้าข่าย (REJECT_SPAM)</span>
-                      <span className="text-[10px] text-slate-500">กรณีข้อมูลเท็จ สแปม หรือไม่อยู่ในขอบข่ายอำนาจหน้าที่</span>
-                    </div>
-                  </label>
-                </div>
-              </div>
-
-              {/* Dynamic input sections */}
-              {triageAction === 'CREATE_CASE' && (
-                <div className="space-y-3 p-4 bg-slate-950 border border-slate-900 rounded-2xl">
-                  <h4 className="font-bold text-white block mb-1">ระบุรายละเอียดสำนวนคดีใหม่</h4>
-                  <div>
-                    <label className="text-slate-400 block mb-1">เลขที่สำนวนคดี</label>
-                    <input
-                      type="text"
-                      required
-                      value={newCaseNumber}
-                      onChange={(e) => setNewCaseNumber(e.target.value)}
-                      className="w-full bg-slate-900 border-0 rounded-xl py-2 px-3 text-white ring-1 ring-slate-800 focus:ring-2 focus:ring-indigo-500 text-xs"
-                    />
-                  </div>
-                  <div>
-                    <label className="text-slate-400 block mb-1">ชื่อสำนวนคดีสืบสวน</label>
-                    <input
-                      type="text"
-                      required
-                      placeholder="เช่น คดีบริการจัดฟันแฟชั่นผิดกฎหมาย Sisaket"
-                      value={newCaseTitle}
-                      onChange={(e) => setNewCaseTitle(e.target.value)}
-                      className="w-full bg-slate-900 border-0 rounded-xl py-2 px-3 text-white ring-1 ring-slate-800 focus:ring-2 focus:ring-indigo-500 text-xs"
-                    />
                   </div>
                 </div>
-              )}
 
-              {triageAction === 'MERGE_INTAKE' && (
-                <div className="space-y-3 p-4 bg-slate-950 border border-slate-900 rounded-2xl">
-                  <h4 className="font-bold text-white block mb-1">เลือกสำนวนคดีเดิมเป้าหมาย</h4>
-                  <select
-                    required
-                    value={mergeCaseId}
-                    onChange={(e) => setMergeCaseId(e.target.value)}
-                    className="w-full bg-slate-900 border-0 rounded-xl py-2.5 px-3 text-white ring-1 ring-slate-800 focus:ring-2 focus:ring-indigo-500 text-xs"
+                <div className="flex flex-col gap-2 pt-2">
+                  <Link
+                    href="/cases"
+                    className="inline-flex items-center justify-center gap-2 px-4 py-3 rounded-2xl text-xs font-semibold text-white bg-indigo-600 hover:bg-indigo-500 transition-all shadow-md"
                   >
-                    <option value="">-- กรุณาเลือกสำนวนคดีเดิม --</option>
-                    {casesList.map(c => (
-                      <option key={c.id} value={c.id}>{c.number} - {c.title}</option>
-                    ))}
-                  </select>
+                    <FolderKanban className="h-4 w-4" />
+                    <span>ไปยังรายการสำนวนคดีสืบสวน (Case Space)</span>
+                  </Link>
+                  <Link
+                    href="/evidence"
+                    className="inline-flex items-center justify-center gap-2 px-4 py-2.5 rounded-2xl text-xs font-semibold text-slate-300 bg-slate-950 hover:bg-slate-900 border border-slate-800 transition-all"
+                  >
+                    <Database className="h-4 w-4 text-teal-300" />
+                    <span>เปิดคลังพยานหลักฐานดิจิทัล (Evidence Vault)</span>
+                  </Link>
                 </div>
-              )}
-
-              <div>
-                <label className="block text-slate-400 font-semibold mb-1">บันทึกความเห็นของเจ้าหน้าที่ผู้คัดกรอง</label>
-                <textarea
-                  required
-                  rows={4}
-                  placeholder="ระบุเหตุผลการพิจารณาคัดกรอง และข้อสั่งการประกอบ..."
-                  value={triageReason}
-                  onChange={(e) => setTriageReason(e.target.value)}
-                  className="w-full bg-slate-950 border-0 rounded-2xl py-3 px-4 text-white ring-1 ring-slate-800 focus:ring-2 focus:ring-indigo-500 text-xs"
-                />
               </div>
+            ) : (
+              <form onSubmit={handleTriageSubmit} className="space-y-4 text-xs">
+                <div>
+                  <label className="block text-slate-400 font-semibold mb-2">เลือกผลการพิจารณาคัดกรอง</label>
+                  <div className="space-y-2">
+                    <label className="flex items-center space-x-2.5 p-3.5 bg-slate-950 rounded-2xl border border-slate-900 hover:border-slate-800 cursor-pointer">
+                      <input
+                        type="radio"
+                        name="triage_action"
+                        checked={triageAction === 'CREATE_CASE'}
+                        onChange={() => setTriageAction('CREATE_CASE')}
+                        className="text-indigo-600 focus:ring-indigo-500 bg-slate-900"
+                      />
+                      <div>
+                        <span className="font-bold text-white block">อนุมัติเปิดสำนวนคดีใหม่ (CREATE_CASE)</span>
+                        <span className="text-[10px] text-slate-500">ขึ้นทะเบียนเป็นสำนวนคดีสืบสวนใหม่ของหน่วยงาน</span>
+                      </div>
+                    </label>
 
-              <button
-                type="submit"
-                disabled={isSubmitting || (triageAction === 'MERGE_INTAKE' && !mergeCaseId)}
-                className="w-full inline-flex items-center justify-center px-4 py-3 border border-transparent rounded-2xl shadow-lg text-sm font-semibold text-white bg-indigo-600 hover:bg-indigo-500 transition-all cursor-pointer"
-              >
-                {isSubmitting ? (
-                  <>
-                    <Loader2 className="h-5 w-5 mr-2 animate-spin" />
-                    กำลังบันทึกและส่งต่อสำนวนคดี...
-                  </>
-                ) : (
-                  <>
-                    <Save className="h-5 w-5 mr-2" />
-                    บันทึกผลการพิจารณาคัดกรอง
-                  </>
+                    <label className="flex items-center space-x-2.5 p-3.5 bg-slate-950 rounded-2xl border border-slate-900 hover:border-slate-800 cursor-pointer">
+                      <input
+                        type="radio"
+                        name="triage_action"
+                        checked={triageAction === 'MERGE_INTAKE'}
+                        onChange={() => setTriageAction('MERGE_INTAKE')}
+                        className="text-indigo-600 focus:ring-indigo-500 bg-slate-900"
+                      />
+                      <div>
+                        <span className="font-bold text-white block">ผนวกเข้ากับสำนวนคดีเดิม (MERGE_INTAKE)</span>
+                        <span className="text-[10px] text-slate-500">นำข้อมูลและพยานหลักฐานรวมเข้ากับสำนวนคดีที่มีอยู่แล้ว</span>
+                      </div>
+                    </label>
+
+                    <label className="flex items-center space-x-2.5 p-3.5 bg-slate-950 rounded-2xl border border-slate-900 hover:border-slate-800 cursor-pointer">
+                      <input
+                        type="radio"
+                        name="triage_action"
+                        checked={triageAction === 'REQUEST_MORE_INFO'}
+                        onChange={() => setTriageAction('REQUEST_MORE_INFO')}
+                        className="text-indigo-600 focus:ring-indigo-500 bg-slate-900"
+                      />
+                      <div>
+                        <span className="font-bold text-white block">ขอข้อมูลและพยานหลักฐานเพิ่มเติม (REQUEST_MORE_INFO)</span>
+                        <span className="text-[10px] text-slate-500">ประสานงานผู้ร้องเรียนเพื่อขอรายละเอียดเอกสารเพิ่มเติม</span>
+                      </div>
+                    </label>
+
+                    <label className="flex items-center space-x-2.5 p-3.5 bg-slate-950 rounded-2xl border border-slate-900 hover:border-slate-800 cursor-pointer">
+                      <input
+                        type="radio"
+                        name="triage_action"
+                        checked={triageAction === 'REJECT_SPAM'}
+                        onChange={() => setTriageAction('REJECT_SPAM')}
+                        className="text-indigo-600 focus:ring-indigo-500 bg-slate-900"
+                      />
+                      <div>
+                        <span className="font-bold text-white block">ปฏิเสธคำร้อง / ไม่เข้าข่าย (REJECT_SPAM)</span>
+                        <span className="text-[10px] text-slate-500">กรณีข้อมูลเท็จ สแปม หรือไม่อยู่ในขอบข่ายอำนาจหน้าที่</span>
+                      </div>
+                    </label>
+                  </div>
+                </div>
+
+                {/* Dynamic input sections */}
+                {triageAction === 'CREATE_CASE' && (
+                  <div className="space-y-3 p-4 bg-slate-950 border border-slate-900 rounded-2xl">
+                    <h4 className="font-bold text-white block mb-1">ระบุรายละเอียดสำนวนคดีใหม่</h4>
+                    <div>
+                      <label className="text-slate-400 block mb-1">เลขที่สำนวนคดี</label>
+                      <input
+                        type="text"
+                        required
+                        value={newCaseNumber}
+                        onChange={(e) => setNewCaseNumber(e.target.value)}
+                        className="w-full bg-slate-900 border-0 rounded-xl py-2 px-3 text-white ring-1 ring-slate-800 focus:ring-2 focus:ring-indigo-500 text-xs"
+                      />
+                    </div>
+                    <div>
+                      <label className="text-slate-400 block mb-1">ชื่อสำนวนคดีสืบสวน</label>
+                      <input
+                        type="text"
+                        required
+                        placeholder="เช่น คดีบริการจัดฟันแฟชั่นผิดกฎหมาย Sisaket"
+                        value={newCaseTitle}
+                        onChange={(e) => setNewCaseTitle(e.target.value)}
+                        className="w-full bg-slate-900 border-0 rounded-xl py-2 px-3 text-white ring-1 ring-slate-800 focus:ring-2 focus:ring-indigo-500 text-xs"
+                      />
+                    </div>
+                  </div>
                 )}
-              </button>
-            </form>
+
+                {triageAction === 'MERGE_INTAKE' && (
+                  <div className="space-y-3 p-4 bg-slate-950 border border-slate-900 rounded-2xl">
+                    <h4 className="font-bold text-white block mb-1">เลือกสำนวนคดีเดิมเป้าหมาย</h4>
+                    <select
+                      required
+                      value={mergeCaseId}
+                      onChange={(e) => setMergeCaseId(e.target.value)}
+                      className="w-full bg-slate-900 border-0 rounded-xl py-2.5 px-3 text-white ring-1 ring-slate-800 focus:ring-2 focus:ring-indigo-500 text-xs"
+                    >
+                      <option value="">-- กรุณาเลือกสำนวนคดีเดิม --</option>
+                      {casesList.map(c => (
+                        <option key={c.id} value={c.id}>{c.number} - {c.title}</option>
+                      ))}
+                    </select>
+                  </div>
+                )}
+
+                <div>
+                  <label className="block text-slate-400 font-semibold mb-1">บันทึกความเห็นของเจ้าหน้าที่ผู้คัดกรอง</label>
+                  <textarea
+                    required
+                    rows={4}
+                    placeholder="ระบุเหตุผลการพิจารณาคัดกรอง และข้อสั่งการประกอบ..."
+                    value={triageReason}
+                    onChange={(e) => setTriageReason(e.target.value)}
+                    className="w-full bg-slate-950 border-0 rounded-2xl py-3 px-4 text-white ring-1 ring-slate-800 focus:ring-2 focus:ring-indigo-500 text-xs"
+                  />
+                </div>
+
+                <button
+                  type="submit"
+                  disabled={isSubmitting || (triageAction === 'MERGE_INTAKE' && !mergeCaseId)}
+                  className="w-full inline-flex items-center justify-center px-4 py-3 border border-transparent rounded-2xl shadow-lg text-sm font-semibold text-white bg-indigo-600 hover:bg-indigo-500 transition-all cursor-pointer"
+                >
+                  {isSubmitting ? (
+                    <>
+                      <Loader2 className="h-5 w-5 mr-2 animate-spin" />
+                      กำลังบันทึกและส่งต่อสำนวนคดี...
+                    </>
+                  ) : (
+                    <>
+                      <Save className="h-5 w-5 mr-2" />
+                      บันทึกผลการพิจารณาคัดกรอง
+                    </>
+                  )}
+                </button>
+              </form>
+            )}
           </div>
 
         </div>
@@ -632,4 +706,3 @@ export default function IntakeDetailPage() {
     </div>
   );
 }
-

@@ -109,20 +109,38 @@ export async function PATCH(request: NextRequest, context: { params: Promise<{ i
 
   if (error) {
     const knownConflict = [
+      'INTAKE_ALREADY_TRIAGED',
       'INTAKE_NOT_CLEAN',
+      'INTAKE_SCAN_NOT_CLEAN',
       'INTAKE_ATTACHMENT_NOT_CLEAN',
+      'INTAKE_ATTACHMENTS_NOT_READY',
       'INTAKE_DESTINATION_REQUIRED',
       'INTAKE_INVALID_TRANSITION',
+      'CASE_CREATE_FORBIDDEN',
+      'CASE_INPUT_INVALID',
+      'DESTINATION_CASE_FORBIDDEN',
     ].find((code) => error.message?.includes(code));
     if (knownConflict) {
+      const messages: Record<string, string> = {
+        INTAKE_ALREADY_TRIAGED: 'ซองคำร้องนี้ได้รับการพิจารณาคัดกรองหรือยกระดับเป็นคดีแล้ว',
+        INTAKE_NOT_CLEAN: 'ยังไม่สามารถดำเนินการได้ เนื่องจากตรวจพบความเสี่ยงในคำร้อง',
+        INTAKE_SCAN_NOT_CLEAN: 'ยังไม่สามารถดำเนินการได้ เนื่องจากไฟล์แนบยังตรวจความปลอดภัยไม่สมบูรณ์',
+        INTAKE_ATTACHMENT_NOT_CLEAN: 'ไฟล์แนบยังตรวจความปลอดภัยไม่สมบูรณ์',
+        INTAKE_ATTACHMENTS_NOT_READY: 'ไฟล์แนบยังอัปโหลดไม่เสร็จสมบูรณ์',
+        INTAKE_DESTINATION_REQUIRED: 'กรุณาเลือกสำนวนคดีเดิมที่ต้องการผนวก',
+        INTAKE_INVALID_TRANSITION: 'สถานะของซองไม่สามารถเปลี่ยนไปยังสถานะที่เลือกได้',
+        CASE_INPUT_INVALID: 'กรุณาระบุเลขที่และชื่อสำนวนคดีให้ถูกต้อง',
+        CASE_CREATE_FORBIDDEN: 'ไม่มีสิทธิ์ในการเปิดสำนวนคดีใหม่',
+        DESTINATION_CASE_FORBIDDEN: 'ไม่มีสิทธิ์ในการเข้าถึงสำนวนคดีปลายทาง',
+      };
       return NextResponse.json(
-        { error: { code: knownConflict, message: 'ยังไม่สามารถดำเนินการคำร้องได้ กรุณาตรวจสถานะไฟล์และข้อมูลปลายทางให้ครบถ้วน' } },
+        { error: { code: knownConflict, message: messages[knownConflict] || 'ยังไม่สามารถดำเนินการคำร้องได้ กรุณาตรวจสถานะไฟล์และข้อมูลปลายทางให้ครบถ้วน' } },
         { status: 409 },
       );
     }
-    console.error('triage_intake RPC failed', { code: error.code });
+    console.error('triage_intake RPC failed', { code: error.code, message: error.message });
     return NextResponse.json(
-      { error: { code: 'INTAKE_TRIAGE_FAILED', message: 'บันทึกผลคัดกรองไม่สำเร็จ กรุณาลองใหม่' } },
+      { error: { code: 'INTAKE_TRIAGE_FAILED', message: error.message || 'บันทึกผลคัดกรองไม่สำเร็จ กรุณาลองใหม่' } },
       { status: 503 },
     );
   }
