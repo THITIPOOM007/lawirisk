@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from 'react';
 import Link from 'next/link';
-import { Check, CircleAlert, Copy, FileBarChart, Loader2, RefreshCw, ShieldCheck } from 'lucide-react';
+import { Check, CircleAlert, Copy, Download, FileBarChart, Loader2, RefreshCw, ShieldCheck } from 'lucide-react';
 import type { Case } from '@/lib/demo-data';
 
 type ReportRecord = {
@@ -187,7 +187,49 @@ export default function ReportsPage() {
           </section>
         </div>
         <section className="min-h-[560px] rounded-3xl border border-slate-900 bg-slate-900/30 p-6">
-          {activeReport ? <div className="space-y-5"><div className="flex flex-col gap-3 border-b border-slate-800 pb-5 sm:flex-row sm:items-center sm:justify-between"><div><h2 className="font-bold text-white">{activeReport.title}</h2>{activeReport.snapshot_sha256 && <p className="mt-1 break-all font-mono text-[10px] text-emerald-400">Snapshot SHA-256: {activeReport.snapshot_sha256}</p>}</div><button type="button" onClick={() => void copy()} className="inline-flex items-center justify-center rounded-xl border border-slate-700 px-3 py-2 text-xs text-slate-300">{copied ? <Check className="mr-2 h-4 w-4 text-emerald-400" /> : <Copy className="mr-2 h-4 w-4" />}{copied ? 'คัดลอกแล้ว' : 'คัดลอกข้อความ'}</button></div><pre className="whitespace-pre-wrap break-words font-sans text-sm leading-7 text-slate-300">{activeReport.content}</pre></div> : <div className="flex min-h-[500px] items-center justify-center text-center"><div><FileBarChart className="mx-auto h-12 w-12 text-slate-800" /><p className="mt-4 text-sm text-slate-500">เลือกรายงานเดิมหรือสร้าง snapshot ใหม่</p></div></div>}
+          {activeReport ? (
+            <div className="space-y-5">
+              <div className="flex flex-col gap-3 border-b border-slate-800 pb-5 sm:flex-row sm:items-center sm:justify-between">
+                <div>
+                  <h2 className="font-bold text-white text-base">{activeReport.title}</h2>
+                  {activeReport.snapshot_sha256 && (
+                    <p className="mt-1 break-all font-mono text-[10px] text-emerald-400">
+                      Snapshot SHA-256: {activeReport.snapshot_sha256}
+                    </p>
+                  )}
+                </div>
+                <div className="flex flex-wrap items-center gap-2">
+                  <button
+                    type="button"
+                    onClick={() => void copy()}
+                    className="inline-flex items-center justify-center rounded-xl border border-slate-700 px-3 py-2 text-xs text-slate-300 hover:bg-slate-800 transition-colors"
+                  >
+                    {copied ? <Check className="mr-2 h-4 w-4 text-emerald-400" /> : <Copy className="mr-2 h-4 w-4" />}
+                    {copied ? 'คัดลอกแล้ว' : 'คัดลอกข้อความ'}
+                  </button>
+                  <a
+                    href={`/api/v1/reports/${activeReport.id}/pdf`}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="inline-flex items-center justify-center rounded-xl bg-indigo-600 hover:bg-indigo-500 px-3.5 py-2 text-xs font-bold text-white shadow-lg transition-all"
+                  >
+                    <Download className="mr-1.5 h-4 w-4" />
+                    ส่งออก PDF (Export PDF)
+                  </a>
+                </div>
+              </div>
+              <pre className="whitespace-pre-wrap break-words font-sans text-sm leading-7 text-slate-300 bg-slate-950/60 p-5 rounded-2xl border border-slate-800/80">
+                {activeReport.content}
+              </pre>
+            </div>
+          ) : (
+            <div className="flex min-h-[500px] items-center justify-center text-center">
+              <div>
+                <FileBarChart className="mx-auto h-12 w-12 text-slate-800" />
+                <p className="mt-4 text-sm text-slate-500">เลือกรายงานเดิมหรือสร้าง snapshot ใหม่</p>
+              </div>
+            </div>
+          )}
         </section>
       </div>
     </div>
