@@ -24,6 +24,7 @@ import {
 } from 'lucide-react';
 import type { Case, EvidenceFile } from '@/lib/demo-data';
 import { evidenceSafetyLabel, isEvidenceUsable } from '@/lib/evidence-file-status';
+import { CaseIntelligenceReconWidget } from '@/components/CaseIntelligenceReconWidget';
 
 type CaseMember = {
   id: string;
@@ -453,6 +454,15 @@ export default function CaseDetailsPage() {
         </div>
       </section>
 
+      {/* Automated Case Intelligence Reconnaissance Engine (5-Dimension) */}
+      <CaseIntelligenceReconWidget
+        caseId={caseId}
+        caseNumber={caseRecord.number}
+        caseTitle={caseRecord.title}
+        description={caseRecord.description}
+        autoRunOnMount={true}
+      />
+
       {/* Investigation Planner */}
       <section className="rounded-3xl border border-indigo-500/30 bg-indigo-950/20 p-6 space-y-5 shadow-[0_0_30px_rgba(99,102,241,0.08)]">
         <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
@@ -606,4 +616,3 @@ export default function CaseDetailsPage() {
     </div>
   );
 }
-

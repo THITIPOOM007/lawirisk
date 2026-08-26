@@ -205,12 +205,26 @@ export const INITIAL_INTAKE_CHANNELS: IntakeChannel[] = [
 
 export const INITIAL_INTAKE_ENVELOPES: IntakeEnvelope[] = [
   {
+    id: 'env-kitima',
+    channel_id: 'ch-walkin',
+    status: 'TRIAGE_PENDING',
+    complainant_mode: 'IDENTIFIED',
+    urgency: 'CRITICAL',
+    urgency_reason: 'ร้องเรียนสถานพยาบาลกิติยาเถื่อน ฉีดยาผู้ป่วยจนเกิดภาวะช็อคหมดสติ ชักเกร็ง ส่งตัวฉุกเฉิน รพ.ปริ้นซ์ศรีสะเกษ',
+    jurisdiction_region: 'เขตสุขภาพที่ 10',
+    jurisdiction_agency: 'สสจ.ศรีสะเกษ',
+    malware_scan_status: 'CLEAN',
+    privacy_risk_status: 'HIGH',
+    created_at: '2026-07-31T00:30:00Z',
+    updated_at: '2026-07-31T01:00:00Z'
+  },
+  {
     id: 'env-1',
     channel_id: 'ch-kouprey',
     status: 'TRIAGE_PENDING',
     complainant_mode: 'IDENTIFIED',
     urgency: 'HIGH',
-    urgency_reason: 'พบคลิปโฆษณาจำหน่ายยาและเครื่องมือแพทย์จัดฟันโดยไม่มีใบอนุญาต คาดว่ามีเหยื่อติดเชื้อในช่องปาก',
+    urgency_reason: 'พบคลิปโฆษณาจำหน่ายยาและเครื่องมือแพทย์จัดฟันโดยไม่มีใบอนุญาต คาดว่ามีเหยื่อติดเชื้อในช่องปาก อ.ขุขันธ์',
     jurisdiction_region: 'เขตสุขภาพที่ 10',
     jurisdiction_agency: 'สสจ.ศรีสะเกษ',
     malware_scan_status: 'NOT_SCANNED',
@@ -247,9 +261,23 @@ export const INITIAL_INTAKE_ENVELOPES: IntakeEnvelope[] = [
 
 export const INITIAL_INTAKE_MESSAGES: IntakeMessage[] = [
   {
+    id: 'msg-kitima',
+    envelope_id: 'env-kitima',
+    raw_payload: JSON.stringify({
+      topic: 'ร้องเรียนสถานพยาบาลกิติยา เปิดสถานพยาบาลและฉีดยาจนผู้ป่วยช็อคหมดสติ',
+      description: 'นายธีระศักดิ์ จันทรจิตร ร้องเรียนว่า นายสุรีย์ยนต์ หรือ นายนพรัตน์ และ น.ส.กิติมา ซื่อสัตย์ เปิดบ้านเลขที่ 122 ม.3 บ้านกลาง ต.หมากเขียบ อ.เมือง จ.ศรีสะเกษ เป็นสถานพยาบาล (กิติยา) และได้ทำการฉีดยาให้ผู้ป่วยจนเกิดอาการช็อค หมดสติ ชักเกร็ง ต้องเรียกรถพยาบาลส่งตัวรักษาด่วนที่ รพ.ปริ้นซ์ศรีสะเกษ และใช้เครื่องช่วยหายใจ',
+      category: 'สถานพยาบาลและวิชาชีพเวชกรรมเถื่อน',
+      region: 'ต.หมากเขียบ อ.เมือง จ.ศรีสะเกษ',
+      complainantName: 'นายธีระศักดิ์ จันทรจิตร',
+      complainantContact: '088-1049377',
+      accusedName: 'นางสาวกิติมา ซื่อสัตย์ / นายนพรัตน์',
+      source: 'แบบคำร้องเรียน สสจ.ศรีสะเกษ'
+    })
+  },
+  {
     id: 'msg-1',
     envelope_id: 'env-1',
-    raw_payload: '{"source":"Kouprey Plus","ref_no":"KP-90223","text":"ร้องเรียนการเปิดคลินิกจัดฟันเถื่อนชื่อ ร้านเมย์ ทันตกรรม โดยโฆษณาในเพจ Sisaket ศรีสะเกษทูเดย์ ติดต่อเบอร์โทร 062-4149791"}'
+    raw_payload: '{"source":"Kouprey Plus","ref_no":"KP-90223","text":"ร้องเรียนการเปิดคลินิกจัดฟันเถื่อนและบริการทำฟันโดยนายอนุชา ใจกล้า โดยโฆษณาในเพจ Sisaket ตลาดสด อ.ขุขันธ์ ติดต่อเบอร์โทร 062-4149791"}'
   },
   {
     id: 'msg-2',
@@ -259,6 +287,16 @@ export const INITIAL_INTAKE_MESSAGES: IntakeMessage[] = [
 ];
 
 export const INITIAL_INTAKE_ATTACHMENTS: IntakeAttachment[] = [
+  {
+    id: 'att-kitima-1',
+    envelope_id: 'env-kitima',
+    filename: 'แบบคำร้องเรียน_สสจ_ศรีสะเกษ_กิติยา.pdf',
+    file_size: 2457600,
+    mime_type: 'application/pdf',
+    sha256: 'a1b2c3d4e5f67890123456789abcdef0123456789abcdef0123456789abcdef0',
+    storage_path: '/vault/intake/att-kitima-1.pdf',
+    malware_scan_status: 'CLEAN'
+  },
   {
     id: 'att-1',
     envelope_id: 'env-1',
@@ -284,6 +322,24 @@ export const INITIAL_INTAKE_ATTACHMENTS: IntakeAttachment[] = [
 
 export const INITIAL_INTAKE_PARTICIPANTS: IntakeParticipant[] = [
   {
+    id: 'part-kitima-1',
+    envelope_id: 'env-kitima',
+    role: 'COMPLAINANT',
+    name: 'นายธีระศักดิ์ จันทรจิตร',
+    phone: '088-1049377',
+    citizen_id: '1339900023752',
+    address: '80 หมู่ที่ 3 ต.หมากเขียบ อ.เมืองศรีสะเกษ จ.ศรีสะเกษ'
+  },
+  {
+    id: 'part-kitima-2',
+    envelope_id: 'env-kitima',
+    role: 'ACCUSED',
+    name: 'นางสาวกิติมา ซื่อสัตย์ / นายนพรัตน์ (สถานพยาบาลกิติยา)',
+    phone: '081-9988776',
+    citizen_id: '3320500587029',
+    address: '122 ม.3 บ้านกลาง ต.หมากเขียบ อ.เมือง จ.ศรีสะเกษ 33000'
+  },
+  {
     id: 'part-1',
     envelope_id: 'env-1',
     role: 'COMPLAINANT',
@@ -295,9 +351,9 @@ export const INITIAL_INTAKE_PARTICIPANTS: IntakeParticipant[] = [
     id: 'part-2',
     envelope_id: 'env-1',
     role: 'ACCUSED',
-    name: 'นางสาวปนัดดา คำนนท์ (คลินิกจัดฟันเถื่อน ร้านเมย์)',
+    name: 'นายอนุชา ใจกล้า (บริการทำฟัน/จัดฟันเถื่อน ขุขันธ์)',
     phone: '062-4149791',
-    address: 'บ้านเลขที่ 192 หมู่ 3 ต.กกแดง อ.นิคมคำสร้อย จ.มุกดาหาร'
+    address: '45/2 หมู่ที่ 5 ต.ห้วยเหนือ อ.ขุขันธ์ จ.ศรีสะเกษ 33140'
   },
   {
     id: 'part-3',
@@ -324,10 +380,22 @@ export const INITIAL_DUPLICATE_CANDIDATES: IntakeDuplicateCandidate[] = [
 
 export const INITIAL_CASES: Case[] = [
   {
+    id: 'case-3',
+    number: 'ค.789/2569',
+    title: 'คดีสถานพยาบาลกิติยาเถื่อน ฉีดยาช็อคหมดสติ ต.หมากเขียบ',
+    description: 'การสืบสวนดำเนินคดีกรณี น.ส.กิติมา ซื่อสัตย์ และนายนพรัตน์ ลักลอบเปิดสถานพยาบาลกิติยา ณ บ้านเลขที่ 122 ม.3 บ้านกลาง ต.หมากเขียบ อ.เมืองศรีสะเกษ ฉีดยาผู้ป่วยจนเกิดอาการช็อคหมดสติและชักเกร็ง ส่งตัวฉุกเฉินเข้ารักษาที่ รพ.ปริ้นซ์ศรีสะเกษ',
+    status: 'ACTIVE',
+    jurisdiction_region: 'เขตสุขภาพที่ 10',
+    jurisdiction_agency: 'สสจ.ศรีสะเกษ',
+    created_by: 'นพ.สสจ. ศรีสะเกษ',
+    created_at: '2026-07-31T09:00:00Z',
+    updated_at: '2026-07-31T15:00:00Z',
+  },
+  {
     id: 'case-1',
     number: 'ค.123/2569',
-    title: 'คดีบริการจัดฟันแฟชั่นผิดกฎหมาย Sisaket',
-    description: 'สืบสวนเครือข่ายลักลอบให้บริการจัดฟันแฟชั่นและจำหน่ายเครื่องมือคงสภาพฟัน (รีเทนเนอร์) โดยไม่ใช่ทันตแพทย์ผ่านสื่อออนไลน์',
+    title: 'คดีบริการจัดฟันแฟชั่นผิดกฎหมาย อ.ขุขันธ์',
+    description: 'สืบสวนเครือข่ายลักลอบให้บริการจัดฟันแฟชั่น ดัดฟัน และใส่ฟันปลอมโดยนายอนุชา ใจกล้า ซึ่งไม่ใช่ทันตแพทย์ ณ อ.ขุขันธ์ จ.ศรีสะเกษ',
     status: 'ACTIVE',
     jurisdiction_region: 'เขตสุขภาพที่ 10',
     jurisdiction_agency: 'สสจ.ศรีสะเกษ',
@@ -351,6 +419,20 @@ export const INITIAL_CASES: Case[] = [
 
 export const INITIAL_EVIDENCE: EvidenceFile[] = [
   {
+    id: 'ev-kitima-1',
+    case_id: 'case-3',
+    filename: 'แบบคำร้องเรียน_สสจ_ศรีสะเกษ_กิติยา.pdf',
+    file_path: '/vault/case-3/แบบคำร้องเรียน_สสจ_ศรีสะเกษ_กิติยา.pdf',
+    file_size: 2457600,
+    mime_type: 'application/pdf',
+    sha256: 'a1b2c3d4e5f67890123456789abcdef0123456789abcdef0123456789abcdef0',
+    status: 'PROCESSED',
+    upload_state: 'STORED',
+    malware_scan_status: 'CLEAN',
+    created_by: 'นพ.สสจ. ศรีสะเกษ',
+    created_at: '2026-07-31T09:15:00Z',
+  },
+  {
     id: 'ev-1',
     case_id: 'case-1',
     filename: 'fb_ad_screenshot.png',
@@ -367,7 +449,10 @@ export const INITIAL_EVIDENCE: EvidenceFile[] = [
 ];
 
 export const INITIAL_ENTITIES: ExtractedEntity[] = [
-  { id: 'ent-1', case_id: 'case-1', type: 'PERSON', value: 'นางสาวปนัดดา คำนนท์', created_at: '2026-07-25T12:00:00Z' },
+  { id: 'ent-kitima-1', case_id: 'case-3', type: 'PERSON', value: 'นางสาวกิติมา ซื่อสัตย์', created_at: '2026-07-31T09:30:00Z' },
+  { id: 'ent-kitima-2', case_id: 'case-3', type: 'CITIZEN_ID', value: '3320500587029', created_at: '2026-07-31T09:30:00Z' },
+  { id: 'ent-kitima-3', case_id: 'case-3', type: 'LOCATION', value: '122 ม.3 ต.หมากเขียบ อ.เมือง จ.ศรีสะเกษ', created_at: '2026-07-31T09:30:00Z' },
+  { id: 'ent-1', case_id: 'case-1', type: 'PERSON', value: 'นายอนุชา ใจกล้า', created_at: '2026-07-25T12:00:00Z' },
   { id: 'ent-2', case_id: 'case-1', type: 'PHONE', value: '062-4149791', created_at: '2026-07-25T12:00:00Z' },
   { id: 'ent-3', case_id: 'case-1', type: 'LOCATION', value: 'อำเภอขุขันธ์ จังหวัดศรีสะเกษ', created_at: '2026-07-25T12:00:00Z' },
   { id: 'ent-4', case_id: 'case-2', type: 'PERSON', value: 'นางสาววันชนิกา สุบิน', created_at: '2026-07-26T10:00:00Z' },
@@ -375,7 +460,7 @@ export const INITIAL_ENTITIES: ExtractedEntity[] = [
 ];
 
 export const INITIAL_MENTIONS: EntityMention[] = [
-  { id: 'm-1', entity_id: 'ent-1', filename: 'fb_ad_screenshot.png', page_number: 1, snippet: 'ตรวจพบชื่อโอนเงินคิวมัดจำ นางสาวปนัดดา คำนนท์', confidence: 0.98 },
+  { id: 'm-1', entity_id: 'ent-1', filename: 'fb_ad_screenshot.png', page_number: 1, snippet: 'ตรวจพบชื่อโอนเงินคิวมัดจำ นายอนุชา ใจกล้า', confidence: 0.98 },
   { id: 'm-2', entity_id: 'ent-2', filename: 'fb_ad_screenshot.png', page_number: 1, snippet: 'เบอร์ติดต่อปักหมุด 062-4149791', confidence: 0.95 }
 ];
 
@@ -410,207 +495,194 @@ export const INITIAL_MATCHES: MatchCandidate[] = [
     entity_id: 'ent-3',
     target_entity_id: 'ent-5',
     entity_type: 'LOCATION',
-    entity_value: 'จังหวัดศรีสะเกษ',
-    confidence: 0.92,
-    status: 'VERIFIED',
-    created_at: '2026-07-26T12:00:00Z',
+    entity_value: 'ศรีสะเกษ',
+    confidence: 0.82,
+    status: 'PENDING',
+    created_at: '2026-07-26T14:00:00Z',
   }
 ];
 
 export const INITIAL_AUDIT_LOGS: AuditLog[] = [
   {
-    id: 'aud-1',
-    profile_name: 'ร.ต.อ. สมชาย',
-    action: 'CASE_CREATE',
-    details: 'สร้างคดีจัดฟันเถื่อน Sisaket (ค.123/2569)',
-    ip_address: '192.168.1.100',
-    created_at: '2026-07-25T10:00:00Z',
+    id: 'log-1',
+    profile_name: 'พล.ต.ต. สุรศักดิ์',
+    action: 'CREATE_CASE',
+    details: 'สร้างสำนวนคดี ค.789/2569 - สถานพยาบาลกิติยา',
+    ip_address: '192.168.1.10',
+    created_at: '2026-07-31T09:00:00Z',
   }
 ];
 
-// Helper to interact with Local Storage in Browser
-const isClient = typeof window !== 'undefined';
-
-function getStored<T>(key: string, fallback: T): T {
-  if (!isClient) return fallback;
-  const stored = localStorage.getItem(`ev_${key}`);
-  if (stored) {
-    try { return JSON.parse(stored); } catch { return fallback; }
-  }
-  return fallback;
-}
-
-function setStored<T>(key: string, value: T): void {
-  if (isClient) {
-    localStorage.setItem(`ev_${key}`, JSON.stringify(value));
-    window.dispatchEvent(new CustomEvent('ev-data-change', { detail: { key } }));
-  }
-}
-
-// In-Memory Fallbacks for server-rendered endpoints in Demo Mode
-let inMemoryCases = [...INITIAL_CASES];
-let inMemoryEvidence = [...INITIAL_EVIDENCE];
-let inMemoryEntities = [...INITIAL_ENTITIES];
-let inMemoryMentions = [...INITIAL_MENTIONS];
-let inMemoryRelationships = [...INITIAL_RELATIONSHIPS];
-let inMemoryMatches = [...INITIAL_MATCHES];
-let inMemoryAuditLogs = [...INITIAL_AUDIT_LOGS];
-
-// New Intake state fallbacks
-let inMemoryEnvelopes = [...INITIAL_INTAKE_ENVELOPES];
-let inMemoryMessages = [...INITIAL_INTAKE_MESSAGES];
-let inMemoryAttachments = [...INITIAL_INTAKE_ATTACHMENTS];
-let inMemoryParticipants = [...INITIAL_INTAKE_PARTICIPANTS];
-let inMemoryDuplicates = [...INITIAL_DUPLICATE_CANDIDATES];
-let inMemoryTriageDecisions: TriageDecision[] = [];
-
-// Getters & Setters
-export const getCases = (): Case[] => getStored('cases', inMemoryCases);
-export const saveCase = (c: Case) => {
-  const cases = getCases();
-  cases.push(c);
-  setStored('cases', cases);
-  inMemoryCases = cases;
-  addAuditLog('ระบบสืบสวน', 'CASE_CREATE', `สร้างสำนวนคดีใหม่: ${c.title} (${c.number})`);
-};
-
-export const getEvidence = (): EvidenceFile[] => getStored('evidence', inMemoryEvidence);
-export const saveEvidence = (e: EvidenceFile) => {
-  const ev = getEvidence();
-  ev.push(e);
-  setStored('evidence', ev);
-  inMemoryEvidence = ev;
-  addAuditLog('ระบบสืบสวน', 'EVIDENCE_UPLOAD', `อัปโหลดไฟล์หลักฐาน: ${e.filename}`);
-};
-
-export const getEntities = (): ExtractedEntity[] => getStored('entities', inMemoryEntities);
-export const saveEntity = (ent: ExtractedEntity) => {
-  const entities = getEntities();
-  entities.push(ent);
-  setStored('entities', entities);
-  inMemoryEntities = entities;
-};
-
-export const getMentions = (): EntityMention[] => getStored('mentions', inMemoryMentions);
-export const saveMention = (m: EntityMention) => {
-  const mentions = getMentions();
-  mentions.push(m);
-  setStored('mentions', mentions);
-  inMemoryMentions = mentions;
-};
-
-export const getRelationships = (): EntityRelationship[] => getStored('relationships', inMemoryRelationships);
-export const verifyRelationship = (id: string, reviewer: string) => {
-  const rels = getRelationships();
-  const rel = rels.find(r => r.id === id);
-  if (rel) {
-    rel.status = 'VERIFIED';
-    rel.verified_by = reviewer;
-    setStored('relationships', rels);
-    inMemoryRelationships = rels;
-    addAuditLog(reviewer, 'RELATION_VERIFY', `ยืนยันความสัมพันธ์ในคดีรหัส ${rel.case_id}`);
-  }
-};
-
-export const getMatches = (): MatchCandidate[] => getStored('matches', inMemoryMatches);
-export const updateMatchStatus = (id: string, status: 'VERIFIED' | 'DISMISSED', reviewer: string) => {
-  const matches = getMatches();
-  const match = matches.find(m => m.id === id);
-  if (match) {
-    match.status = status;
-    match.reviewed_by = reviewer;
-    setStored('matches', matches);
-    inMemoryMatches = matches;
-    addAuditLog(reviewer, 'MATCH_REVIEW', `ตรวจสอบความเชื่อมโยง (${status}) สำหรับข้อมูล: ${match.entity_value}`);
-  }
-};
-
-export const getAuditLogs = (): AuditLog[] => getStored('audit', inMemoryAuditLogs);
-export const addAuditLog = (profile: string, action: string, details: string) => {
-  const logs = getAuditLogs();
-  const newLog: AuditLog = {
-    id: `aud-${Date.now()}`,
-    profile_name: profile,
-    action,
-    details,
-    ip_address: '127.0.0.1',
-    created_at: new Date().toISOString(),
-  };
-  logs.unshift(newLog);
-  setStored('audit', logs);
-  inMemoryAuditLogs = logs;
-};
-
-// Intake state functions
-export const getIntakeEnvelopes = (): IntakeEnvelope[] => getStored('envelopes', inMemoryEnvelopes);
-export const saveIntakeEnvelope = (env: IntakeEnvelope) => {
-  const envs = getIntakeEnvelopes();
-  envs.push(env);
-  setStored('envelopes', envs);
-  inMemoryEnvelopes = envs;
-};
-
-export const updateIntakeEnvelopeStatus = (id: string, status: IntakeEnvelope['status']) => {
-  const envs = getIntakeEnvelopes();
-  const env = envs.find(e => e.id === id);
-  if (env) {
-    env.status = status;
-    env.updated_at = new Date().toISOString();
-    setStored('envelopes', envs);
-    inMemoryEnvelopes = envs;
-  }
-};
-
-export const getIntakeMessages = (): IntakeMessage[] => getStored('messages', inMemoryMessages);
-export const saveIntakeMessage = (msg: IntakeMessage) => {
-  const msgs = getIntakeMessages();
-  msgs.push(msg);
-  setStored('messages', msgs);
-  inMemoryMessages = msgs;
-};
-
-export const getIntakeAttachments = (): IntakeAttachment[] => getStored('attachments', inMemoryAttachments);
-export const saveIntakeAttachment = (att: IntakeAttachment) => {
-  const atts = getIntakeAttachments();
-  atts.push(att);
-  setStored('attachments', atts);
-  inMemoryAttachments = atts;
-};
-
-export const getIntakeParticipants = (): IntakeParticipant[] => getStored('participants', inMemoryParticipants);
-export const saveIntakeParticipant = (part: IntakeParticipant) => {
-  const parts = getIntakeParticipants();
-  parts.push(part);
-  setStored('participants', parts);
-  inMemoryParticipants = parts;
-};
-
-export const getDuplicateCandidates = (): IntakeDuplicateCandidate[] => getStored('duplicates', inMemoryDuplicates);
-export const saveDuplicateCandidate = (dup: IntakeDuplicateCandidate) => {
-  const dups = getDuplicateCandidates();
-  dups.push(dup);
-  setStored('duplicates', dups);
-  inMemoryDuplicates = dups;
-};
-
-export const getTriageDecisions = (): TriageDecision[] => getStored('triage', inMemoryTriageDecisions);
-export const saveTriageDecision = (decision: TriageDecision) => {
-  const decisions = getTriageDecisions();
-  decisions.push(decision);
-  setStored('triage', decisions);
-  inMemoryTriageDecisions = decisions;
-
-  // Log to audit
-  addAuditLog(decision.created_by, 'TRIAGE_ACTION', `เจ้าหน้าที่ทำการคัดกรอง (${decision.action}) บนหมายเลขรับเรื่อง ${decision.envelope_id}`);
-};
-
-export const getSettings = (): UserSettings => getStored('settings', {
+export const INITIAL_SETTINGS: UserSettings = {
   language: 'th',
   theme: 'dark',
   autoExtraction: true,
-  confidenceThreshold: 0.85
-});
-
-export const saveSettings = (s: UserSettings) => {
-  setStored('settings', s);
+  confidenceThreshold: 0.75,
 };
+
+// Stateful in-memory stores for demo mode
+let casesStore: Case[] = [...INITIAL_CASES];
+let evidenceStore: EvidenceFile[] = [...INITIAL_EVIDENCE];
+let entitiesStore: ExtractedEntity[] = [...INITIAL_ENTITIES];
+let relationshipsStore: EntityRelationship[] = [...INITIAL_RELATIONSHIPS];
+let matchesStore: MatchCandidate[] = [...INITIAL_MATCHES];
+let auditLogsStore: AuditLog[] = [...INITIAL_AUDIT_LOGS];
+let settingsStore: UserSettings = { ...INITIAL_SETTINGS };
+let intakeEnvelopesStore: IntakeEnvelope[] = [...INITIAL_INTAKE_ENVELOPES];
+let intakeMessagesStore: IntakeMessage[] = [...INITIAL_INTAKE_MESSAGES];
+let intakeAttachmentsStore: IntakeAttachment[] = [...INITIAL_INTAKE_ATTACHMENTS];
+let intakeParticipantsStore: IntakeParticipant[] = [...INITIAL_INTAKE_PARTICIPANTS];
+let duplicateCandidatesStore: IntakeDuplicateCandidate[] = [...INITIAL_DUPLICATE_CANDIDATES];
+
+// Getters and Setters
+export function getCases(): Case[] { return casesStore; }
+export function saveCase(item: Case): Case {
+  const idx = casesStore.findIndex((c) => c.id === item.id);
+  if (idx >= 0) casesStore[idx] = item;
+  else casesStore.unshift(item);
+  return item;
+}
+
+export function getEvidence(): EvidenceFile[] { return evidenceStore; }
+export function saveEvidence(item: EvidenceFile): EvidenceFile {
+  const idx = evidenceStore.findIndex((e) => e.id === item.id);
+  if (idx >= 0) evidenceStore[idx] = item;
+  else evidenceStore.unshift(item);
+  return item;
+}
+
+export function getEntities(): ExtractedEntity[] { return entitiesStore; }
+export function saveEntity(item: ExtractedEntity): ExtractedEntity {
+  const idx = entitiesStore.findIndex((e) => e.id === item.id);
+  if (idx >= 0) entitiesStore[idx] = item;
+  else entitiesStore.unshift(item);
+  return item;
+}
+
+export function getRelationships(): EntityRelationship[] { return relationshipsStore; }
+export function saveRelationship(item: EntityRelationship): EntityRelationship {
+  const idx = relationshipsStore.findIndex((r) => r.id === item.id);
+  if (idx >= 0) relationshipsStore[idx] = item;
+  else relationshipsStore.unshift(item);
+  return item;
+}
+
+export function getMatches(): MatchCandidate[] { return matchesStore; }
+export function saveMatch(item: MatchCandidate): MatchCandidate {
+  const idx = matchesStore.findIndex((m) => m.id === item.id);
+  if (idx >= 0) matchesStore[idx] = item;
+  else matchesStore.unshift(item);
+  return item;
+}
+
+export function getAuditLogs(): AuditLog[] { return auditLogsStore; }
+let triageDecisionsStore: TriageDecision[] = [];
+
+export function saveTriageDecision(item: TriageDecision): TriageDecision {
+  triageDecisionsStore.unshift(item);
+  return item;
+}
+
+export function updateIntakeEnvelopeStatus(
+  id: string,
+  status: IntakeEnvelope['status'],
+  urgency_reason?: string,
+): IntakeEnvelope | null {
+  const idx = intakeEnvelopesStore.findIndex((e) => e.id === id);
+  if (idx >= 0) {
+    intakeEnvelopesStore[idx] = {
+      ...intakeEnvelopesStore[idx],
+      status,
+      ...(urgency_reason ? { urgency_reason } : {}),
+      updated_at: new Date().toISOString(),
+    };
+    return intakeEnvelopesStore[idx];
+  }
+  return null;
+}
+
+export function addAuditLog(
+  profileOrEntry:
+    | string
+    | {
+        action: string;
+        details: string;
+        profile_name?: string;
+        ip_address?: string;
+      },
+  actionParam?: string,
+  detailsParam?: string,
+): AuditLog {
+  let profile_name = 'เจ้าหน้าที่ สสจ.';
+  let action = 'AUDIT';
+  let details = '';
+  let ip_address = '127.0.0.1';
+
+  if (typeof profileOrEntry === 'string') {
+    profile_name = profileOrEntry;
+    action = actionParam || 'AUDIT';
+    details = detailsParam || '';
+  } else if (typeof profileOrEntry === 'object' && profileOrEntry !== null) {
+    profile_name = profileOrEntry.profile_name || 'เจ้าหน้าที่ สสจ.';
+    action = profileOrEntry.action;
+    details = profileOrEntry.details;
+    ip_address = profileOrEntry.ip_address || '127.0.0.1';
+  }
+
+  const log: AuditLog = {
+    id: `log-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`,
+    profile_name,
+    action,
+    details,
+    ip_address,
+    created_at: new Date().toISOString(),
+  };
+  auditLogsStore.unshift(log);
+  return log;
+}
+
+export function getSettings(): UserSettings { return settingsStore; }
+export function saveSettings(item: UserSettings): UserSettings {
+  settingsStore = { ...item };
+  return settingsStore;
+}
+
+export function getIntakeEnvelopes(): IntakeEnvelope[] { return intakeEnvelopesStore; }
+export function saveIntakeEnvelope(item: IntakeEnvelope): IntakeEnvelope {
+  const idx = intakeEnvelopesStore.findIndex((e) => e.id === item.id);
+  if (idx >= 0) intakeEnvelopesStore[idx] = item;
+  else intakeEnvelopesStore.unshift(item);
+  return item;
+}
+
+export function getIntakeMessages(): IntakeMessage[] { return intakeMessagesStore; }
+export function saveIntakeMessage(item: IntakeMessage): IntakeMessage {
+  const idx = intakeMessagesStore.findIndex((m) => m.id === item.id);
+  if (idx >= 0) intakeMessagesStore[idx] = item;
+  else intakeMessagesStore.unshift(item);
+  return item;
+}
+
+export function getIntakeAttachments(): IntakeAttachment[] { return intakeAttachmentsStore; }
+export function saveIntakeAttachment(item: IntakeAttachment): IntakeAttachment {
+  const idx = intakeAttachmentsStore.findIndex((a) => a.id === item.id);
+  if (idx >= 0) intakeAttachmentsStore[idx] = item;
+  else intakeAttachmentsStore.unshift(item);
+  return item;
+}
+
+export function getIntakeParticipants(): IntakeParticipant[] { return intakeParticipantsStore; }
+export function saveIntakeParticipant(item: IntakeParticipant): IntakeParticipant {
+  const idx = intakeParticipantsStore.findIndex((p) => p.id === item.id);
+  if (idx >= 0) intakeParticipantsStore[idx] = item;
+  else intakeParticipantsStore.unshift(item);
+  return item;
+}
+
+export function getDuplicateCandidates(): IntakeDuplicateCandidate[] { return duplicateCandidatesStore; }
+export function saveDuplicateCandidate(item: IntakeDuplicateCandidate): IntakeDuplicateCandidate {
+  const idx = duplicateCandidatesStore.findIndex((d) => d.id === item.id);
+  if (idx >= 0) duplicateCandidatesStore[idx] = item;
+  else duplicateCandidatesStore.unshift(item);
+  return item;
+}
