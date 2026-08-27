@@ -12,7 +12,7 @@ import {
 
 describe('normalizePhone', () => {
   it('converts Thai mobile formats', () => {
-    expect(normalizePhone('062-4149791')).toBe('+66624149791');
+    expect(normalizePhone('080-000-0000')).toBe('+66800000000');
     expect(normalizePhone('0624149791')).toBe('+66624149791');
     expect(normalizePhone('089 771 2345')).toBe('+66897712345');
   });

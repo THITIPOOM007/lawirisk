@@ -20,6 +20,8 @@ pnpm dev
 
 วิธีตั้ง Gemini, Cloudflare secrets และข้อจำกัดของ SKYNET/OSS อยู่ที่ [Secrets and connectors](docs/SECRETS_AND_CONNECTORS.md)
 
+การตั้งบัญชีแบบ DPAPI และ auto-login สำหรับ SKYNET/OSS บนเครื่อง Windows อยู่ที่ [Recon Companion](docs/RECON_COMPANION.md)
+
 n8n Automation Command Center, workflow import และ trust boundary อยู่ที่ [n8n Automation V1](docs/N8N_AUTOMATION.md)
 
 ## Quality gates
@@ -37,7 +39,7 @@ pnpm build:vinext
 - mutation จาก browser ตรวจ Origin และใช้ shared rate limit ใน PostgreSQL
 - หลักฐานรองรับ PDF/PNG/JPEG สูงสุด 200 MB อัปโหลดตรงแบบ TUS resumable ไป private Storage แล้วตรวจขนาด MIME และ magic bytes จาก object ก่อนยืนยัน
 - หน้า Evidence รองรับลากวาง/เลือกพร้อมกันสูงสุด 20 ไฟล์และถ่ายภาพจากกล้องมือถือ โดยรายงานผลสำเร็จ/ล้มเหลวแยกรายไฟล์
-- object path ไม่เปิดเผยต่อ client; ดาวน์โหลดผ่าน signed URL 60 วินาที เฉพาะไฟล์ `STORED/CLEAN` เดิมหรือ `STORED/NOT_SCANNED`
+- object path ไม่เปิดเผยต่อ client; ดาวน์โหลดผ่าน signed URL 60 วินาทีเฉพาะไฟล์ที่จัดเก็บและผ่านการตรวจขนาด/MIME/magic bytes (`STORED/CLEAN` หรือ `STORED/NOT_SCANNED`)
 - metadata ต้นฉบับและ audit เป็น append-only/immutable ด้วย database trigger
 - extraction/match เป็นข้อเสนอ; การยืนยันต้องมี source และหลักฐานที่จัดเก็บและตรวจรูปแบบสมบูรณ์
 - การเข้าใช้ระบบและลงนามรับรองรองรับ WebAuthn Passkey (Windows Hello, Face ID, Touch ID, security key) พร้อมหน้าจัดการอุปกรณ์; ข้อมูลชีวมิติอยู่บนอุปกรณ์และ production ไม่มี simulated passkey fallback

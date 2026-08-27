@@ -8,8 +8,8 @@
 
 ## External capabilities awaiting owner configuration
 
-- FDA SKYNET/Privus remains manual-only until official API/OAuth credentials and an approved export contract exist.
-- HSS OSS remains disabled because the observed path downgrades to HTTP.
+- FDA SKYNET/Privus has local DPAPI-backed auto-login; automated searching/export still awaits an authenticated-page adapter and approved query/export contract.
+- HSS OSS has opt-in local auto-login but remains a production transport risk because the observed path downgrades to HTTP.
 - Email intake has no production mail provider.
 - Kouprey, partner APIs, n8n and Gemini require production secrets, data-governance decisions and staging acceptance fixtures.
 

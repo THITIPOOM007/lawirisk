@@ -369,7 +369,7 @@ export default function PublicPortalPage() {
                             : 'bg-emerald-500/20 text-emerald-300 border border-emerald-500/40 shadow-[0_0_10px_rgba(16,185,129,0.2)]'
                         }`}
                       >
-                        ● {item.status === 'SAFE' ? 'ถูกต้องตามกฎหมาย (SAFE)' : item.status}
+                        ● {item.status === 'SAFE' ? 'พบสถานะใช้งานในทะเบียนที่อนุมัติ' : item.status === 'UNREGISTERED' ? 'ยังไม่ยืนยันกับทะเบียนทางการ' : item.status}
                       </span>
                     </div>
 

@@ -149,7 +149,7 @@ export async function POST(request: NextRequest) {
     const safeRecord = record as Record<string, unknown>;
     return NextResponse.json({
       success: true,
-      message: 'จัดเก็บและตรวจรูปแบบหลักฐานแล้ว พร้อมใช้งานในขั้นตอนถัดไป',
+      message: 'จัดเก็บและตรวจขนาด ชนิด และโครงสร้างหลักฐานแล้ว',
       data: {
         id: safeRecord.id,
         case_id: safeRecord.case_id,

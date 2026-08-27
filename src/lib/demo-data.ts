@@ -210,7 +210,7 @@ export const INITIAL_INTAKE_ENVELOPES: IntakeEnvelope[] = [
     status: 'TRIAGE_PENDING',
     complainant_mode: 'IDENTIFIED',
     urgency: 'CRITICAL',
-    urgency_reason: 'ร้องเรียนสถานพยาบาลกิติยาเถื่อน ฉีดยาผู้ป่วยจนเกิดภาวะช็อคหมดสติ ชักเกร็ง ส่งตัวฉุกเฉิน รพ.ปริ้นซ์ศรีสะเกษ',
+    urgency_reason: 'ข้อมูลสังเคราะห์: ร้องเรียนสถานพยาบาลตัวอย่างและมีเหตุผู้ป่วยฉุกเฉิน',
     jurisdiction_region: 'เขตสุขภาพที่ 10',
     jurisdiction_agency: 'สสจ.ศรีสะเกษ',
     malware_scan_status: 'CLEAN',
@@ -264,20 +264,20 @@ export const INITIAL_INTAKE_MESSAGES: IntakeMessage[] = [
     id: 'msg-kitima',
     envelope_id: 'env-kitima',
     raw_payload: JSON.stringify({
-      topic: 'ร้องเรียนสถานพยาบาลกิติยา เปิดสถานพยาบาลและฉีดยาจนผู้ป่วยช็อคหมดสติ',
-      description: 'นายธีระศักดิ์ จันทรจิตร ร้องเรียนว่า นายสุรีย์ยนต์ หรือ นายนพรัตน์ และ น.ส.กิติมา ซื่อสัตย์ เปิดบ้านเลขที่ 122 ม.3 บ้านกลาง ต.หมากเขียบ อ.เมือง จ.ศรีสะเกษ เป็นสถานพยาบาล (กิติยา) และได้ทำการฉีดยาให้ผู้ป่วยจนเกิดอาการช็อค หมดสติ ชักเกร็ง ต้องเรียกรถพยาบาลส่งตัวรักษาด่วนที่ รพ.ปริ้นซ์ศรีสะเกษ และใช้เครื่องช่วยหายใจ',
+      topic: 'ข้อมูลสังเคราะห์: ร้องเรียนสถานพยาบาลตัวอย่างและเหตุผู้ป่วยฉุกเฉิน',
+      description: 'ข้อมูลสังเคราะห์สำหรับทดสอบ workflow เท่านั้น: ผู้ร้องตัวอย่างแจ้งเหตุเกี่ยวกับสถานประกอบการตัวอย่างในจังหวัดศรีสะเกษและขอให้เจ้าหน้าที่ตรวจสอบข้อเท็จจริง',
       category: 'สถานพยาบาลและวิชาชีพเวชกรรมเถื่อน',
-      region: 'ต.หมากเขียบ อ.เมือง จ.ศรีสะเกษ',
-      complainantName: 'นายธีระศักดิ์ จันทรจิตร',
+      region: 'ต.ตัวอย่าง อ.เมือง จ.ศรีสะเกษ',
+      complainantName: 'ผู้ร้องตัวอย่าง ก',
       complainantContact: '088-1049377',
-      accusedName: 'นางสาวกิติมา ซื่อสัตย์ / นายนพรัตน์',
+      accusedName: 'บุคคลตัวอย่าง ก / บุคคลตัวอย่าง ข',
       source: 'แบบคำร้องเรียน สสจ.ศรีสะเกษ'
     })
   },
   {
     id: 'msg-1',
     envelope_id: 'env-1',
-    raw_payload: '{"source":"Kouprey Plus","ref_no":"KP-90223","text":"ร้องเรียนการเปิดคลินิกจัดฟันเถื่อนและบริการทำฟันโดยนายอนุชา ใจกล้า โดยโฆษณาในเพจ Sisaket ตลาดสด อ.ขุขันธ์ ติดต่อเบอร์โทร 062-4149791"}'
+    raw_payload: '{"source":"Kouprey Plus","ref_no":"KP-DEMO-001","text":"ข้อมูลสังเคราะห์: ร้องเรียนบริการสุขภาพของบุคคลตัวอย่าง ค ติดต่อเบอร์ 080-000-0000"}'
   },
   {
     id: 'msg-2',
@@ -290,7 +290,7 @@ export const INITIAL_INTAKE_ATTACHMENTS: IntakeAttachment[] = [
   {
     id: 'att-kitima-1',
     envelope_id: 'env-kitima',
-    filename: 'แบบคำร้องเรียน_สสจ_ศรีสะเกษ_กิติยา.pdf',
+    filename: 'แบบคำร้องเรียน_ข้อมูลสังเคราะห์.pdf',
     file_size: 2457600,
     mime_type: 'application/pdf',
     sha256: 'a1b2c3d4e5f67890123456789abcdef0123456789abcdef0123456789abcdef0',
@@ -325,19 +325,19 @@ export const INITIAL_INTAKE_PARTICIPANTS: IntakeParticipant[] = [
     id: 'part-kitima-1',
     envelope_id: 'env-kitima',
     role: 'COMPLAINANT',
-    name: 'นายธีระศักดิ์ จันทรจิตร',
+    name: 'ผู้ร้องตัวอย่าง ก',
     phone: '088-1049377',
     citizen_id: '1339900023752',
-    address: '80 หมู่ที่ 3 ต.หมากเขียบ อ.เมืองศรีสะเกษ จ.ศรีสะเกษ'
+    address: '1 หมู่ที่ 1 ต.ตัวอย่าง อ.เมืองศรีสะเกษ จ.ศรีสะเกษ'
   },
   {
     id: 'part-kitima-2',
     envelope_id: 'env-kitima',
     role: 'ACCUSED',
-    name: 'นางสาวกิติมา ซื่อสัตย์ / นายนพรัตน์ (สถานพยาบาลกิติยา)',
+    name: 'บุคคลตัวอย่าง ก / บุคคลตัวอย่าง ข (สถานพยาบาลตัวอย่าง)',
     phone: '081-9988776',
-    citizen_id: '3320500587029',
-    address: '122 ม.3 บ้านกลาง ต.หมากเขียบ อ.เมือง จ.ศรีสะเกษ 33000'
+    citizen_id: '0000000000000',
+    address: '99 ม.9 ต.ตัวอย่าง อ.เมือง จ.ศรีสะเกษ 33000'
   },
   {
     id: 'part-1',
@@ -351,15 +351,15 @@ export const INITIAL_INTAKE_PARTICIPANTS: IntakeParticipant[] = [
     id: 'part-2',
     envelope_id: 'env-1',
     role: 'ACCUSED',
-    name: 'นายอนุชา ใจกล้า (บริการทำฟัน/จัดฟันเถื่อน ขุขันธ์)',
-    phone: '062-4149791',
+    name: 'บุคคลตัวอย่าง ค (บริการสุขภาพตัวอย่าง)',
+    phone: '080-000-0000',
     address: '45/2 หมู่ที่ 5 ต.ห้วยเหนือ อ.ขุขันธ์ จ.ศรีสะเกษ 33140'
   },
   {
     id: 'part-3',
     envelope_id: 'env-2',
     role: 'ACCUSED',
-    name: 'นางสาววันชนิกา สุบิน (โรงน้ำดื่มวีร่า/ไอร่า วอเตอร์)',
+    name: 'บุคคลตัวอย่าง ง (ผลิตภัณฑ์ตัวอย่าง)',
     phone: '082-1904178',
     address: 'บ้านเลขที่ 32 หมู่ 2 ต.หัวช้าง อ.อุทุมพรพิสัย จ.ศรีสะเกษ'
   }
@@ -382,8 +382,8 @@ export const INITIAL_CASES: Case[] = [
   {
     id: 'case-3',
     number: 'ค.789/2569',
-    title: 'คดีสถานพยาบาลกิติยาเถื่อน ฉีดยาช็อคหมดสติ ต.หมากเขียบ',
-    description: 'การสืบสวนดำเนินคดีกรณี น.ส.กิติมา ซื่อสัตย์ และนายนพรัตน์ ลักลอบเปิดสถานพยาบาลกิติยา ณ บ้านเลขที่ 122 ม.3 บ้านกลาง ต.หมากเขียบ อ.เมืองศรีสะเกษ ฉีดยาผู้ป่วยจนเกิดอาการช็อคหมดสติและชักเกร็ง ส่งตัวฉุกเฉินเข้ารักษาที่ รพ.ปริ้นซ์ศรีสะเกษ',
+    title: 'ข้อมูลสังเคราะห์: ตรวจสอบสถานพยาบาลตัวอย่าง',
+    description: 'สำนวนสาธิตสำหรับทดสอบการรับเรื่อง หลักฐาน การตรวจทาน และการสร้างรายงาน โดยไม่อ้างถึงบุคคลหรือสถานประกอบการจริง',
     status: 'ACTIVE',
     jurisdiction_region: 'เขตสุขภาพที่ 10',
     jurisdiction_agency: 'สสจ.ศรีสะเกษ',
@@ -395,7 +395,7 @@ export const INITIAL_CASES: Case[] = [
     id: 'case-1',
     number: 'ค.123/2569',
     title: 'คดีบริการจัดฟันแฟชั่นผิดกฎหมาย อ.ขุขันธ์',
-    description: 'สืบสวนเครือข่ายลักลอบให้บริการจัดฟันแฟชั่น ดัดฟัน และใส่ฟันปลอมโดยนายอนุชา ใจกล้า ซึ่งไม่ใช่ทันตแพทย์ ณ อ.ขุขันธ์ จ.ศรีสะเกษ',
+    description: 'ข้อมูลสังเคราะห์สำหรับทดสอบ workflow การตรวจบริการสุขภาพและการเชื่อมโยงหลักฐาน',
     status: 'ACTIVE',
     jurisdiction_region: 'เขตสุขภาพที่ 10',
     jurisdiction_agency: 'สสจ.ศรีสะเกษ',
@@ -421,8 +421,8 @@ export const INITIAL_EVIDENCE: EvidenceFile[] = [
   {
     id: 'ev-kitima-1',
     case_id: 'case-3',
-    filename: 'แบบคำร้องเรียน_สสจ_ศรีสะเกษ_กิติยา.pdf',
-    file_path: '/vault/case-3/แบบคำร้องเรียน_สสจ_ศรีสะเกษ_กิติยา.pdf',
+    filename: 'แบบคำร้องเรียน_ข้อมูลสังเคราะห์.pdf',
+    file_path: '/vault/case-3/แบบคำร้องเรียน_ข้อมูลสังเคราะห์.pdf',
     file_size: 2457600,
     mime_type: 'application/pdf',
     sha256: 'a1b2c3d4e5f67890123456789abcdef0123456789abcdef0123456789abcdef0',
@@ -442,26 +442,27 @@ export const INITIAL_EVIDENCE: EvidenceFile[] = [
     sha256: '89504E47d32b509ef8c8d6263bb496a718b5774a3db0ffcb4159518e974e4600',
     status: 'PROCESSED',
     upload_state: 'STORED',
-    malware_scan_status: 'NOT_SCANNED',
+    // Synthetic demo fixture retained to exercise the legacy CLEAN state.
+    malware_scan_status: 'CLEAN',
     created_by: 'ร.ต.อ. สมชาย',
     created_at: '2026-07-25T11:15:00Z',
   }
 ];
 
 export const INITIAL_ENTITIES: ExtractedEntity[] = [
-  { id: 'ent-kitima-1', case_id: 'case-3', type: 'PERSON', value: 'นางสาวกิติมา ซื่อสัตย์', created_at: '2026-07-31T09:30:00Z' },
-  { id: 'ent-kitima-2', case_id: 'case-3', type: 'CITIZEN_ID', value: '3320500587029', created_at: '2026-07-31T09:30:00Z' },
-  { id: 'ent-kitima-3', case_id: 'case-3', type: 'LOCATION', value: '122 ม.3 ต.หมากเขียบ อ.เมือง จ.ศรีสะเกษ', created_at: '2026-07-31T09:30:00Z' },
-  { id: 'ent-1', case_id: 'case-1', type: 'PERSON', value: 'นายอนุชา ใจกล้า', created_at: '2026-07-25T12:00:00Z' },
-  { id: 'ent-2', case_id: 'case-1', type: 'PHONE', value: '062-4149791', created_at: '2026-07-25T12:00:00Z' },
+  { id: 'ent-kitima-1', case_id: 'case-3', type: 'PERSON', value: 'บุคคลตัวอย่าง ก', created_at: '2026-07-31T09:30:00Z' },
+  { id: 'ent-kitima-2', case_id: 'case-3', type: 'CITIZEN_ID', value: '0000000000000', created_at: '2026-07-31T09:30:00Z' },
+  { id: 'ent-kitima-3', case_id: 'case-3', type: 'LOCATION', value: 'ต.ตัวอย่าง อ.เมือง จ.ศรีสะเกษ', created_at: '2026-07-31T09:30:00Z' },
+  { id: 'ent-1', case_id: 'case-1', type: 'PERSON', value: 'บุคคลตัวอย่าง ค', created_at: '2026-07-25T12:00:00Z' },
+  { id: 'ent-2', case_id: 'case-1', type: 'PHONE', value: '080-000-0000', created_at: '2026-07-25T12:00:00Z' },
   { id: 'ent-3', case_id: 'case-1', type: 'LOCATION', value: 'อำเภอขุขันธ์ จังหวัดศรีสะเกษ', created_at: '2026-07-25T12:00:00Z' },
-  { id: 'ent-4', case_id: 'case-2', type: 'PERSON', value: 'นางสาววันชนิกา สุบิน', created_at: '2026-07-26T10:00:00Z' },
+  { id: 'ent-4', case_id: 'case-2', type: 'PERSON', value: 'บุคคลตัวอย่าง ง', created_at: '2026-07-26T10:00:00Z' },
   { id: 'ent-5', case_id: 'case-2', type: 'LOCATION', value: 'อำเภออุทุมพรพิสัย จังหวัดศรีสะเกษ', created_at: '2026-07-26T10:00:00Z' }
 ];
 
 export const INITIAL_MENTIONS: EntityMention[] = [
-  { id: 'm-1', entity_id: 'ent-1', filename: 'fb_ad_screenshot.png', page_number: 1, snippet: 'ตรวจพบชื่อโอนเงินคิวมัดจำ นายอนุชา ใจกล้า', confidence: 0.98 },
-  { id: 'm-2', entity_id: 'ent-2', filename: 'fb_ad_screenshot.png', page_number: 1, snippet: 'เบอร์ติดต่อปักหมุด 062-4149791', confidence: 0.95 }
+  { id: 'm-1', entity_id: 'ent-1', filename: 'fb_ad_screenshot.png', page_number: 1, snippet: 'ข้อมูลสังเคราะห์: พบบุคคลตัวอย่าง ค', confidence: 0.98 },
+  { id: 'm-2', entity_id: 'ent-2', filename: 'fb_ad_screenshot.png', page_number: 1, snippet: 'ข้อมูลสังเคราะห์: เบอร์ 080-000-0000', confidence: 0.95 }
 ];
 
 export const INITIAL_RELATIONSHIPS: EntityRelationship[] = [
@@ -483,7 +484,7 @@ export const INITIAL_RELATIONSHIP_REFERENCES: RelationshipReference[] = [
     relationship_id: 'rel-1',
     evidence_id: 'ev-1',
     page_number: 1,
-    quote: 'เบอร์ติดต่อปักหมุด 062-4149791',
+    quote: 'ข้อมูลสังเคราะห์: เบอร์ 080-000-0000',
   },
 ];
 
@@ -507,7 +508,7 @@ export const INITIAL_AUDIT_LOGS: AuditLog[] = [
     id: 'log-1',
     profile_name: 'พล.ต.ต. สุรศักดิ์',
     action: 'CREATE_CASE',
-    details: 'สร้างสำนวนคดี ค.789/2569 - สถานพยาบาลกิติยา',
+    details: 'สร้างสำนวนคดีสังเคราะห์ ค.789/2569',
     ip_address: '192.168.1.10',
     created_at: '2026-07-31T09:00:00Z',
   }
@@ -521,18 +522,18 @@ export const INITIAL_SETTINGS: UserSettings = {
 };
 
 // Stateful in-memory stores for demo mode
-let casesStore: Case[] = [...INITIAL_CASES];
-let evidenceStore: EvidenceFile[] = [...INITIAL_EVIDENCE];
-let entitiesStore: ExtractedEntity[] = [...INITIAL_ENTITIES];
-let relationshipsStore: EntityRelationship[] = [...INITIAL_RELATIONSHIPS];
-let matchesStore: MatchCandidate[] = [...INITIAL_MATCHES];
-let auditLogsStore: AuditLog[] = [...INITIAL_AUDIT_LOGS];
+const casesStore: Case[] = [...INITIAL_CASES];
+const evidenceStore: EvidenceFile[] = [...INITIAL_EVIDENCE];
+const entitiesStore: ExtractedEntity[] = [...INITIAL_ENTITIES];
+const relationshipsStore: EntityRelationship[] = [...INITIAL_RELATIONSHIPS];
+const matchesStore: MatchCandidate[] = [...INITIAL_MATCHES];
+const auditLogsStore: AuditLog[] = [...INITIAL_AUDIT_LOGS];
 let settingsStore: UserSettings = { ...INITIAL_SETTINGS };
-let intakeEnvelopesStore: IntakeEnvelope[] = [...INITIAL_INTAKE_ENVELOPES];
-let intakeMessagesStore: IntakeMessage[] = [...INITIAL_INTAKE_MESSAGES];
-let intakeAttachmentsStore: IntakeAttachment[] = [...INITIAL_INTAKE_ATTACHMENTS];
-let intakeParticipantsStore: IntakeParticipant[] = [...INITIAL_INTAKE_PARTICIPANTS];
-let duplicateCandidatesStore: IntakeDuplicateCandidate[] = [...INITIAL_DUPLICATE_CANDIDATES];
+const intakeEnvelopesStore: IntakeEnvelope[] = [...INITIAL_INTAKE_ENVELOPES];
+const intakeMessagesStore: IntakeMessage[] = [...INITIAL_INTAKE_MESSAGES];
+const intakeAttachmentsStore: IntakeAttachment[] = [...INITIAL_INTAKE_ATTACHMENTS];
+const intakeParticipantsStore: IntakeParticipant[] = [...INITIAL_INTAKE_PARTICIPANTS];
+const duplicateCandidatesStore: IntakeDuplicateCandidate[] = [...INITIAL_DUPLICATE_CANDIDATES];
 
 // Getters and Setters
 export function getCases(): Case[] { return casesStore; }
@@ -576,7 +577,7 @@ export function saveMatch(item: MatchCandidate): MatchCandidate {
 }
 
 export function getAuditLogs(): AuditLog[] { return auditLogsStore; }
-let triageDecisionsStore: TriageDecision[] = [];
+const triageDecisionsStore: TriageDecision[] = [];
 
 export function saveTriageDecision(item: TriageDecision): TriageDecision {
   triageDecisionsStore.unshift(item);

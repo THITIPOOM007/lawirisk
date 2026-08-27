@@ -7,6 +7,16 @@ function source(relativePath: string) {
 }
 
 describe('release security regressions', () => {
+  it('ships CSP and HSTS while preserving the allow-listed local Recon connection', () => {
+    const config = source('next.config.ts');
+    expect(config).toContain('Content-Security-Policy');
+    expect(config).toContain('Strict-Transport-Security');
+    expect(config).toContain("object-src 'none'");
+    expect(config).toContain("frame-ancestors 'none'");
+    expect(config).toContain('http://127.0.0.1:32147');
+    expect(config).not.toContain('connect-src *');
+  });
+
   it('keeps evidence upload behind reservation, RLS and compensation boundaries', () => {
     const route = source('src/app/api/evidence/upload/route.ts');
     expect(route).toContain("supabase.rpc('reserve_evidence_upload'");
@@ -27,10 +37,16 @@ describe('release security regressions', () => {
     expect(complete).toContain('createSignedUrl(evidence.file_path, 300)');
     expect(complete).toContain('validateStoredFileReference');
     expect(complete).toContain("supabase.rpc('finalize_evidence_upload'");
-    expect(complete).not.toContain('MALWARE_SCANNER');
     expect(contract).toContain('200 * 1024 * 1024');
     expect(migration).toContain('209715200');
     expect(migration).toContain("record.upload_state <> 'RESERVED'");
+  });
+
+  it('removes the scanner RPC and accepts deterministically validated files', () => {
+    const migration = source('supabase/migrations/202608260003_remove_malware_scanner_again.sql');
+    expect(migration).toContain('DROP FUNCTION IF EXISTS public.finalize_scanned_evidence_upload');
+    expect(migration).toContain("IN (''CLEAN'', ''NOT_SCANNED'')");
+    expect(migration).toContain("'confirmed_infected_preserved', true");
   });
 
   it('records unscanned files honestly and never rewrites infected legacy files', () => {

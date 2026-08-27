@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { z } from 'zod';
 import { resolveMultiChannelSearch } from '@/lib/fda-smart-resolver';
+import { consumeRateLimit } from '@/lib/rate-limit';
 
 const searchQuerySchema = z.object({
   q: z.string().trim().min(2).max(200),
@@ -8,6 +9,16 @@ const searchQuerySchema = z.object({
 });
 
 export async function GET(request: NextRequest) {
+  const clientAddress = request.headers.get('cf-connecting-ip')
+    || request.headers.get('x-forwarded-for')?.split(',')[0]?.trim()
+    || 'unknown';
+  const limit = await consumeRateLimit({ key: `public-search:${clientAddress}`, limit: 30, windowSeconds: 60 });
+  if (!limit.allowed) {
+    return NextResponse.json(
+      { success: false, error: 'ค้นหาถี่เกินไป กรุณารอสักครู่' },
+      { status: 429, headers: { 'Retry-After': String(limit.retryAfterSeconds), 'Cache-Control': 'no-store' } },
+    );
+  }
   const { searchParams } = new URL(request.url);
   const q = searchParams.get('q') || '';
   const category = searchParams.get('category') || 'ALL';
@@ -22,17 +33,17 @@ export async function GET(request: NextRequest) {
 
   const rawQuery = parsed.data.q.trim();
 
-  // Intelligent Multi-Channel Resolver across all 8 government registries
   const allResults = await resolveMultiChannelSearch(rawQuery);
   const results = parsed.data.category === 'ALL'
     ? allResults
     : allResults.filter((item) => item.category === parsed.data.category);
 
-  // AI Citation Summary
   let aiSummary = '';
   if (results.length > 0) {
     const topItem = results[0];
-    aiSummary = `จากการตรวจสอบระบบสืบค้นข้อมูลผลิตภัณฑ์และทะเบียนภาครัฐ (${topItem.source}) พบข้อมูลที่เกี่ยวข้องกับ "${rawQuery}": ${topItem.snippet} (อ้างอิงจาก: ${topItem.source} ณ วันที่ ${topItem.publishedDate})`;
+    aiSummary = topItem.status === 'UNREGISTERED'
+      ? `ยังไม่มีผลจากทะเบียนที่ยืนยันได้สำหรับ "${rawQuery}" ข้อมูลด้านล่างเป็นคำแนะนำให้ตรวจสอบกับต้นทาง ไม่ใช่การรับรองว่าปลอดภัยหรือถูกกฎหมาย`
+      : `พบรายการที่บันทึกในแหล่งข้อมูลที่อนุมัติ (${topItem.source}) สำหรับ "${rawQuery}": ${topItem.snippet}`;
   } else {
     aiSummary = `ไม่พบข้อมูลที่ตรงกับ "${rawQuery}" ในฐานข้อมูลเปิดหรือทะเบียนที่บันทึกไว้ กรุณาตรวจสอบการสะกดหรือลองค้นหาด้วยชื่อสามัญ/ชื่อทางการค้า`;
   }
@@ -46,5 +57,5 @@ export async function GET(request: NextRequest) {
       citationCount: results.length,
       results,
     },
-  });
+  }, { headers: { 'Cache-Control': 'public, max-age=0, no-store' } });
 }

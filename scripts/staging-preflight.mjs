@@ -7,6 +7,7 @@ const required = [
   'SUPABASE_SERVICE_ROLE_KEY',
   'PRIVATE_EVIDENCE_BUCKET',
   'APP_ORIGIN',
+  'GEMINI_API_KEY',
   'N8N_AUTOMATION_WEBHOOK_URL',
   'N8N_DISPATCH_TOKEN',
   'N8N_CALLBACK_TOKEN',
@@ -16,6 +17,11 @@ const results = [];
 const record = (name, ok, detail) => results.push({ name, ok, detail });
 const valueOf = (name) => process.env[name]?.trim() || '';
 const looksLikePlaceholder = (value) => !value || /your-|replace-|example\.(com|invalid)|localhost|127\.0\.0\.1/i.test(value);
+
+if (required.every((name) => !valueOf(name))) {
+  console.log('INFO  ไม่พบ .env.staging.local: ผลด้านล่างตรวจเฉพาะ configuration ใน process นี้ ไม่ได้อ่าน Cloudflare secrets');
+  console.log('INFO  หาก deploy ด้วย Cloudflare secret store ให้ใช้ pnpm staging:live:verify และ pnpm staging:anonymous:verify ตรวจระบบที่ deploy แล้ว\n');
+}
 
 for (const name of required) {
   const value = valueOf(name);
@@ -31,6 +37,12 @@ record(
   'N8N_TOKENS_SEPARATED',
   Boolean(valueOf('N8N_DISPATCH_TOKEN')) && valueOf('N8N_DISPATCH_TOKEN') !== valueOf('N8N_CALLBACK_TOKEN'),
   'dispatch and callback tokens must be different',
+);
+record(
+  'SUPABASE_KEYS_SEPARATED',
+  Boolean(valueOf('NEXT_PUBLIC_SUPABASE_ANON_KEY'))
+    && valueOf('NEXT_PUBLIC_SUPABASE_ANON_KEY') !== valueOf('SUPABASE_SERVICE_ROLE_KEY'),
+  'anon and service-role keys must be different',
 );
 
 for (const name of ['NEXT_PUBLIC_SUPABASE_URL', 'APP_ORIGIN', 'N8N_AUTOMATION_WEBHOOK_URL']) {

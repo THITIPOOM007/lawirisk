@@ -61,13 +61,10 @@ export async function POST(request: NextRequest, context: { params: Promise<{ id
     if (isEvidenceUsable(evidence.upload_state, evidence.malware_scan_status)) {
       return NextResponse.json({
         success: true,
-        message: evidence.malware_scan_status === 'CLEAN'
-          ? 'หลักฐานนี้จัดเก็บและสแกนไว้แล้ว'
-          : 'หลักฐานนี้จัดเก็บและตรวจรูปแบบไฟล์ไว้แล้ว',
+        message: 'หลักฐานนี้จัดเก็บและผ่านการตรวจขนาด ชนิด และโครงสร้างแล้ว',
         data: evidence,
       }, { status: 200, headers: { 'Cache-Control': 'no-store', 'X-Request-ID': traceId } });
     }
-
     const service = createServiceClient();
     const bucket = process.env.PRIVATE_EVIDENCE_BUCKET || 'evidence-vault';
     const { data: signedSource, error: signedSourceError } = await service.storage
@@ -106,7 +103,9 @@ export async function POST(request: NextRequest, context: { params: Promise<{ id
       return apiError('EVIDENCE_INTEGRITY_REJECTED', 'ขนาด ชนิด หรือโครงสร้างไฟล์ในพื้นที่จัดเก็บไม่ตรงกับข้อมูลที่ลงทะเบียน', 422, traceId);
     }
 
-    const { data: finalizedData, error: finalizeError } = await supabase.rpc('finalize_evidence_upload', { p_evidence_id: evidence.id });
+    const { data: finalizedData, error: finalizeError } = await supabase.rpc('finalize_evidence_upload', {
+      p_evidence_id: evidence.id,
+    });
     if (finalizeError || !finalizedData) {
       console.error('Evidence direct upload finalize failed', { traceId, evidenceId: evidence.id, code: finalizeError?.code });
       return apiError('METADATA_WRITE_FAILED', 'ยืนยันทะเบียนหลักฐานไม่สำเร็จ กรุณาลองใหม่', 503, traceId);
@@ -115,9 +114,9 @@ export async function POST(request: NextRequest, context: { params: Promise<{ id
 
     return NextResponse.json({
       success: true,
-      message: 'อัปโหลดครบและตรวจขนาด ชนิดไฟล์ และโครงสร้างแล้ว พร้อมใช้งานในขั้นตอนถัดไป',
-      data: finalized,
-    }, { status: 201, headers: { 'Cache-Control': 'no-store', 'X-Request-ID': traceId } });
+      message: 'อัปโหลดครบและตรวจขนาด ชนิด และโครงสร้างไฟล์แล้ว',
+      data: { ...finalized, ready_for_use: true },
+    }, { status: 200, headers: { 'Cache-Control': 'no-store', 'X-Request-ID': traceId } });
   } catch (error: unknown) {
     console.error('Evidence upload completion error', { traceId, error: error instanceof Error ? error.name : 'UnknownError' });
     return apiError('INTERNAL_ERROR', 'เกิดข้อผิดพลาดภายในระบบ กรุณาลองใหม่', 500, traceId);

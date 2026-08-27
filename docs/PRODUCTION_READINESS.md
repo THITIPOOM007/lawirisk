@@ -10,9 +10,12 @@
 - Worker ที่ไม่มี secret ตอบ health 503 และ redirect หน้าป้องกันไป login แบบ fail closed
 - security headers, private signed download, shared rate limit, Origin check, immutable evidence/audit, human review, source snapshot และ transactional CSV import มี implementation แล้ว
 - Passkey รองรับ enrollment, passwordless login, device revocation และ biometric step-up โดยเก็บเฉพาะ FIDO2 public key/counter ไม่เก็บภาพใบหน้าหรือลายนิ้วมือ
-- Evidence intake รองรับ drag/drop หลายไฟล์และกล้องมือถือ; Vision OCR อ่านภาพ/PDF ที่เป็น `STORED/CLEAN` เดิมหรือ `STORED/NOT_SCANNED` และทุกผลยังคงเป็น `SUGGESTED` รอมนุษย์รับรอง
+- Evidence intake รองรับ drag/drop หลายไฟล์และกล้องมือถือ; ไฟล์ `STORED/CLEAN` หรือ `STORED/NOT_SCANNED` ที่ผ่านการตรวจขนาด/MIME/magic bytes เปิด ส่งเข้า AI หรือใช้ในรายงานได้ ส่วน Vision OCR จำกัดไฟล์ไม่เกิน 20 MB และทุกผลยังคงเป็น `SUGGESTED` รอมนุษย์รับรอง
+- Recon/Dossier ที่เคยใช้ข้อมูล fixture และสร้างข้อสรุปโดยไม่มี connector ทางการถูกปิดแบบ fail closed; Public Search ที่ไม่มี trusted-source match แสดง `UNREGISTERED`/confidence 0 และระบุว่าไม่ใช่ผลรับรอง
 
 ยังห้ามใช้ข้อมูลจริงจนกว่า live gates ด้านล่างจะผ่านและมีผู้รับผิดชอบลงนาม
+
+ระบบไม่ใช้ malware scanner ตาม product decision; readiness ตรวจเฉพาะบริการที่อยู่ในขอบเขตใช้งานจริง
 
 ## สิ่งที่เจ้าของโครงการต้องเตรียมเพื่อเริ่ม staging
 
@@ -62,7 +65,7 @@
    - Investigator A อ่าน case B ไม่ได้
    - VIEWER/REVIEWER เขียน case/evidence/import ไม่ได้
    - direct insert evidence ถูกปฏิเสธ; member upload ผ่าน reserve/finalize RPC ได้
-   - signed URL ออกได้เฉพาะ member และหลักฐาน `STORED/CLEAN` เดิมหรือ `STORED/NOT_SCANNED`
+   - signed URL ออกได้เฉพาะ member และหลักฐานที่ `STORED` และผ่าน deterministic file validation; confirmed `INFECTED` ต้องถูกปฏิเสธ
    - audit update/delete และ stored evidence delete ถูกปฏิเสธ
    - suggestion จากหลักฐานที่ยังไม่พร้อมใช้งานยืนยันไม่ได้
    - ลงทะเบียน/ล็อกอิน/เพิกถอน Passkey ได้จริงบน Windows Hello, Face ID/Touch ID และ security key อย่างน้อยสองชนิด พร้อมตรวจ counter replay และ Audit Log
@@ -75,7 +78,7 @@
 
 ## File validation gate
 
-ยืนยันว่า Supabase organization และ global upload limit รองรับไฟล์ 200 MB, bucket `evidence-vault` จำกัดไม่เกิน 200 MB และยังเป็น private จากนั้นทดสอบ TUS resume, ขนาด 0/เกิน 200 MB, extension/MIME/magic-byte mismatch, object หาย, range request ล้มเหลว และไฟล์ 200 MB จริง สถานะใหม่ต้องเป็น `NOT_SCANNED` อย่างตรงไปตรงมา ไม่แสดงว่า CLEAN
+ยืนยันว่า Supabase organization และ global upload limit รองรับไฟล์ 200 MB, bucket `evidence-vault` จำกัดไม่เกิน 200 MB และยังเป็น private จากนั้นทดสอบ TUS resume, ขนาด 0/เกิน 200 MB, extension/MIME/magic-byte mismatch, object หาย และไฟล์ 200 MB จริง
 
 ## Cloudflare gates
 
@@ -93,8 +96,8 @@ vinext ใช้ Workers Cache, ไม่ใช้ Data Cache/KV และไม
 - Gemini text/Vision extraction เชื่อมผ่าน route ฝั่งเซิร์ฟเวอร์แล้ว: ถ้ามีข้อความจะวิเคราะห์ข้อความนั้น ถ้าเว้นว่างจะดาวน์โหลดต้นฉบับภาพ/PDF ที่พร้อมใช้งานจาก private bucket เพื่อทำ Vision OCR ตรวจผลด้วย schema และบันทึกเป็น `SUGGESTED`; งาน batch/background ใช้ automation job/n8n contract ที่มีอยู่ ส่วน demo ใช้ deterministic fixtureที่ติดป้ายชัดและไม่เรียก provider ภายนอก ยังต้องสรุป data residency, DPA, retention และ evaluation set ก่อนเปิด Gemini กับข้อมูลจริง
 - Kouprey/Partner endpoints พร้อม contract แต่ต้องมี production key, partner test fixture และการซ้อม key rotation/replay response
 - Email ingestion ไม่มี SMTP/mail provider เชื่อมจริง จึงยังไม่ควรประกาศช่องทางอีเมลว่าเปิดใช้งาน
-- FDA SKYNET/Privus เปิดใช้ในโหมด manual-only ผ่าน stable HTTPS entry point; ไม่เก็บ eGov credential/callback URL และต้องนำ official export กลับเข้า Evidence Intake
-- HSS OSS ถูกบล็อกเพราะ HTTPS path ย้อนกลับไป HTTP ต้องได้ HTTPS/API ที่ สบส. รับรองก่อนเปิดใช้ ดู `docs/EXTERNAL_SOURCE_INTEGRATION.md`
+- FDA SKYNET/Privus มี Recon Companion แบบ local auto-login แล้ว: credential เข้ารหัสด้วย Windows DPAPI, เริ่ม OIDC/PKCE ใหม่ทุกครั้ง และไม่ส่ง credential/session ขึ้น Cloudflare/Supabase; automated search/export หลังล็อกอินยังต้องมี adapter ที่ทดสอบกับบัญชีจริง
+- HSS OSS มี local auto-login แบบต้องยืนยันความเสี่ยงทุกครั้ง แต่ยังไม่ผ่าน production transport gate เพราะ HTTPS path ย้อนกลับ HTTP; ต้องได้ HTTPS/API ที่ สบส. รับรองเพื่อยกเลิกข้อยกเว้น ดู `docs/EXTERNAL_SOURCE_INTEGRATION.md`
 
 ## Operational sign-off
 

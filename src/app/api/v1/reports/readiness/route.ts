@@ -72,7 +72,7 @@ export async function GET(request: NextRequest) {
   const message = eligible
     ? 'พร้อมสร้างรายงานที่ตรวจสอบย้อนกลับได้'
     : usableEvidenceCount === 0
-      ? 'ต้องมีหลักฐานที่จัดเก็บและตรวจรูปแบบไฟล์สมบูรณ์อย่างน้อย 1 ไฟล์ก่อน'
+      ? 'ต้องมีหลักฐานที่จัดเก็บและผ่านการตรวจขนาด ชนิด และโครงสร้างอย่างน้อย 1 ไฟล์ก่อน'
       : 'ต้องสกัดข้อมูลและรับรอง source mention หรือ relationship reference อย่างน้อย 1 รายการก่อน';
 
   return NextResponse.json({

@@ -32,7 +32,6 @@ import {
 } from '@/lib/demo-data';
 
 import { validateFileInBrowser } from '@/lib/file-validator';
-import { CaseIntelligenceReconWidget } from '@/components/CaseIntelligenceReconWidget';
 
 export default function IntakeDetailPage() {
   const params = useParams();
@@ -466,16 +465,6 @@ export default function IntakeDetailPage() {
 
           </div>
 
-          {/* Automated Case Intelligence Reconnaissance Engine (5-Dimension) */}
-          <CaseIntelligenceReconWidget
-            caseId={envelope.id}
-            caseNumber={`คำร้อง #${envelope.id.slice(0, 8)}`}
-            caseTitle={parsedData?.topic || envelope.urgency_reason || 'เรื่องร้องเรียนด้านสาธารณสุข'}
-            description={parsedData?.description || message?.raw_payload}
-            accusedName={accused?.name || (parsedData as { accusedName?: string })?.accusedName}
-            locationAddress={accused?.address || (parsedData as { region?: string })?.region}
-            autoRunOnMount={true}
-          />
         </div>
 
         {/* Right column: Duplicate checks and Triage decision form (2/5) */}

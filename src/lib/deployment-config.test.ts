@@ -20,8 +20,9 @@ describe('staging deployment contract', () => {
     expect(deployScript.indexOf('assertCloudflareSecrets();')).toBeLessThan(deployScript.indexOf('const deployment = runPnpm'));
   });
 
-  it('does not require or bind a malware scanner', () => {
+  it('does not require the removed malware scanner integration', () => {
     expect(wranglerConfig).not.toContain('MALWARE_SCANNER');
     expect(deployScript).not.toContain('MALWARE_SCANNER');
+    expect(readFileSync('src/lib/runtime-config.ts', 'utf8')).not.toContain('malwareScanner');
   });
 });

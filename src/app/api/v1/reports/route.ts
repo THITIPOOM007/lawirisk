@@ -53,7 +53,7 @@ export async function POST(request: NextRequest) {
 
   const [caseResult, evidenceResult, entitiesResult, relationshipsResult] = await Promise.all([
     supabase.from('cases').select('id,number,title,description,status,jurisdiction_region,jurisdiction_agency,created_at').eq('id', payload.case_id).maybeSingle(),
-    supabase.from('evidence_files').select('id,filename,sha256,malware_scan_status').eq('case_id', payload.case_id).eq('upload_state', 'STORED').order('created_at'),
+    supabase.from('evidence_files').select('id,filename,sha256,malware_scan_status').eq('case_id', payload.case_id).eq('upload_state', 'STORED').in('malware_scan_status', ['CLEAN', 'NOT_SCANNED']).order('created_at'),
     supabase.from('extracted_entities').select('id,type,value').eq('case_id', payload.case_id),
     supabase.from('entity_relationships').select('id,type,status').eq('case_id', payload.case_id).eq('status', 'VERIFIED'),
   ]);

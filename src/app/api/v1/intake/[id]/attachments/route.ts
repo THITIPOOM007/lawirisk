@@ -150,7 +150,7 @@ export async function POST(
     const safeRecord = record as Record<string, unknown> || {};
     return NextResponse.json({
       success: true,
-      message: 'จัดเก็บและตรวจรูปแบบไฟล์แนบแล้ว พร้อมใช้งานในขั้นตอนถัดไป',
+      message: 'จัดเก็บและตรวจขนาด ชนิด และโครงสร้างไฟล์แนบแล้ว',
       data: {
         id: safeRecord.id || attachmentId,
         envelope_id: safeRecord.envelope_id || envelopeId,

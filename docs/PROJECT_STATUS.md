@@ -2,9 +2,9 @@
 
 ## LawiRisk SSK Smart EvidenceVerse
 
-**Source status (2026-08-23): release candidate; local quality gates pass.**
+**Source status (2026-08-27): release candidate with local Recon Companion deployed to staging; automated quality gates pass.**
 
-The application is feature-complete for its current product scope in demo/local mode and builds for both Next.js and vinext/Cloudflare. It is not approved for real case data until the staging and operational gates in `PRODUCTION_READINESS.md` have passed.
+The application is feature-complete for its current product scope and is deployed at `https://lawirisk-ssk.evidenceverse-th.workers.dev`. Operational approval for real case data still depends on the remaining drills and sign-offs in `PRODUCTION_READINESS.md`.
 
 ## Implemented
 
@@ -18,25 +18,34 @@ The application is feature-complete for its current product scope in demo/local 
 - Evidence Universe demo/live states with case, entity, evidence and verified cross-case nodes; errors fail visibly with retry rather than rendering a blank graph.
 - Origin checks on browser mutations, signed/idempotent external intake, least-privilege RLS/RPC boundaries and append-only audit events.
 - Thai-font PDF generation, responsive/mobile navigation and reduced-motion support.
+- Case Intelligence Workspace ครอบคลุม 10 มิติ รวมชื่อ/เบอร์โทร ภาพถ่าย สถานที่ พยานแวดล้อม cross-case และกฎหมาย พร้อมร่าง dossier แบบ plain text ที่ติดป้ายให้ตรวจทาน
+- Windows Recon Companion ใช้ DPAPI เก็บบัญชีเฉพาะเครื่อง, auto-login SKYNET/eGov และ HSS ตาม allowlist, หยุดรอ MFA/CAPTCHA และไม่ส่ง credential/session ขึ้น Cloudflare/Supabase; HSS บังคับยืนยัน HTTP ทุกครั้ง
 
 ## Verified locally
 
 - ESLint: pass
 - TypeScript/Next route types: pass
-- Vitest: 18 files, 94 tests pass
-- Playwright critical flows: 14/14 pass
-- Next.js production build: pass (52 generated routes/pages)
+- Vitest: 23 files, 115 tests pass
+- Coverage thresholds pass: 77.77% statements, 62.24% branches, 82.35% functions, 79.14% lines
+- Playwright critical/surface flows: 22/22 pass
+- Next.js production build: pass (57 generated routes/pages)
 - vinext/Cloudflare build: pass
 - Production dependency audit: no known vulnerabilities
 
-## External release blockers
+## Verified on staging
 
-The current machine has no staging secrets or linked infrastructure, so `pnpm staging:preflight` is 0/19. Before real data can be used, the owner must configure and prove:
+- Cloudflare version `fe6d5ddb-39a0-42f9-8c27-7e5f596e3ed4` deployed successfully.
+- `/api/health` returns HTTP 200 `ready`; login and public search return HTTP 200.
+- Linked Supabase migrations are up to date.
+- Anonymous case reads return no rows and anonymous private-storage reads are denied.
+- Worker has no malware-scanner binding or runtime dependency.
 
-1. Staging Supabase, migration dry-run/apply and multi-role RLS tests.
-2. Private `evidence-vault` storage and 200 MB stored-object size/MIME/magic-byte validation tests.
-3. Cloudflare staging secrets/domain, health check, WAF/rate limits, monitoring and rollback.
-4. Backup/restore, retention, incident response and Product/Security/DPO/DB/Cloudflare sign-off.
-5. Production credentials and acceptance fixtures for optional n8n, Kouprey, partner and official-source connectors.
+## Remaining external/operational acceptance
 
-Static public registry records and manual-only official portal launching remain deliberate fallbacks; HSS OSS stays blocked until an authority-approved HTTPS/API endpoint exists.
+1. Run authenticated multi-role staging journeys with real ADMIN/INVESTIGATOR/REVIEWER/VIEWER accounts and real passkey devices.
+2. Complete a real 200 MB TUS pause/resume/upload/download test against the staging bucket.
+3. Run WAF/rate-limit/monitoring/rollback and backup/PITR restore drills, then record Product/Security/DPO/DB/Cloudflare sign-off.
+4. Rotate the Supabase privileged key that appeared in Git history and rewrite/purge the affected remote history before production approval.
+5. Obtain production contracts, credentials and acceptance fixtures for optional n8n, Kouprey, partner and official-source connectors.
+
+Static public registry records remain a deliberate fallback. Local auto-login เปิดใช้แล้ว แต่ automated search/export หลังล็อกอินยังต้องเพิ่ม adapter จากหน้าจริงและ acceptance fixture ของแต่ละแหล่ง; HSS ยังเป็น transport exception จนมี HTTPS/API ที่หน่วยงานรับรอง

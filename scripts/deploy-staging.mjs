@@ -1,6 +1,6 @@
 import { spawnSync } from 'node:child_process';
 
-const projectRef = process.env.SUPABASE_PROJECT_REF?.trim() || 'keenndeevrwmembphckn';
+const projectRef = process.env.SUPABASE_PROJECT_REF?.trim() || '';
 const requiredCloudflareSecrets = [
   'APP_ORIGIN',
   'GEMINI_API_KEY',

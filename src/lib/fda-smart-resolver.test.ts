@@ -3,36 +3,37 @@ import { resolveMultiChannelSearch } from './fda-smart-resolver';
 
 vi.mock('server-only', () => ({}));
 
-describe('FDA Smart Resolver (Multi-Channel)', () => {
-  it('identifies valid 13-digit cosmetic license correctly', async () => {
-    // searchDb = false for tests
-    const results = await resolveMultiChannelSearch('10-1-6500012345', false);
-    expect(results.length).toBeGreaterThan(0);
-    expect(results[0].category).toBe('LICENSES');
-    expect(results[0].productCategoryLabel).toContain('ผลิตภัณฑ์อาหารและสุขภาพ');
+describe('FDA public search fallback', () => {
+  it('treats a plausible registration number as unverified guidance', async () => {
+    const [result] = await resolveMultiChannelSearch('10-1-6500012345', false);
+    expect(result.category).toBe('HEALTH_PRODUCTS');
+    expect(result.status).toBe('UNREGISTERED');
+    expect(result.confidenceScore).toBe(0);
+    expect(result.productCategoryLabel).toContain('ไม่ใช่ผลรับรอง');
   });
 
-  it('identifies medical advertisement license', async () => {
-    const results = await resolveMultiChannelSearch('ฆพ. 1234/2565', false);
-    expect(results.length).toBeGreaterThan(0);
-    expect(results[0].category).toBe('LICENSES');
+  it('classifies an advertisement-license-shaped query without claiming validity', async () => {
+    const [result] = await resolveMultiChannelSearch('ฆพ. 1234/2565', false);
+    expect(result.category).toBe('LICENSES');
+    expect(result.status).toBe('UNREGISTERED');
   });
 
-  it('identifies company registration keywords', async () => {
-    const results = await resolveMultiChannelSearch('บริษัท ตัวอย่าง', false);
-    expect(results.length).toBeGreaterThan(0);
-    expect(results[0].category).toBe('COMPANIES');
+  it('classifies a company query without fabricating a registry match', async () => {
+    const [result] = await resolveMultiChannelSearch('บริษัท ตัวอย่าง', false);
+    expect(result.category).toBe('COMPANIES');
+    expect(result.status).toBe('UNREGISTERED');
+    expect(result.snippet).toContain('ยังไม่ได้ยืนยัน');
   });
 
-  it('detects high-risk exaggerated keywords', async () => {
-    const results = await resolveMultiChannelSearch('อาหารเสริม ลดน้ำหนัก ทันใจ', false);
-    expect(results.length).toBeGreaterThan(0);
-    expect(results[0].status).toBe('WARNING');
+  it('does not turn suspicious marketing text into an official finding', async () => {
+    const [result] = await resolveMultiChannelSearch('อาหารเสริม ลดน้ำหนัก ทันใจ', false);
+    expect(result.status).toBe('UNREGISTERED');
+    expect(result.confidenceScore).toBe(0);
   });
 
-  it('provides fallback context for generic health terms', async () => {
-    const results = await resolveMultiChannelSearch('พาราเซตามอล', false);
-    expect(results.length).toBeGreaterThan(0);
-    expect(results[0].id).toContain('reg-1A1/65');
+  it('does not return a hard-coded product record for a generic term', async () => {
+    const [result] = await resolveMultiChannelSearch('พาราเซตามอล', false);
+    expect(result.id).toContain('unverified-');
+    expect(result.sourceUrl).toMatch(/^https:\/\//);
   });
 });

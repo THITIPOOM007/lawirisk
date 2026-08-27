@@ -10,6 +10,7 @@ import { createServer } from '@/lib/supabase-server';
 import { aiExtractionRequestSchema } from '@/lib/workflow-contracts';
 
 const AI_CREATE_ROLES = new Set([...REVIEW_ROLES, 'INVESTIGATOR'] as const);
+const MAX_VISION_FILE_BYTES = 20 * 1024 * 1024;
 
 export async function POST(request: NextRequest) {
   const auth = await authorizeStaff(request, AI_CREATE_ROLES);
@@ -20,8 +21,8 @@ export async function POST(request: NextRequest) {
     if (!body?.case_id || !body.evidence_id) return apiError('INVALID_REQUEST', 'กรุณาเลือกคดีและหลักฐาน', 400);
     const sourceText = typeof body.source_text === 'string' && body.source_text.trim()
       ? body.source_text.trim()
-      : 'OCR สาธิตจากภาพ: ติดต่อสั่งซื้อทาง LINE และโทร 062-4149791 ผู้รับเงิน นางสาวปนัดดา คำนนท์';
-    const phone = sourceText.match(/0\d{2}[- ]?\d{3}[- ]?\d{4}/)?.[0] || '062-4149791';
+      : 'OCR สาธิตจากภาพ: ข้อมูลสังเคราะห์ ติดต่อเบอร์ 080-000-0000 บุคคลตัวอย่าง จ';
+    const phone = sourceText.match(/0\d{2}[- ]?\d{3}[- ]?\d{4}/)?.[0] || '080-000-0000';
     const suggestion = {
       id: `demo-ai-${Date.now()}`,
       case_id: body.case_id,
@@ -62,7 +63,7 @@ export async function POST(request: NextRequest) {
   const payload = parsed.data;
   const evidence = await supabase
     .from('evidence_files')
-    .select('id,case_id,upload_state,malware_scan_status,file_path,mime_type')
+    .select('id,case_id,upload_state,malware_scan_status,file_path,mime_type,file_size')
     .eq('id', payload.evidence_id)
     .eq('case_id', payload.case_id)
     .maybeSingle();
@@ -76,6 +77,9 @@ export async function POST(request: NextRequest) {
 
   // If no source text, attempt to use vision OCR
   if (!payload.source_text) {
+    if (evidence.data.file_size > MAX_VISION_FILE_BYTES) {
+      return apiError('AI_FILE_TOO_LARGE', 'ไฟล์สำหรับ Vision OCR ต้องมีขนาดไม่เกิน 20 MB กรุณาแยกหน้าไฟล์หรือใช้ข้อความที่ตรวจทานแล้ว', 413);
+    }
     const bucketName = process.env.PRIVATE_EVIDENCE_BUCKET || 'evidence-vault';
     const { data: fileData, error: fileError } = await supabase.storage.from(bucketName).download(evidence.data.file_path);
     if (fileError || !fileData) return apiError('EVIDENCE_DOWNLOAD_FAILED', 'ไม่สามารถดาวน์โหลดไฟล์หลักฐานสำหรับ OCR ได้', 500);

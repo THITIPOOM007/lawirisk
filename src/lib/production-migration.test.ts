@@ -8,6 +8,8 @@ const automationMigration = fs.readFileSync(path.join(process.cwd(), 'supabase/m
 const manualIntakeMigration = fs.readFileSync(path.join(process.cwd(), 'supabase/migrations/202608240001_manual_intake_scan_readiness.sql'), 'utf8');
 const largeEvidenceMigration = fs.readFileSync(path.join(process.cwd(), 'supabase/migrations/202608240002_evidence_upload_200mb.sql'), 'utf8');
 const scannerRemovalMigration = fs.readFileSync(path.join(process.cwd(), 'supabase/migrations/202608240003_remove_scanner_dependency.sql'), 'utf8');
+const cleanEvidenceGateMigration = fs.readFileSync(path.join(process.cwd(), 'supabase/migrations/202608260001_restore_clean_evidence_gate.sql'), 'utf8');
+const finalScannerRemovalMigration = fs.readFileSync(path.join(process.cwd(), 'supabase/migrations/202608260003_remove_malware_scanner_again.sql'), 'utf8');
 const falseQuarantineMigration = fs.readFileSync(path.join(process.cwd(), 'supabase/migrations/202608240004_release_false_quarantine.sql'), 'utf8');
 const promotedAttachmentsMigration = fs.readFileSync(path.join(process.cwd(), 'supabase/migrations/202608250001_allow_promoted_attachments.sql'), 'utf8');
 
@@ -85,6 +87,13 @@ describe('production migration invariants', () => {
     expect(falseQuarantineMigration).toContain("object.name = attachment.storage_path");
     expect(falseQuarantineMigration).toContain("'confirmed_infected_preserved', true");
     expect(falseQuarantineMigration).not.toContain("SET malware_scan_status = 'CLEAN'");
+  });
+
+  it('records the superseded CLEAN-only gate and then removes the scanner dependency again', () => {
+    expect(cleanEvidenceGateMigration).toContain("malware_scan_status = ''CLEAN''");
+    expect(finalScannerRemovalMigration).toContain("IN (''CLEAN'', ''NOT_SCANNED'')");
+    expect(finalScannerRemovalMigration).toContain('DROP FUNCTION IF EXISTS public.finalize_scanned_evidence_upload');
+    expect(finalScannerRemovalMigration).toContain("'confirmed_infected_preserved', true");
   });
 
   it('allows promoted envelopes to receive additional attachment uploads', () => {

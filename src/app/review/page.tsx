@@ -91,7 +91,7 @@ export default function ReviewPage() {
   const createAiSuggestions = async (event: React.FormEvent) => {
     event.preventDefault();
     if (!selectedCaseId || !aiInput.evidence_id) {
-      setActionError('กรุณาเลือกสำนวนคดีและเอกสารหลักฐานที่ผ่านการตรวจความปลอดภัย (CLEAN)');
+      setActionError('กรุณาเลือกสำนวนคดีและเอกสารหลักฐานที่ผ่านการตรวจขนาด ชนิด และโครงสร้างแล้ว');
       return;
     }
     setSubmitting('ai');
@@ -229,14 +229,14 @@ export default function ReviewPage() {
           <h2 className="font-bold text-white">การสกัดข้อมูลอัตโนมัติด้วย AI จากเอกสารหลักฐาน</h2>
         </div>
         <p className="mt-2 text-xs leading-5 text-slate-500">
-          ระบบรองรับทั้ง OCR จากภาพ/PDF และการวิเคราะห์ข้อความที่เจ้าหน้าที่ระบุ โดยรับเฉพาะหลักฐานที่ผ่านการตรวจความปลอดภัย (CLEAN) และบันทึกผลเป็นข้อเสนอแนะ (SUGGESTED) เพื่อรอการอนุมัติ
+          ระบบรองรับทั้ง OCR จากภาพ/PDF และการวิเคราะห์ข้อความที่เจ้าหน้าที่ระบุ โดยรับเฉพาะหลักฐานที่จัดเก็บและตรวจโครงสร้างแล้ว และบันทึกผลเป็นข้อเสนอแนะ (SUGGESTED) เพื่อรอการอนุมัติ
         </p>
         <div className="mt-5 grid gap-4 md:grid-cols-[minmax(0,1fr)_150px]">
           <label className="text-xs text-slate-300">หลักฐานที่ปลอดภัย (CLEAN)<select required disabled={!selectedCaseId} value={aiInput.evidence_id} onChange={(event) => setAiInput((current) => ({ ...current, evidence_id: event.target.value }))} className="mt-2 w-full rounded-xl border border-slate-800 bg-slate-950 p-3 text-sm text-white"><option value="">เลือกไฟล์หลักฐาน</option>{cleanCaseEvidence.map((item) => <option key={item.id} value={item.id}>{item.filename}</option>)}</select></label>
           <label className="text-xs text-slate-300">หน้าเอกสาร<input required type="number" min="1" max="100000" value={aiInput.page_number} onChange={(event) => setAiInput((current) => ({ ...current, page_number: event.target.value }))} className="mt-2 w-full rounded-xl border border-slate-800 bg-slate-950 p-3 text-sm text-white" /></label>
           <label className="text-xs text-slate-300 md:col-span-2">ข้อความต้นทางในเอกสาร (ไม่บังคับ)<textarea maxLength={4000} rows={5} value={aiInput.source_text} onChange={(event) => setAiInput((current) => ({ ...current, source_text: event.target.value }))} placeholder="เว้นว่างเพื่อให้ระบบ OCR อ่านจากภาพหรือ PDF ที่เลือก" aria-describedby="ai-source-help" className="mt-2 w-full rounded-xl border border-slate-800 bg-slate-950 p-3 text-sm text-white" /><span id="ai-source-help" className="mt-1 block text-[10px] text-slate-600">เมื่อระบุข้อความ ระบบจะวิเคราะห์เฉพาะข้อความนั้น; เมื่อเว้นว่าง ระบบจะใช้ Vision OCR กับต้นฉบับ CLEAN</span></label>
         </div>
-        {selectedCaseId && cleanCaseEvidence.length === 0 && <p role="status" className="mt-4 rounded-xl border border-amber-400/15 bg-amber-400/[0.04] p-3 text-xs text-amber-200">คดีนี้ยังไม่มีหลักฐานที่ผ่านการตรวจความปลอดภัย (CLEAN)</p>}
+        {selectedCaseId && cleanCaseEvidence.length === 0 && <p role="status" className="mt-4 rounded-xl border border-amber-400/15 bg-amber-400/[0.04] p-3 text-xs text-amber-200">คดีนี้ยังไม่มีหลักฐานที่จัดเก็บและตรวจโครงสร้างแล้ว</p>}
         <button type="submit" disabled={submitting === 'ai' || !selectedCaseId || cleanCaseEvidence.length === 0} className="mt-5 inline-flex min-h-11 items-center rounded-xl bg-indigo-400 px-4 py-2.5 text-sm font-bold text-slate-950 disabled:opacity-50 cursor-pointer">{submitting === 'ai' ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Sparkles className="mr-2 h-4 w-4" />}{mode === 'demo' ? 'ทดลอง OCR และสกัดข้อมูล' : 'สั่งการให้ AI วิเคราะห์สกัดข้อมูล'}</button>
       </form>
 

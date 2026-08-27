@@ -1,13 +1,13 @@
 # Test Baseline
 
-Baseline recorded 2026-08-23.
+Baseline recorded 2026-08-27.
 
 ## Automated gates
 
 - `pnpm lint`: pass.
 - `pnpm typecheck`: pass, including Next.js route type generation.
-- `pnpm test`: 18 Vitest files and 93 tests pass. Coverage includes schemas, normalization, cryptography/webhook verification, rate limiting, runtime configuration, auth fail-closed behavior and security source/migration regressions.
-- `pnpm test:e2e`: 10/10 Chromium flows pass sequentially. Coverage includes protected workspace/demo login, dashboard/case access, UTF-8 CSV intake, CSRF rejection, mobile/reduced-motion behavior, approved/blocked source launching, viewer RBAC, demo automation fail-closed behavior, authenticated PDF export and citizen search → complaint → tracking.
+- `pnpm test`: 23 Vitest files and 115 tests pass. Coverage includes schemas, normalization, cryptography/webhook verification, rate limiting, runtime configuration, auth fail-closed behavior, recon companion allowlist/HTTP acknowledgement and security source/migration regressions.
+- `pnpm test:e2e`: 22/22 Chromium flows pass sequentially. Coverage includes protected workspace/demo login, 10-dimension Case Intelligence/dossier drafts, dashboard/case access, UTF-8 CSV/manual intake, CSRF rejection, mobile/reduced-motion behavior, local auto-login launch contract/HTTP acknowledgement, viewer RBAC, automation fail-closed behavior, Evidence Universe, evidence queue/OCR/review, authenticated PDF/report readiness and citizen search → complaint → tracking.
 - `pnpm build`: Next.js production build passes.
 - `pnpm build:vinext`: Cloudflare/vinext build passes.
 - `pnpm audit --prod`: no known production dependency vulnerabilities.

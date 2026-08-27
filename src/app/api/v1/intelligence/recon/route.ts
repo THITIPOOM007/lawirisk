@@ -1,60 +1,81 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { runAutomatedCaseRecon } from '@/lib/intelligence/case-recon-engine';
-import { authorizeStaff } from '@/lib/api-auth';
-import { STAFF_READ_ROLES } from '@/lib/roles';
 import { z } from 'zod';
-
-const reconRequestSchema = z.object({
-  case_id: z.string().min(1),
-  case_number: z.string().optional(),
-  case_title: z.string().optional(),
-  raw_text: z.string().optional(),
-  accused_name: z.string().optional(),
-  accused_citizen_id: z.string().optional(),
-  facility_name: z.string().optional(),
-  location_address: z.string().optional(),
-  is_dental_context: z.boolean().optional(),
-});
+import { authorizeStaff } from '@/lib/api-auth';
+import { apiError, authError } from '@/lib/api-errors';
+import { buildCaseReconSummary, caseIntelligenceRequestSchema } from '@/lib/case-intelligence';
+import { addAuditLog, getCases, getEntities, getEvidence, getMatches, getRelationships } from '@/lib/demo-data';
+import { consumeRateLimit } from '@/lib/rate-limit';
+import { CASE_WRITE_ROLES } from '@/lib/roles';
+import { hasTrustedBrowserOrigin } from '@/lib/request-security';
+import { createServer } from '@/lib/supabase-server';
 
 export async function POST(request: NextRequest) {
-  const auth = await authorizeStaff(request, STAFF_READ_ROLES);
-  if (!auth.ok) {
-    return NextResponse.json({ error: { message: 'กรุณาเข้าสู่ระบบก่อนดำเนินการ' } }, { status: auth.status });
+  const auth = await authorizeStaff(request, CASE_WRITE_ROLES);
+  if (!auth.ok) return authError(auth, 'ไม่มีสิทธิ์ใช้การสืบค้นข้อมูลเชิงลึก');
+  if (!hasTrustedBrowserOrigin(request)) {
+    return apiError('UNTRUSTED_ORIGIN', 'คำขอไม่ได้มาจากระบบที่อนุญาต', 403);
+  }
+  const parsed = caseIntelligenceRequestSchema.safeParse(await request.json().catch(() => null));
+  if (!parsed.success) return apiError('INVALID_REQUEST', 'รหัสสำนวนคดีไม่ถูกต้อง', 400);
+
+  if (auth.identity.mode === 'demo') {
+    const caseRecord = getCases().find((item) => item.id === parsed.data.case_id);
+    if (!caseRecord) return apiError('CASE_NOT_FOUND', 'ไม่พบสำนวนคดี', 404);
+    const report = buildCaseReconSummary({
+      caseId: caseRecord.id,
+      caseNumber: caseRecord.number,
+      caseTitle: caseRecord.title,
+      evidenceCount: getEvidence().filter((item) => item.case_id === caseRecord.id).length,
+      entityCount: getEntities().filter((item) => item.case_id === caseRecord.id).length,
+      verifiedRelationshipCount: getRelationships().filter((item) => item.case_id === caseRecord.id && item.status === 'VERIFIED').length,
+      crossCaseMatchCount: getMatches().filter((item) => item.source_case_id === caseRecord.id || item.target_case_id === caseRecord.id).length,
+    });
+    addAuditLog(auth.identity.name, 'CASE_INTELLIGENCE_WORKSPACE_OPEN', `เปิด workspace สำนวน ${caseRecord.number}`);
+    return NextResponse.json({ data: { report } }, { headers: { 'Cache-Control': 'private, no-store' } });
   }
 
-  try {
-    const json = await request.json().catch(() => ({}));
-    const parsed = reconRequestSchema.safeParse(json);
-    if (!parsed.success) {
-      return NextResponse.json(
-        { error: { message: 'ข้อมูลนำเข้าไม่ถูกต้อง', details: parsed.error.format() } },
-        { status: 400 },
-      );
-    }
-
-    const report = await runAutomatedCaseRecon({
-      caseId: parsed.data.case_id,
-      caseNumber: parsed.data.case_number,
-      caseTitle: parsed.data.case_title,
-      rawText: parsed.data.raw_text,
-      accusedName: parsed.data.accused_name,
-      accusedCitizenId: parsed.data.accused_citizen_id,
-      facilityName: parsed.data.facility_name,
-      locationAddress: parsed.data.location_address,
-      isDentalContext: parsed.data.is_dental_context,
-    });
-
-    return NextResponse.json({
-      success: true,
-      data: {
-        report,
-      },
-    });
-  } catch (error: unknown) {
-    console.error('Error in intelligence recon route:', error);
+  const supabase = await createServer();
+  const limit = await consumeRateLimit({
+    client: supabase,
+    key: `case-intelligence:${auth.identity.id}`,
+    limit: 10,
+    windowSeconds: 60,
+  });
+  if (!limit.allowed) {
     return NextResponse.json(
-      { error: { message: error instanceof Error ? error.message : 'การสืบค้นข้อมูลเชิงลึกไม่สำเร็จ' } },
-      { status: 500 },
+      { error: { code: 'RATE_LIMITED', message: 'เรียกตรวจข้อมูลถี่เกินไป กรุณารอสักครู่' } },
+      { status: 429, headers: { 'Retry-After': String(limit.retryAfterSeconds) } },
     );
   }
+
+  if (!z.string().uuid().safeParse(parsed.data.case_id).success) return apiError('CASE_NOT_FOUND', 'ไม่พบสำนวนคดี', 404);
+  const caseId = parsed.data.case_id;
+  const [caseResult, evidenceResult, entitiesResult, relationshipsResult, matchesResult] = await Promise.all([
+    supabase.from('cases').select('id,number,title').eq('id', caseId).maybeSingle(),
+    supabase.from('evidence_files').select('*', { count: 'exact', head: true }).eq('case_id', caseId).eq('upload_state', 'STORED').in('malware_scan_status', ['CLEAN', 'NOT_SCANNED']),
+    supabase.from('extracted_entities').select('*', { count: 'exact', head: true }).eq('case_id', caseId),
+    supabase.from('entity_relationships').select('*', { count: 'exact', head: true }).eq('case_id', caseId).eq('status', 'VERIFIED'),
+    supabase.from('match_candidates').select('*', { count: 'exact', head: true }).or(`source_case_id.eq.${caseId},target_case_id.eq.${caseId}`),
+  ]);
+  if (caseResult.error || !caseResult.data) return apiError('CASE_NOT_FOUND', 'ไม่พบสำนวนคดีหรือไม่มีสิทธิ์เข้าถึง', 404);
+  if (evidenceResult.error || entitiesResult.error || relationshipsResult.error || matchesResult.error) {
+    return apiError('INTELLIGENCE_WORKSPACE_FAILED', 'รวบรวมสถานะข้อมูลคดีไม่สำเร็จ', 503);
+  }
+
+  const report = buildCaseReconSummary({
+    caseId: caseResult.data.id,
+    caseNumber: caseResult.data.number,
+    caseTitle: caseResult.data.title,
+    evidenceCount: evidenceResult.count || 0,
+    entityCount: entitiesResult.count || 0,
+    verifiedRelationshipCount: relationshipsResult.count || 0,
+    crossCaseMatchCount: matchesResult.count || 0,
+  });
+  const audit = await supabase.from('audit_logs').insert({
+    profile_id: auth.identity.id,
+    action: 'CASE_INTELLIGENCE_WORKSPACE_OPEN',
+    details: { case_id: caseId, external_queries_performed: false },
+  });
+  if (audit.error) return apiError('AUDIT_WRITE_FAILED', 'บันทึกการเปิด workspace ไม่สำเร็จ', 503);
+  return NextResponse.json({ data: { report } }, { headers: { 'Cache-Control': 'private, no-store' } });
 }

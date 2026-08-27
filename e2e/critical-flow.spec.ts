@@ -34,6 +34,25 @@ test('imports a validated UTF-8 CSV batch through the real API route', async ({ 
   await expect(page.getByText(/นำเข้าแล้ว 1 แถว; ไม่ผ่าน 0 แถว/)).toBeVisible();
 });
 
+test('opens the source-bound intelligence workspace and generates safe dossier drafts', async ({ page }) => {
+  await loginAsInvestigator(page);
+  await page.goto('/cases/case-1');
+  await expect(page.getByRole('heading', { name: 'Case Intelligence Workspace' })).toBeVisible();
+  await page.getByRole('button', { name: 'ตรวจสถานะข้อมูลคดี' }).click();
+  await expect(page.getByText('ทะเบียนบุคคลและนิติบุคคล')).toBeVisible();
+  await expect(page.getByText('ต้องตรวจ/ยืนยัน').first()).toBeVisible();
+  await expect(page.getByText('ชื่อ เบอร์โทร และช่องทางติดต่อ')).toBeVisible();
+  await expect(page.getByText('ภาพถ่ายและภาพเชื่อมโยง')).toBeVisible();
+  await expect(page.getByText('พยานแวดล้อมและลำดับเหตุการณ์')).toBeVisible();
+  await expect(page.getByText('ความเชื่อมโยงข้ามคดี')).toBeVisible();
+
+  await page.getByRole('button', { name: 'สร้างร่างแฟ้ม' }).click();
+  const dialog = page.getByRole('dialog', { name: 'ร่างแฟ้มสืบสวน' });
+  await expect(dialog).toBeVisible();
+  await expect(dialog.getByText('ยังไม่ใช่หนังสือราชการฉบับลงนาม')).toBeVisible();
+  await expect(dialog.locator('pre')).toContainText('ร่างเพื่อการตรวจทาน');
+});
+
 test('creates a text-only manual intake that is immediately ready for triage', async ({ page }) => {
   await loginAsInvestigator(page);
   await page.goto('/intake');
@@ -112,20 +131,45 @@ test('provides a searchable complete guide and a skippable responsive tour', asy
   await expect(guideButton).toBeFocused();
 });
 
-test('allows only reviewed external sources and fails closed for insecure transport', async ({ page }) => {
+test('offers local auto-login and requires per-launch acknowledgement for insecure HSS transport', async ({ page }) => {
   await loginAsInvestigator(page);
   await page.goto('/sources');
   await expect(page.getByRole('heading', { level: 1, name: 'แหล่งสืบค้นข้อมูลที่ได้รับอนุญาต' })).toBeVisible();
   await expect(page.getByRole('heading', { name: 'SKYNET / Privus อย.' })).toBeVisible();
-  await expect(page.getByRole('button', { name: /เปิด SKYNET \/ Privus อย\./ })).toBeEnabled();
+  await expect(page.getByRole('button', { name: 'ตั้ง/เปลี่ยนบัญชีบนเครื่องนี้' })).toHaveCount(2);
+  await expect(page.getByRole('radio', { name: /ทะเบียนนิติบุคคล/ })).toBeChecked();
+  await expect(page.getByRole('radio', { name: /ทะเบียนบุคคล/ })).toBeVisible();
+  await expect(page.getByRole('button', { name: 'ล็อกอินและเปิดหน้าสืบค้นที่เลือก' }).first()).toBeEnabled();
   await expect(page.getByRole('heading', { name: 'OSS สบส.' })).toBeVisible();
-  await expect(page.getByRole('button', { name: 'ปิดการเปิดใช้งานจนกว่าจะมี HTTPS/API' })).toBeDisabled();
+  await expect(page.getByRole('radio', { name: /ข้อมูลสถานพยาบาล/ })).toBeChecked();
+  const hssAutoLogin = page.getByRole('button', { name: 'ล็อกอินและเปิดหน้าสืบค้นที่เลือก' }).last();
+  await expect(hssAutoLogin).toBeDisabled();
+  await page.getByRole('checkbox', { name: /รับทราบว่า HSS ใช้ HTTP/ }).check();
+  await expect(hssAutoLogin).toBeEnabled();
 
   const blocked = await page.evaluate(async () => {
-    const response = await fetch('/api/v1/sources/HSS_OSS/launch', { method: 'POST' });
+    const response = await fetch('/api/v1/sources/HSS_OSS/companion', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: '{}',
+    });
     return { status: response.status, body: await response.json() };
   });
-  expect(blocked).toMatchObject({ status: 409, body: { error: { code: 'SOURCE_INSECURE_TRANSPORT' } } });
+  expect(blocked).toMatchObject({ status: 409, body: { error: { code: 'INSECURE_TRANSPORT_ACK_REQUIRED' } } });
+
+  const allowed = await page.evaluate(async () => {
+    const response = await fetch('/api/v1/sources/HSS_OSS/companion', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ service: 'HSS_FACILITY', acknowledge_insecure_transport: true }),
+    });
+    return { status: response.status, body: await response.json() };
+  });
+  expect(allowed).toMatchObject({
+    status: 200,
+    body: { data: { companion_uri: 'lawirisk-recon://launch?source=HSS_OSS&service=HSS_FACILITY&allow_insecure_http=1' } },
+  });
+  expect(JSON.stringify(allowed)).not.toMatch(/password|cookie|token/i);
 });
 
 test('denies source registry access to viewer role', async ({ page }) => {
@@ -168,9 +212,9 @@ test('loads the demo Evidence Universe with case, evidence, and entity nodes', a
   await page.goto('/universe');
   await expect(page.getByText(/ชุดข้อมูลสาธิตภายในเครื่อง/)).toBeVisible();
   await expect(page.getByRole('button', { name: 'อ่านง่าย 2D' })).toHaveAttribute('aria-pressed', 'true');
-  await page.getByRole('textbox', { name: 'ค้นหาโหนดในผังความเชื่อมโยง' }).fill('062');
-  await page.getByRole('button', { name: 'PHONE · 062-4149791', exact: true }).click();
-  await expect(page.getByRole('heading', { level: 2, name: 'PHONE · 062-4149791' })).toBeVisible();
+  await page.getByRole('textbox', { name: 'ค้นหาโหนดในผังความเชื่อมโยง' }).fill('080');
+  await page.getByRole('button', { name: 'PHONE · 080-000-0000', exact: true }).click();
+  await expect(page.getByRole('heading', { level: 2, name: 'PHONE · 080-000-0000' })).toBeVisible();
   await expect(page.getByRole('button', { name: /คดี ค\.123\/2569/ })).toBeVisible();
   await page.getByRole('button', { name: '3D เต็มรูปแบบ' }).click();
   await expect(page.getByRole('button', { name: 'หมุนอัตโนมัติ' })).toBeVisible();

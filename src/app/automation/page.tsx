@@ -125,7 +125,7 @@ export default function AutomationPage() {
   const createJob = async (event: React.FormEvent) => {
     event.preventDefault();
     if (!selectedCaseId || !form.evidence_id) {
-      setError('กรุณาเลือกคดีและหลักฐานที่จัดเก็บและตรวจรูปแบบไฟล์แล้ว');
+      setError('กรุณาเลือกคดีและหลักฐานที่จัดเก็บและผ่านการตรวจขนาด ชนิด และโครงสร้างแล้ว');
       return;
     }
     setIsSubmitting(true);

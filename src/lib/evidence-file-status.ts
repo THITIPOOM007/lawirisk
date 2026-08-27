@@ -6,8 +6,8 @@ export function isEvidenceUsable(uploadState: string | null | undefined, malware
 }
 
 export function evidenceSafetyLabel(malwareScanStatus: string | null | undefined) {
-  if (malwareScanStatus === 'CLEAN') return 'สแกนมัลแวร์แล้ว';
-  if (malwareScanStatus === UNSCANNED_EVIDENCE_STATUS) return 'ตรวจรูปแบบไฟล์แล้ว · ไม่ได้สแกนมัลแวร์';
+  if (malwareScanStatus === 'CLEAN') return 'ตรวจสอบไฟล์แล้ว';
+  if (malwareScanStatus === UNSCANNED_EVIDENCE_STATUS) return 'ตรวจชนิดและโครงสร้างไฟล์แล้ว';
   if (malwareScanStatus === 'INFECTED') return 'กักกัน · พบความเสี่ยง';
   return 'ไฟล์ยังไม่พร้อมใช้งาน';
 }

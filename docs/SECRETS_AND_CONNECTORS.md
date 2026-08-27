@@ -45,15 +45,19 @@ deployment, `/api/health` must return HTTP 200 with `status: "ready"`.
 
 ## SKYNET and OSS สบส.
 
-The current application does not implement an automatic API connector for
-either source. Adding a username and password to an environment file would not
-make automatic searching work and would create a central credential risk.
+The application now implements local Windows auto-login through Recon Companion;
+it still does not implement a server-side automatic search API connector. Never
+put an external username/password in an environment file or Cloudflare secret.
 
-- SKYNET / Privus remains `MANUAL_ONLY`; the app opens the stable Privus
-  `STATE=3` entry for `เจ้าหน้าที่ สสจ.` and the officer authenticates directly
-  at the official Digital ID/OIDC page.
-- OSS สบส. remains `BLOCKED_INSECURE_TRANSPORT` because the supplied login
-  path redirects to HTTP.
+- SKYNET / Privus is `LOCAL_AUTO_LOGIN`; Windows DPAPI protects the local
+  credential and the companion creates a fresh OIDC/PKCE transaction each run.
+- OSS สบส. is `LOCAL_AUTO_LOGIN_RISK_ACK_REQUIRED`; the HTTPS path redirects
+  to HTTP, so every run requires an explicit acknowledgement and does not pass
+  the recommended production transport gate.
+
+Install and configure it with `pnpm recon:install` and the steps in
+`docs/RECON_COMPANION.md`. Credential files stay under LocalAppData and are not
+Cloudflare/Supabase secrets.
 
 When a source owner supplies a written system-to-system agreement and an
 approved HTTPS API/OAuth contract, use server-only secrets such as:

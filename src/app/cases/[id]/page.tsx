@@ -23,8 +23,8 @@ import {
   XCircle,
 } from 'lucide-react';
 import type { Case, EvidenceFile } from '@/lib/demo-data';
+import { CaseIntelligenceWorkspace } from '@/components/CaseIntelligenceWorkspace';
 import { evidenceSafetyLabel, isEvidenceUsable } from '@/lib/evidence-file-status';
-import { CaseIntelligenceReconWidget } from '@/components/CaseIntelligenceReconWidget';
 
 type CaseMember = {
   id: string;
@@ -284,6 +284,8 @@ export default function CaseDetailsPage() {
         ))}
       </section>
 
+      <CaseIntelligenceWorkspace caseId={caseId} />
+
       {/* Closure Modal / Gate Inspection */}
       {showCloseModal && (
         <div className="rounded-3xl border border-rose-500/30 bg-slate-900/90 p-6 space-y-4">
@@ -409,7 +411,7 @@ export default function CaseDetailsPage() {
               <Fingerprint className="mr-2 h-5 w-5 text-amber-300" />
               ทะเบียนหลักฐานต้นฉบับ
             </h2>
-            <p className="mt-1 text-xs text-slate-500">ไม่เปิดเผย storage path; ดาวน์โหลดผ่าน signed URL อายุสั้นและเฉพาะไฟล์ที่ STORED/CLEAN</p>
+            <p className="mt-1 text-xs text-slate-500">ไม่เปิดเผย storage path; ดาวน์โหลดผ่าน signed URL อายุสั้นเฉพาะไฟล์ที่จัดเก็บและตรวจโครงสร้างแล้ว</p>
           </div>
           <Link href="/evidence" className="text-xs font-semibold text-indigo-300 hover:text-indigo-200">
             เพิ่มหลักฐาน
@@ -453,15 +455,6 @@ export default function CaseDetailsPage() {
           )}
         </div>
       </section>
-
-      {/* Automated Case Intelligence Reconnaissance Engine (5-Dimension) */}
-      <CaseIntelligenceReconWidget
-        caseId={caseId}
-        caseNumber={caseRecord.number}
-        caseTitle={caseRecord.title}
-        description={caseRecord.description}
-        autoRunOnMount={true}
-      />
 
       {/* Investigation Planner */}
       <section className="rounded-3xl border border-indigo-500/30 bg-indigo-950/20 p-6 space-y-5 shadow-[0_0_30px_rgba(99,102,241,0.08)]">

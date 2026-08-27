@@ -89,7 +89,7 @@ describe('runtime-config', () => {
     expect(readiness.blockers).toContain('SERVICE_ROLE_NOT_CONFIGURED');
   });
 
-  it('reports built-in file validation without external scanner configuration', () => {
+  it('keeps deterministic file validation enabled without a scanner dependency', () => {
     expect(getRuntimeReadiness().checks.fileValidation).toBe(true);
     expect(getRuntimeReadiness().blockers).not.toContain('MALWARE_SCANNER_NOT_CONFIGURED');
   });
