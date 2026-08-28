@@ -30,6 +30,7 @@ export default function EvidencePage() {
   const [isDragging, setIsDragging] = useState(false);
   const [isUploading, setIsUploading] = useState(false);
   const [retryingEvidenceId, setRetryingEvidenceId] = useState('');
+  const [cancellingEvidenceId, setCancellingEvidenceId] = useState('');
   const [errorMessage, setErrorMessage] = useState('');
   const [successMessage, setSuccessMessage] = useState('');
 
@@ -244,6 +245,26 @@ export default function EvidencePage() {
     }
   };
 
+  const cancelReservedEvidence = async (evidenceId: string) => {
+    setCancellingEvidenceId(evidenceId);
+    setErrorMessage('');
+    setSuccessMessage('');
+    try {
+      const response = await fetch(`/api/v1/evidence/uploads/${evidenceId}`, { method: 'DELETE', credentials: 'same-origin' });
+      const payload = await response.json().catch(() => null) as { success?: boolean; data?: { cancelled?: boolean }; error?: { message?: string } } | null;
+      if (!response.ok || !payload?.success || !payload.data?.cancelled) {
+        throw new Error(payload?.error?.message || 'ไม่สามารถยกเลิกรายการอัปโหลดที่ค้างได้');
+      }
+      setEvidenceList((current) => current.filter((item) => item.id !== evidenceId));
+      setSuccessMessage('ยกเลิกรายการอัปโหลดที่ยังไม่เริ่มจัดเก็บแล้ว');
+      window.dispatchEvent(new Event('ev-data-change'));
+    } catch (caught: unknown) {
+      setErrorMessage(caught instanceof Error ? caught.message : 'ไม่สามารถยกเลิกรายการอัปโหลดที่ค้างได้');
+    } finally {
+      setCancellingEvidenceId('');
+    }
+  };
+
   return (
     <div className="space-y-8">
       {/* Page Header */}
@@ -423,6 +444,11 @@ export default function EvidencePage() {
                               {!isEvidenceUsable(file.upload_state, file.malware_scan_status) && file.malware_scan_status !== 'INFECTED' && (
                                 <button type="button" onClick={() => void retryEvidenceValidation(file.id)} disabled={Boolean(retryingEvidenceId)} className="inline-flex min-h-8 items-center rounded-lg border border-amber-300/15 px-2.5 text-[10px] font-semibold text-amber-200 hover:bg-amber-300/[0.06] disabled:opacity-50">
                                   {retryingEvidenceId === file.id ? <Loader2 className="mr-1.5 h-3 w-3 animate-spin" /> : <RefreshCw className="mr-1.5 h-3 w-3" />}ยืนยันไฟล์อีกครั้ง
+                                </button>
+                              )}
+                              {file.upload_state === 'RESERVED' && (
+                                <button type="button" onClick={() => void cancelReservedEvidence(file.id)} disabled={Boolean(cancellingEvidenceId)} className="inline-flex min-h-8 items-center rounded-lg border border-rose-300/15 px-2.5 text-[10px] font-semibold text-rose-200 hover:bg-rose-300/[0.06] disabled:opacity-50">
+                                  {cancellingEvidenceId === file.id ? <Loader2 className="mr-1.5 h-3 w-3 animate-spin" /> : <X className="mr-1.5 h-3 w-3" />}ยกเลิกรายการค้าง
                                 </button>
                               )}
                             </div>

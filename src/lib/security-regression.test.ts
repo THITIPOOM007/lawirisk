@@ -28,6 +28,7 @@ describe('release security regressions', () => {
 
   it('keeps 200 MB evidence off the Worker body and validates the stored object before finalization', () => {
     const reserve = source('src/app/api/v1/evidence/uploads/route.ts');
+    const cancellation = source('src/app/api/v1/evidence/uploads/[id]/route.ts');
     const complete = source('src/app/api/v1/evidence/uploads/[id]/complete/route.ts');
     const contract = source('src/lib/evidence-upload-contract.ts');
     const migration = source('supabase/migrations/202608240002_evidence_upload_200mb.sql');
@@ -43,6 +44,8 @@ describe('release security regressions', () => {
     expect(storagePolicy).toContain('DROP POLICY IF EXISTS "Case members upload evidence originals" ON storage.objects');
     expect(storagePolicy).toContain("evidence.upload_state = 'RESERVED'");
     expect(storagePolicy).toContain('evidence.created_by = auth.uid()');
+    expect(cancellation).toContain("supabase.rpc('cancel_evidence_reservation'");
+    expect(cancellation).toContain("p_reason: 'DIRECT_TUS_UPLOAD_NOT_STARTED'");
     expect(complete).toContain('createSignedUrl(evidence.file_path, 300)');
     expect(complete).toContain('validateStoredFileReference');
     expect(complete).toContain("supabase.rpc('finalize_evidence_upload'");
