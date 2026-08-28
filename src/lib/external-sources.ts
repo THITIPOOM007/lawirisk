@@ -1,6 +1,6 @@
 import { z } from 'zod';
 
-export const externalSourceKeySchema = z.enum(['FDA_SKYNET', 'HSS_OSS']);
+export const externalSourceKeySchema = z.enum(['FDA_SKYNET', 'HSS_OSS', 'HSS_ESTA2']);
 export type ExternalSourceKey = z.infer<typeof externalSourceKeySchema>;
 
 export const reconServiceKeySchema = z.enum([
@@ -9,6 +9,7 @@ export const reconServiceKeySchema = z.enum([
   'FDA_PLACE_DRUG',
   'HSS_FACILITY',
   'HSS_PROFESSIONAL',
+  'HSS_HEALTH_BUSINESS_APPROVED',
 ]);
 export type ReconServiceKey = z.infer<typeof reconServiceKeySchema>;
 
@@ -117,6 +118,36 @@ export const EXTERNAL_SOURCES: readonly ExternalSource[] = [
           { key: 'PROFESSIONAL_LICENSE', label: 'เลขใบอนุญาตประกอบโรคศิลปะ', inputMode: 'text' },
           { key: 'BUSINESS_LICENSE', label: 'เลขใบอนุญาตประกอบกิจการ', inputMode: 'text' },
           { key: 'OPERATION_LICENSE', label: 'เลขใบอนุญาตดำเนินการ', inputMode: 'text' },
+        ],
+      },
+    ],
+  },
+  {
+    key: 'HSS_ESTA2',
+    name: 'ESTA2 สบส.',
+    authority: 'กองสถานประกอบการเพื่อสุขภาพ กรมสนับสนุนบริการสุขภาพ กระทรวงสาธารณสุข',
+    coverage: 'สถานประกอบการเพื่อสุขภาพที่ได้รับอนุญาต รวมร้านนวดเพื่อสุขภาพ ตามสิทธิ์และจังหวัดที่บัญชีรับผิดชอบ',
+    authMode: 'LEGACY_CREDENTIAL',
+    accessMode: 'LOCAL_AUTO_LOGIN',
+    transport: 'HTTPS',
+    launchUrl: 'https://esta2.hss.moph.go.th/business/approved',
+    companionSetupUrl: 'lawirisk-recon://setup?source=HSS_ESTA2',
+    verifiedAt: '2026-08-28',
+    guidance: [
+      'ตั้งบัญชี ESTA2 ครั้งแรกใน Recon Companion บนเครื่อง Windows; รหัสผ่านถูกเข้ารหัสด้วย DPAPI และไม่ส่งขึ้น Cloudflare/Supabase',
+      'Companion เข้าระบบผ่าน HTTPS แล้วเปิดเฉพาะหน้า /business/approved ที่ตรวจ allowlist แล้ว',
+      'ค้นชื่อสถานประกอบการครั้งละหนึ่งคำค้น ผูกกับสำนวนและวัตถุประสงค์ที่เจ้าหน้าที่ยืนยัน',
+      'ผลค้นถูกบันทึกเป็น PDF พร้อม SHA-256 บนเครื่องในสถานะรอนำเข้าและรอมนุษย์ตรวจ',
+    ],
+    limitation: 'ระบบค้นเฉพาะข้อมูลที่บัญชี ESTA2 ได้รับสิทธิ์และจังหวัดที่รับผิดชอบ ผล “ไม่พบ” ไม่ใช่ข้อยืนยันว่าไม่มีใบอนุญาต และ Companion จะไม่กดแก้ไข ยกเลิก พิมพ์ใบอนุญาต หรือทำรายการเปลี่ยนสถานะ',
+    services: [
+      {
+        key: 'HSS_HEALTH_BUSINESS_APPROVED',
+        name: 'สถานประกอบการที่ได้รับอนุญาตแล้ว',
+        description: 'ค้นชื่อร้านนวด/สถานประกอบการเพื่อสุขภาพในรายการที่ได้รับอนุญาตตามสิทธิ์ของบัญชี',
+        automationMode: 'LOCAL_SEARCH',
+        searchFields: [
+          { key: 'FACILITY_NAME', label: 'ชื่อสถานประกอบการ', inputMode: 'text' },
         ],
       },
     ],

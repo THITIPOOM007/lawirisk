@@ -8,7 +8,12 @@ import os from 'node:os';
 import path from 'node:path';
 import process from 'node:process';
 import { fileURLToPath } from 'node:url';
-import { assertSourceLaunchAllowed, parseReconUri, resolveHssSearchFilter } from './companion-contract.mjs';
+import {
+  assertSourceLaunchAllowed,
+  parseReconUri,
+  resolveEsta2SearchOption,
+  resolveHssSearchFilter,
+} from './companion-contract.mjs';
 
 export const LOCAL_BRIDGE_HOST = '127.0.0.1';
 export const LOCAL_BRIDGE_PORT = 32147;
@@ -92,11 +97,13 @@ export function validateLocalSearch(search, command) {
   const allowedKeys = new Set(['field', 'value', 'purpose', 'confirmed']);
   if (Object.keys(search).some((key) => !allowedKeys.has(key))) throw new Error('INVALID_SEARCH_REQUEST');
   if (search.confirmed !== true) throw new Error('SEARCH_CONFIRMATION_REQUIRED');
-  if (command.action !== 'launch' || command.source.key !== 'HSS_OSS' || !command.caseId || !command.service) {
+  if (command.action !== 'launch' || !['HSS_OSS', 'HSS_ESTA2'].includes(command.source.key)
+    || !command.caseId || !command.service) {
     throw new Error('AUTOMATED_SEARCH_NOT_ALLOWED');
   }
   const field = cleanSearchText(search.field, 1, 50, 'INVALID_SEARCH_FIELD');
-  resolveHssSearchFilter(command.service, field);
+  if (command.source.key === 'HSS_OSS') resolveHssSearchFilter(command.service, field);
+  else resolveEsta2SearchOption(command.service, field);
   return {
     source: command.source.key,
     service: command.service,

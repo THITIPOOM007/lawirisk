@@ -2,8 +2,8 @@ import { describe, expect, it } from 'vitest';
 import { buildReconCompanionUri, companionLaunchRequestSchema, EXTERNAL_SOURCES, externalSourceKeySchema, findExternalSource, isLaunchableSource } from './external-sources';
 
 describe('external source allowlist', () => {
-  it('contains only the two reviewed government sources', () => {
-    expect(EXTERNAL_SOURCES.map((source) => source.key)).toEqual(['FDA_SKYNET', 'HSS_OSS']);
+  it('contains only the three reviewed government sources', () => {
+    expect(EXTERNAL_SOURCES.map((source) => source.key)).toEqual(['FDA_SKYNET', 'HSS_OSS', 'HSS_ESTA2']);
     expect(externalSourceKeySchema.safeParse('https://attacker.example').success).toBe(false);
   });
 
@@ -20,6 +20,15 @@ describe('external source allowlist', () => {
     expect(hss && isLaunchableSource(hss)).toBe(false);
     expect(() => hss && buildReconCompanionUri(hss)).toThrow('INSECURE_TRANSPORT_ACK_REQUIRED');
     expect(hss && buildReconCompanionUri(hss, { acknowledgeInsecureTransport: true })).toContain('allow_insecure_http=1');
+  });
+
+  it('allows the reviewed HTTPS ESTA2 approved-business entry point without an HTTP exception', () => {
+    const esta2 = findExternalSource('HSS_ESTA2');
+    expect(esta2?.transport).toBe('HTTPS');
+    expect(esta2?.launchUrl).toBe('https://esta2.hss.moph.go.th/business/approved');
+    expect(esta2 && isLaunchableSource(esta2)).toBe(true);
+    expect(esta2 && buildReconCompanionUri(esta2, { service: 'HSS_HEALTH_BUSINESS_APPROVED' }))
+      .toBe('lawirisk-recon://launch?source=HSS_ESTA2&service=HSS_HEALTH_BUSINESS_APPROVED');
   });
 
   it('builds an allow-listed local companion URI without credentials', () => {
@@ -40,10 +49,18 @@ describe('external source allowlist', () => {
   it('advertises local automatic search only for reviewed HSS forms', () => {
     const fda = findExternalSource('FDA_SKYNET');
     const hss = findExternalSource('HSS_OSS');
+    const esta2 = findExternalSource('HSS_ESTA2');
     expect(fda?.services.every((service) => service.automationMode === 'FORM_ONLY' && service.searchFields.length === 0)).toBe(true);
     expect(hss?.services.every((service) => service.automationMode === 'LOCAL_SEARCH' && service.searchFields.length > 0)).toBe(true);
     expect(hss?.services.find((service) => service.key === 'HSS_FACILITY')?.searchFields.map((field) => field.key)).toContain('PHONE');
     expect(hss?.services.find((service) => service.key === 'HSS_PROFESSIONAL')?.searchFields.map((field) => field.key)).toContain('CITIZEN_ID');
+    expect(esta2?.services).toEqual(expect.arrayContaining([
+      expect.objectContaining({
+        key: 'HSS_HEALTH_BUSINESS_APPROVED',
+        automationMode: 'LOCAL_SEARCH',
+        searchFields: [expect.objectContaining({ key: 'FACILITY_NAME' })],
+      }),
+    ]));
   });
 
   it('never accepts a raw query in the cloud companion authorization contract', () => {

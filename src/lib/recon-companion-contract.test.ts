@@ -3,6 +3,7 @@ import {
   assertSourceLaunchAllowed,
   isHssResultBoundToQuery,
   parseReconUri,
+  resolveEsta2SearchOption,
   resolveHssSearchFilter,
   safeCompanionMessage,
 } from '../../scripts/recon/companion-contract.mjs';
@@ -27,7 +28,15 @@ describe('local recon companion contract', () => {
   it('allows only source-bound service navigation', () => {
     expect(parseReconUri('lawirisk-recon://launch?source=FDA_SKYNET&service=DBD').service).toBe('DBD');
     expect(parseReconUri('lawirisk-recon://launch?source=HSS_OSS&service=HSS_FACILITY&allow_insecure_http=1').service).toBe('HSS_FACILITY');
+    expect(parseReconUri('lawirisk-recon://launch?source=HSS_ESTA2&service=HSS_HEALTH_BUSINESS_APPROVED').service).toBe('HSS_HEALTH_BUSINESS_APPROVED');
+    expect(() => assertSourceLaunchAllowed(parseReconUri('lawirisk-recon://launch?source=HSS_ESTA2'))).not.toThrow();
     expect(() => parseReconUri('lawirisk-recon://launch?source=HSS_OSS&service=DBD&allow_insecure_http=1')).toThrow('SERVICE_NOT_ALLOWED');
+  });
+
+  it('maps only the reviewed ESTA2 approved-business search field', () => {
+    expect(resolveEsta2SearchOption('HSS_HEALTH_BUSINESS_APPROVED', 'FACILITY_NAME')).toBe('ชื่อสถานประกอบการ');
+    expect(() => resolveEsta2SearchOption('HSS_HEALTH_BUSINESS_APPROVED', 'PHONE')).toThrow('SEARCH_FIELD_NOT_ALLOWED');
+    expect(() => resolveEsta2SearchOption('HSS_FACILITY', 'FACILITY_NAME')).toThrow('SEARCH_FIELD_NOT_ALLOWED');
   });
 
   it('accepts only UUID v4 one-time job identifiers', () => {

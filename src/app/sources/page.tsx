@@ -248,7 +248,7 @@ export default function SourcesPage() {
       )}
 
       <section aria-label="ทะเบียนแหล่งสืบค้น" className="grid gap-5 xl:grid-cols-2">
-        {isLoading ? [0, 1].map((item) => (
+        {isLoading ? [0, 1, 2].map((item) => (
           <div key={item} className="soft-panel min-h-[390px] rounded-[26px] p-6"><div className="skeleton-shimmer h-12 w-12 rounded-2xl" /><div className="mt-6 h-7 w-52 rounded-lg skeleton-shimmer" /><div className="mt-4 h-4 w-full rounded skeleton-shimmer" /><div className="mt-2 h-4 w-3/4 rounded skeleton-shimmer" /></div>
         )) : sources.map((source) => {
           const status = statusMeta[source.accessMode];

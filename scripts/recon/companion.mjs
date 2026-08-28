@@ -13,6 +13,7 @@ import {
   assertSourceLaunchAllowed,
   isHssResultBoundToQuery,
   parseReconUri,
+  resolveEsta2SearchOption,
   resolveHssSearchFilter,
   safeCompanionMessage,
 } from './companion-contract.mjs';
@@ -121,8 +122,50 @@ async function loginHss(page, credential) {
   }
 }
 
+async function loginEsta2(page, credential) {
+  await page.goto('https://esta2.hss.moph.go.th/login', { waitUntil: 'domcontentloaded' });
+  const currentUrl = new URL(page.url());
+  if (currentUrl.hostname !== 'esta2.hss.moph.go.th' || currentUrl.protocol !== 'https:') {
+    throw new Error('ESTA2_LOGIN_FAILED');
+  }
+  const loginButton = page.locator('#login-btn');
+  if (!await loginButton.isVisible().catch(() => false)) {
+    if (currentUrl.pathname !== '/login') {
+      console.log('ใช้ ESTA2 session เดิมสำเร็จ');
+      return;
+    }
+    throw new Error('ESTA2_LOGIN_FAILED');
+  }
+  const username = page.locator('#login');
+  const password = page.locator('#password');
+  if (!await username.isVisible().catch(() => false) || !await password.isVisible().catch(() => false)) {
+    throw new Error('ESTA2_LOGIN_FAILED');
+  }
+  await username.fill(credential.username);
+  await password.fill(credential.password);
+  await loginButton.click();
+  await page.waitForURL((url) => url.hostname === 'esta2.hss.moph.go.th' && url.pathname !== '/login', {
+    timeout: 30_000,
+  }).catch(() => undefined);
+  if (new URL(page.url()).pathname === '/login' || await loginButton.isVisible().catch(() => false)) {
+    throw new Error('ESTA2_LOGIN_FAILED');
+  }
+  console.log('เข้าสู่ ESTA2 สำเร็จ');
+}
+
 async function navigateToService(page, request) {
   if (!request.service) return page;
+  if (request.source.key === 'HSS_ESTA2') {
+    if (request.service !== 'HSS_HEALTH_BUSINESS_APPROVED') throw new Error('SERVICE_NOT_ALLOWED');
+    await page.goto('https://esta2.hss.moph.go.th/business/approved', { waitUntil: 'domcontentloaded' })
+      .catch(() => { throw new Error('ESTA2_SERVICE_PAGE_FAILED'); });
+    const targetUrl = new URL(page.url());
+    if (targetUrl.protocol !== 'https:' || targetUrl.hostname !== 'esta2.hss.moph.go.th'
+      || targetUrl.pathname !== '/business/approved' || await page.locator('#login-btn').isVisible().catch(() => false)) {
+      throw new Error('ESTA2_SERVICE_PAGE_FAILED');
+    }
+    return page;
+  }
   const context = page.context();
   const popupPromise = context.waitForEvent('page', { timeout: 8_000 }).catch(() => undefined);
 
@@ -218,6 +261,68 @@ async function runHssLocalSearch(page, request, search) {
     throw new Error('SEARCH_RESULT_NOT_BOUND_TO_QUERY');
   }
   return { querySha256 };
+}
+
+async function runEsta2LocalSearch(page, request, search) {
+  if (!search) return undefined;
+  if (request.source.key !== 'HSS_ESTA2' || request.service !== 'HSS_HEALTH_BUSINESS_APPROVED') {
+    throw new Error('SEARCH_FIELD_NOT_ALLOWED');
+  }
+  const optionLabel = resolveEsta2SearchOption(request.service, search.field);
+  await page.waitForFunction((expectedLabel) => [...document.querySelectorAll('select option')]
+    .some((option) => option.textContent?.replace(/\s+/g, ' ').trim() === expectedLabel), optionLabel, {
+    timeout: 10_000,
+  }).catch(() => { throw new Error('SEARCH_FORM_CHANGED'); });
+  const selects = page.locator('select');
+  let filter;
+  for (let index = 0; index < Math.min(await selects.count(), 20); index += 1) {
+    const candidate = selects.nth(index);
+    const labels = await candidate.locator('option').allTextContents().catch(() => []);
+    if (labels.some((label) => label.replace(/\s+/g, ' ').trim() === optionLabel)) {
+      filter = candidate;
+      break;
+    }
+  }
+  const value = page.locator('input[placeholder*="พิมพ์คำค้นหา"]').first();
+  if (!filter || !await filter.isVisible().catch(() => false) || !await value.isVisible().catch(() => false)) {
+    throw new Error('SEARCH_FORM_CHANGED');
+  }
+
+  const querySha256 = createHash('sha256').update(search.value, 'utf8').digest('hex');
+  const searchValue = search.value;
+  await filter.selectOption({ label: optionLabel });
+  await value.fill(searchValue);
+  search.value = '';
+  const form = value.locator('xpath=ancestor::form[1]');
+  if (await form.count()) {
+    await form.evaluate((element) => element.requestSubmit());
+  }
+  else {
+    const submit = page.locator('button[type="submit"]').filter({ visible: true }).first();
+    if (!await submit.isVisible().catch(() => false)) throw new Error('SEARCH_FORM_CHANGED');
+    await submit.click();
+  }
+  await page.waitForTimeout(3_000);
+  const currentUrl = new URL(page.url());
+  if (currentUrl.hostname !== 'esta2.hss.moph.go.th' || currentUrl.pathname !== '/business/approved') {
+    throw new Error('SEARCH_FORM_CHANGED');
+  }
+  const echoedValue = await value.evaluate((element) => element instanceof HTMLInputElement ? element.value : '');
+  if (echoedValue !== searchValue) throw new Error('SEARCH_REQUEST_NOT_RETAINED');
+  const resultRows = await page.locator('table tbody tr').evaluateAll((rows) => rows
+    .map((row) => Array.from(row.querySelectorAll('td')).map((cell) => cell.textContent || '').join(' '))
+    .filter(Boolean));
+  if (!isHssResultBoundToQuery(resultRows, searchValue)) {
+    throw new Error('SEARCH_RESULT_NOT_BOUND_TO_QUERY');
+  }
+  return { querySha256 };
+}
+
+async function runLocalSearch(page, request, search) {
+  if (!search) return undefined;
+  if (request.source.key === 'HSS_OSS') return runHssLocalSearch(page, request, search);
+  if (request.source.key === 'HSS_ESTA2') return runEsta2LocalSearch(page, request, search);
+  throw new Error('SEARCH_FIELD_NOT_ALLOWED');
 }
 
 async function captureLocalSearchResult(page, request, search, searchResult) {
@@ -381,11 +486,13 @@ async function main() {
   const page = context.pages()[0] || await context.newPage();
   try {
     if (request.source.key === 'FDA_SKYNET') await loginFda(page, credential);
-    else await loginHss(page, credential);
+    else if (request.source.key === 'HSS_OSS') await loginHss(page, credential);
+    else if (request.source.key === 'HSS_ESTA2') await loginEsta2(page, credential);
+    else throw new Error('SOURCE_NOT_ALLOWED');
     const targetPage = await navigateToService(page, request);
     await targetPage.waitForTimeout(1_000);
     await captureSanitizedPageContract(targetPage, request.source, request.service);
-    const searchResult = await runHssLocalSearch(targetPage, request, localSearch);
+    const searchResult = await runLocalSearch(targetPage, request, localSearch);
     await captureLocalSearchResult(targetPage, request, localSearch, searchResult);
   }
   catch (error) {

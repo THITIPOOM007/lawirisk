@@ -196,6 +196,21 @@ describe('local recon bridge boundary', () => {
       );
       expect(valid).toMatchObject({ field: 'CITIZEN_ID', service: 'HSS_PROFESSIONAL' });
 
+      const validEsta2 = validateLocalSearch(
+        { field: 'FACILITY_NAME', value: 'ร้านนวดตัวอย่าง', purpose: 'ตรวจสอบตามสำนวนทดสอบที่ได้รับมอบหมาย', confirmed: true },
+        {
+          action: 'launch',
+          source: { key: 'HSS_ESTA2' },
+          caseId: 'case-1',
+          service: 'HSS_HEALTH_BUSINESS_APPROVED',
+        },
+      );
+      expect(validEsta2).toMatchObject({
+        source: 'HSS_ESTA2',
+        field: 'FACILITY_NAME',
+        service: 'HSS_HEALTH_BUSINESS_APPROVED',
+      });
+
       const unauthorized = await fetch(`${baseUrl}/v1/jobs/00000000-0000-4000-8000-000000000000`, {
         headers: { Origin: trustedHeaders.Origin, 'X-LawiRisk-Recon-Job': '00000000-0000-4000-8000-000000000000' },
       });

@@ -151,20 +151,27 @@ test('offers local auto-login and requires per-launch acknowledgement for insecu
   await page.goto('/sources');
   await expect(page.getByRole('heading', { level: 1, name: 'แหล่งสืบค้นข้อมูลที่ได้รับอนุญาต' })).toBeVisible();
   await expect(page.getByRole('heading', { name: 'SKYNET / Privus อย.' })).toBeVisible();
-  await expect(page.getByRole('button', { name: 'ตั้ง/เปลี่ยนบัญชีบนเครื่องนี้' })).toHaveCount(2);
+  await expect(page.getByRole('button', { name: 'ตั้ง/เปลี่ยนบัญชีบนเครื่องนี้' })).toHaveCount(3);
   await expect(page.getByRole('radio', { name: /ทะเบียนนิติบุคคล/ })).toBeChecked();
   await expect(page.getByRole('radio', { name: /ทะเบียนบุคคล/ })).toBeVisible();
   await expect(page.getByRole('button', { name: 'ล็อกอินและเปิดหน้าสืบค้นที่เลือก' }).first()).toBeEnabled();
   await expect(page.getByRole('heading', { name: 'OSS สบส.' })).toBeVisible();
-  await expect(page.getByRole('radio', { name: /ข้อมูลสถานพยาบาล/ })).toBeChecked();
-  await expect(page.getByText('ค้นอัตโนมัติแบบ local-only')).toBeVisible();
-  await expect(page.getByLabel('สำนวนคดี')).toBeVisible();
-  await expect(page.getByLabel('ประเภทคำค้น')).toHaveValue('FACILITY_NAME');
-  await expect(page.getByRole('button', { name: 'ล็อกอิน ค้น และบันทึกผล PDF อัตโนมัติ' })).toBeDisabled();
-  const hssAutoLogin = page.getByRole('button', { name: 'ล็อกอินและเปิดหน้าสืบค้นที่เลือก' }).last();
+  const hssCard = page.getByRole('heading', { name: 'OSS สบส.' }).locator('xpath=ancestor::article[1]');
+  await expect(hssCard.getByRole('radio', { name: /ข้อมูลสถานพยาบาล/ })).toBeChecked();
+  await expect(hssCard.getByText('ค้นอัตโนมัติแบบ local-only')).toBeVisible();
+  await expect(hssCard.getByLabel('สำนวนคดี')).toBeVisible();
+  await expect(hssCard.getByLabel('ประเภทคำค้น')).toHaveValue('FACILITY_NAME');
+  await expect(hssCard.getByRole('button', { name: 'ล็อกอิน ค้น และบันทึกผล PDF อัตโนมัติ' })).toBeDisabled();
+  const hssAutoLogin = hssCard.getByRole('button', { name: 'ล็อกอินและเปิดหน้าสืบค้นที่เลือก' });
   await expect(hssAutoLogin).toBeDisabled();
   await page.getByRole('checkbox', { name: /รับทราบว่า HSS ใช้ HTTP/ }).check();
   await expect(hssAutoLogin).toBeEnabled();
+
+  const esta2Card = page.getByRole('heading', { name: 'ESTA2 สบส.' }).locator('xpath=ancestor::article[1]');
+  await expect(esta2Card.getByRole('radio', { name: /สถานประกอบการที่ได้รับอนุญาตแล้ว/ })).toBeChecked();
+  await expect(esta2Card.getByText('HTTPS ตรวจแล้ว')).toBeVisible();
+  await expect(esta2Card.getByLabel('ประเภทคำค้น')).toHaveValue('FACILITY_NAME');
+  await expect(esta2Card.getByRole('button', { name: 'ล็อกอินและเปิดหน้าสืบค้นที่เลือก' })).toBeEnabled();
 
   const blocked = await page.evaluate(async () => {
     const response = await fetch('/api/v1/sources/HSS_OSS/companion', {
@@ -189,6 +196,20 @@ test('offers local auto-login and requires per-launch acknowledgement for insecu
     body: { data: { companion_uri: 'lawirisk-recon://launch?source=HSS_OSS&service=HSS_FACILITY&allow_insecure_http=1' } },
   });
   expect(JSON.stringify(allowed)).not.toMatch(/password|cookie|token/i);
+
+  const esta2Allowed = await page.evaluate(async () => {
+    const response = await fetch('/api/v1/sources/HSS_ESTA2/companion', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ service: 'HSS_HEALTH_BUSINESS_APPROVED' }),
+    });
+    return { status: response.status, body: await response.json() };
+  });
+  expect(esta2Allowed).toMatchObject({
+    status: 200,
+    body: { data: { companion_uri: 'lawirisk-recon://launch?source=HSS_ESTA2&service=HSS_HEALTH_BUSINESS_APPROVED' } },
+  });
+  expect(JSON.stringify(esta2Allowed)).not.toMatch(/password|cookie|token/i);
 
   const localSearch = await page.evaluate(async () => {
     const response = await fetch('/api/v1/sources/HSS_OSS/companion', {

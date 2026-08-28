@@ -15,6 +15,14 @@ export const RECON_SOURCES = Object.freeze({
     adapterVersion: 'hss-login-2026-08-27',
     services: Object.freeze(['HSS_FACILITY', 'HSS_PROFESSIONAL']),
   }),
+  HSS_ESTA2: Object.freeze({
+    key: 'HSS_ESTA2',
+    name: 'ESTA2 สบส.',
+    startUrl: 'https://esta2.hss.moph.go.th/login',
+    secureTransport: true,
+    adapterVersion: 'esta2-approved-business-2026-08-28',
+    services: Object.freeze(['HSS_HEALTH_BUSINESS_APPROVED']),
+  }),
 });
 
 export const HSS_SEARCH_FILTERS = Object.freeze({
@@ -45,6 +53,19 @@ export function resolveHssSearchFilter(service, field) {
   const filter = serviceFilters?.[field];
   if (!filter) throw new Error('SEARCH_FIELD_NOT_ALLOWED');
   return filter;
+}
+
+export const ESTA2_SEARCH_OPTIONS = Object.freeze({
+  HSS_HEALTH_BUSINESS_APPROVED: Object.freeze({
+    FACILITY_NAME: 'ชื่อสถานประกอบการ',
+  }),
+});
+
+export function resolveEsta2SearchOption(service, field) {
+  const serviceOptions = ESTA2_SEARCH_OPTIONS[service];
+  const option = serviceOptions?.[field];
+  if (!option) throw new Error('SEARCH_FIELD_NOT_ALLOWED');
+  return option;
 }
 
 function normalizeSearchText(value) {
@@ -117,6 +138,8 @@ export function safeCompanionMessage(error) {
     HSS_SERVICE_SWITCH_UNAVAILABLE: 'บัญชี HSS นี้ไม่แสดงเมนูเปลี่ยนไปยังบริการย่อยที่เลือก',
     HSS_SERVICE_SWITCH_FAILED: 'เปิดบริการย่อย HSS ที่เลือกไม่สำเร็จ โปรดตรวจสิทธิ์ของบัญชีในหน้าต่างต้นทาง',
     HSS_SERVICE_PAGE_FAILED: 'บริการย่อย HSS ไม่ยอมเปิดหน้ารายการที่กำหนด',
+    ESTA2_LOGIN_FAILED: 'เข้าสู่ ESTA2 ไม่สำเร็จ โปรดตรวจบัญชีหรือข้อความจากระบบต้นทาง',
+    ESTA2_SERVICE_PAGE_FAILED: 'ESTA2 ไม่ยอมเปิดหน้าสถานประกอบการที่ได้รับอนุญาต',
     INSECURE_HTTP_ACK_REQUIRED: 'HSS ใช้ HTTP ต้องยืนยันความเสี่ยงจากหน้า LAW-i-RISK ก่อนทุกครั้ง',
     CREDENTIAL_NOT_CONFIGURED: 'ยังไม่ได้ตั้งบัญชีสำหรับแหล่งข้อมูลนี้',
   };

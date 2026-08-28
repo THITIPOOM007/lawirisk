@@ -4,7 +4,7 @@ param(
   [string]$Action,
 
   [Parameter(Mandatory = $true)]
-  [ValidateSet('FDA_SKYNET', 'HSS_OSS')]
+  [ValidateSet('FDA_SKYNET', 'HSS_OSS', 'HSS_ESTA2')]
   [string]$Source
 )
 
