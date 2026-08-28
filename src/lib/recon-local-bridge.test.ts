@@ -5,10 +5,15 @@ import {
   LOCAL_BRIDGE_PORT,
   createLocalBridgeServer,
   isAllowedReconOrigin,
+  validateLocalSearch,
 } from '../../scripts/recon/local-bridge.mjs';
 
-async function withLocalBridge(run: (baseUrl: string) => Promise<void>) {
-  const server = createLocalBridgeServer();
+async function withLocalBridge(
+  run: (baseUrl: string, launched: string[]) => Promise<void>,
+  options: { jobTtlMs?: number } = {},
+) {
+  const launched: string[] = [];
+  const server = createLocalBridgeServer({ ...options, launchHandler: (uri: string) => launched.push(uri) });
   await new Promise<void>((resolve, reject) => {
     server.once('error', reject);
     server.listen(0, LOCAL_BRIDGE_HOST, resolve);
@@ -16,7 +21,7 @@ async function withLocalBridge(run: (baseUrl: string) => Promise<void>) {
   const address = server.address();
   if (!address || typeof address === 'string') throw new Error('Expected a TCP bridge address');
   try {
-    await run(`http://${LOCAL_BRIDGE_HOST}:${address.port}`);
+    await run(`http://${LOCAL_BRIDGE_HOST}:${address.port}`, launched);
   }
   finally {
     await new Promise<void>((resolve, reject) => server.close((error) => error ? reject(error) : resolve()));
@@ -123,5 +128,98 @@ describe('local recon bridge boundary', () => {
       expect(oversized.status).toBe(400);
       await expect(oversized.json()).resolves.toEqual({ error: 'REQUEST_TOO_LARGE' });
     });
+  });
+
+  it('holds a confirmed HSS query in one-time local memory without putting it in the launch URI', async () => {
+    await withLocalBridge(async (baseUrl, launched) => {
+      const response = await fetch(`${baseUrl}/v1/command`, {
+        method: 'POST',
+        headers: { ...trustedHeaders, 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          uri: 'lawirisk-recon://launch?source=HSS_OSS&case_id=case-1&service=HSS_FACILITY&allow_insecure_http=1',
+          search: { field: 'PHONE', value: '0800000000', purpose: 'ตรวจสอบตามสำนวนที่ได้รับมอบหมาย', confirmed: true },
+        }),
+      });
+      expect(response.status).toBe(202);
+      await expect(response.json()).resolves.toMatchObject({ mode: 'LOCAL_SEARCH', source: 'HSS_OSS' });
+      expect(launched).toHaveLength(1);
+      expect(launched[0]).not.toContain('0800000000');
+      expect(launched[0]).not.toContain('purpose');
+
+      const uri = new URL(launched[0]);
+      const jobId = uri.searchParams.get('job_id');
+      expect(jobId).toMatch(/^[0-9a-f-]{36}$/i);
+      const consumed = await fetch(`${baseUrl}/v1/jobs/${jobId}`, {
+        headers: { 'X-LawiRisk-Recon-Job': jobId! },
+      });
+      expect(consumed.status).toBe(200);
+      await expect(consumed.json()).resolves.toMatchObject({
+        data: { field: 'PHONE', value: '0800000000', caseId: 'case-1' },
+      });
+      const replay = await fetch(`${baseUrl}/v1/jobs/${jobId}`, {
+        headers: { 'X-LawiRisk-Recon-Job': jobId! },
+      });
+      expect(replay.status).toBe(404);
+    });
+  });
+
+  it('denies browser-origin access to local jobs and fails closed for unsafe search requests', async () => {
+    await withLocalBridge(async (baseUrl, launched) => {
+      const invalidRequests = [
+        { field: 'PHONE', value: '0800000000', purpose: 'ตรวจสอบตามสำนวนที่ได้รับมอบหมาย', confirmed: false },
+        { field: 'UNKNOWN', value: 'ทดสอบ', purpose: 'ตรวจสอบตามสำนวนที่ได้รับมอบหมาย', confirmed: true },
+        { field: 'PHONE', value: 'x', purpose: 'ตรวจสอบตามสำนวนที่ได้รับมอบหมาย', confirmed: true },
+        { field: 'PHONE', value: '0800000000', purpose: 'สั้น', confirmed: true },
+        { field: 'PHONE', value: '0800000000', purpose: 'ตรวจสอบตามสำนวนที่ได้รับมอบหมาย', confirmed: true, token: 'forbidden' },
+      ];
+      for (const search of invalidRequests) {
+        const response = await fetch(`${baseUrl}/v1/command`, {
+          method: 'POST',
+          headers: { ...trustedHeaders, 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            uri: 'lawirisk-recon://launch?source=HSS_OSS&case_id=case-1&service=HSS_FACILITY&allow_insecure_http=1',
+            search,
+          }),
+        });
+        expect(response.status).toBe(400);
+      }
+      expect(launched).toHaveLength(0);
+
+      const valid = validateLocalSearch(
+        { field: 'CITIZEN_ID', value: '0000000000000', purpose: 'ตรวจสอบตามสำนวนทดสอบที่ได้รับมอบหมาย', confirmed: true },
+        {
+          action: 'launch',
+          source: { key: 'HSS_OSS' },
+          caseId: 'case-1',
+          service: 'HSS_PROFESSIONAL',
+        },
+      );
+      expect(valid).toMatchObject({ field: 'CITIZEN_ID', service: 'HSS_PROFESSIONAL' });
+
+      const unauthorized = await fetch(`${baseUrl}/v1/jobs/00000000-0000-4000-8000-000000000000`, {
+        headers: { Origin: trustedHeaders.Origin, 'X-LawiRisk-Recon-Job': '00000000-0000-4000-8000-000000000000' },
+      });
+      expect(unauthorized.status).toBe(403);
+    });
+  });
+
+  it('deletes an unconsumed search job when its local TTL expires', async () => {
+    await withLocalBridge(async (baseUrl, launched) => {
+      const response = await fetch(`${baseUrl}/v1/command`, {
+        method: 'POST',
+        headers: { ...trustedHeaders, 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          uri: 'lawirisk-recon://launch?source=HSS_OSS&case_id=case-1&service=HSS_FACILITY&allow_insecure_http=1',
+          search: { field: 'PHONE', value: '0800000000', purpose: 'ตรวจสอบตามสำนวนที่ได้รับมอบหมาย', confirmed: true },
+        }),
+      });
+      expect(response.status).toBe(202);
+      const jobId = new URL(launched[0]).searchParams.get('job_id');
+      await new Promise((resolve) => setTimeout(resolve, 30));
+      const expired = await fetch(`${baseUrl}/v1/jobs/${jobId}`, {
+        headers: { 'X-LawiRisk-Recon-Job': jobId! },
+      });
+      expect(expired.status).toBe(404);
+    }, { jobTtlMs: 10 });
   });
 });

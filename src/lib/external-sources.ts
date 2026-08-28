@@ -16,6 +16,12 @@ const reconServiceSchema = z.object({
   key: reconServiceKeySchema,
   name: z.string().min(1),
   description: z.string().min(1),
+  automationMode: z.enum(['FORM_ONLY', 'LOCAL_SEARCH']),
+  searchFields: z.array(z.object({
+    key: z.string().regex(/^[A-Z_]+$/),
+    label: z.string().min(1),
+    inputMode: z.enum(['text', 'tel', 'numeric']),
+  }).strict()),
 }).strict();
 
 export const externalSourceSchema = z.object({
@@ -58,9 +64,9 @@ export const EXTERNAL_SOURCES: readonly ExternalSource[] = [
     ],
     limitation: 'ทำ auto-login และเปิดหน้าค้นที่เลือกผ่านโปรแกรมบนเครื่องเท่านั้น LAW-i-RISK บน Cloudflare/Supabase ไม่รับรหัสผ่านหรือ session; เจ้าหน้าที่ต้องตรวจคำค้นและกดค้นในระบบต้นทางตามสิทธิ์ของบัญชี',
     services: [
-      { key: 'DBD', name: 'ทะเบียนนิติบุคคล (DBD)', description: 'เปิดหน้าค้นหาข้อมูลนิติบุคคลที่บัญชีได้รับสิทธิ์' },
-      { key: 'DOPA', name: 'ทะเบียนบุคคล (DOPA)', description: 'เปิดหน้าค้นหาบุคคลของกรมการปกครองที่บัญชีได้รับสิทธิ์' },
-      { key: 'FDA_PLACE_DRUG', name: 'สถานที่และทะเบียนยา', description: 'เปิดระบบค้นหาสถานที่และทะเบียนผลิตภัณฑ์ยา' },
+      { key: 'DBD', name: 'ทะเบียนนิติบุคคล (DBD)', description: 'เปิดหน้าค้นหาข้อมูลนิติบุคคลที่บัญชีได้รับสิทธิ์', automationMode: 'FORM_ONLY', searchFields: [] },
+      { key: 'DOPA', name: 'ทะเบียนบุคคล (DOPA)', description: 'เปิดหน้าค้นหาบุคคลของกรมการปกครองที่บัญชีได้รับสิทธิ์', automationMode: 'FORM_ONLY', searchFields: [] },
+      { key: 'FDA_PLACE_DRUG', name: 'สถานที่และทะเบียนยา', description: 'เปิดระบบค้นหาสถานที่และทะเบียนผลิตภัณฑ์ยา', automationMode: 'FORM_ONLY', searchFields: [] },
     ],
   },
   {
@@ -81,8 +87,38 @@ export const EXTERNAL_SOURCES: readonly ExternalSource[] = [
     ],
     limitation: 'ตรวจยืนยันแล้วว่า HTTPS redirect กลับ HTTP; auto-login จึงเป็นข้อยกเว้นเฉพาะเครื่องที่ต้องยืนยันความเสี่ยง ไม่ใช่ค่าเริ่มต้นและไม่ใช่ช่องทางที่แนะนำ',
     services: [
-      { key: 'HSS_FACILITY', name: 'ข้อมูลสถานพยาบาล', description: 'เปิดรายการข้อมูลสถานพยาบาลภายใต้สิทธิ์ของบัญชี' },
-      { key: 'HSS_PROFESSIONAL', name: 'ข้อมูลผู้ประกอบโรคศิลปะ', description: 'เปิดระบบข้อมูลบุคคลและผู้ประกอบโรคศิลปะภายใต้สิทธิ์ของบัญชี' },
+      {
+        key: 'HSS_FACILITY',
+        name: 'ข้อมูลสถานพยาบาล',
+        description: 'ค้นชื่อ เลขประจำตัว ใบอนุญาต เบอร์โทร หรือที่อยู่ ภายใต้สิทธิ์ของบัญชี',
+        automationMode: 'LOCAL_SEARCH',
+        searchFields: [
+          { key: 'FACILITY_NAME', label: 'ชื่อสถานพยาบาล', inputMode: 'text' },
+          { key: 'OPERATOR_NAME', label: 'ชื่อผู้ประกอบกิจการ', inputMode: 'text' },
+          { key: 'OPERATOR_ID', label: 'เลขประจำตัว/เลขนิติบุคคล', inputMode: 'numeric' },
+          { key: 'MANAGER_NAME', label: 'ชื่อผู้ดำเนินการ', inputMode: 'text' },
+          { key: 'MANAGER_ID', label: 'เลขประจำตัวผู้ดำเนินการ', inputMode: 'numeric' },
+          { key: 'BUSINESS_LICENSE', label: 'เลขใบอนุญาตประกอบกิจการ', inputMode: 'text' },
+          { key: 'OPERATION_LICENSE', label: 'เลขใบอนุญาตดำเนินการ', inputMode: 'text' },
+          { key: 'PHONE', label: 'เบอร์โทรศัพท์', inputMode: 'tel' },
+          { key: 'ADDRESS_NUMBER', label: 'ที่อยู่/เลขที่', inputMode: 'text' },
+        ],
+      },
+      {
+        key: 'HSS_PROFESSIONAL',
+        name: 'ข้อมูลผู้ประกอบโรคศิลปะ',
+        description: 'ค้นบุคคล หนังสือเดินทาง และใบอนุญาต ภายใต้สิทธิ์ของบัญชี',
+        automationMode: 'LOCAL_SEARCH',
+        searchFields: [
+          { key: 'CITIZEN_ID', label: 'เลขประจำตัวประชาชน', inputMode: 'numeric' },
+          { key: 'PASSPORT', label: 'เลขหนังสือเดินทาง', inputMode: 'text' },
+          { key: 'PERSON_NAME', label: 'ชื่อ-นามสกุล', inputMode: 'text' },
+          { key: 'FORMER_NAME', label: 'ชื่อ-นามสกุลเดิม', inputMode: 'text' },
+          { key: 'PROFESSIONAL_LICENSE', label: 'เลขใบอนุญาตประกอบโรคศิลปะ', inputMode: 'text' },
+          { key: 'BUSINESS_LICENSE', label: 'เลขใบอนุญาตประกอบกิจการ', inputMode: 'text' },
+          { key: 'OPERATION_LICENSE', label: 'เลขใบอนุญาตดำเนินการ', inputMode: 'text' },
+        ],
+      },
     ],
   },
 ] as const;
@@ -102,6 +138,7 @@ export function isLaunchableSource(source: ExternalSource) {
 export const companionLaunchRequestSchema = z.object({
   case_id: z.string().trim().min(1).max(100).optional(),
   service: reconServiceKeySchema.optional(),
+  intent: z.enum(['OPEN_FORM', 'LOCAL_SEARCH']).optional().default('OPEN_FORM'),
   acknowledge_insecure_transport: z.boolean().optional().default(false),
 }).strict();
 

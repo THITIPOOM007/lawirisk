@@ -142,6 +142,10 @@ test('offers local auto-login and requires per-launch acknowledgement for insecu
   await expect(page.getByRole('button', { name: 'ล็อกอินและเปิดหน้าสืบค้นที่เลือก' }).first()).toBeEnabled();
   await expect(page.getByRole('heading', { name: 'OSS สบส.' })).toBeVisible();
   await expect(page.getByRole('radio', { name: /ข้อมูลสถานพยาบาล/ })).toBeChecked();
+  await expect(page.getByText('ค้นอัตโนมัติแบบ local-only')).toBeVisible();
+  await expect(page.getByLabel('สำนวนคดี')).toBeVisible();
+  await expect(page.getByLabel('ประเภทคำค้น')).toHaveValue('FACILITY_NAME');
+  await expect(page.getByRole('button', { name: 'ล็อกอิน ค้น และบันทึกผล PDF อัตโนมัติ' })).toBeDisabled();
   const hssAutoLogin = page.getByRole('button', { name: 'ล็อกอินและเปิดหน้าสืบค้นที่เลือก' }).last();
   await expect(hssAutoLogin).toBeDisabled();
   await page.getByRole('checkbox', { name: /รับทราบว่า HSS ใช้ HTTP/ }).check();
@@ -170,6 +174,36 @@ test('offers local auto-login and requires per-launch acknowledgement for insecu
     body: { data: { companion_uri: 'lawirisk-recon://launch?source=HSS_OSS&service=HSS_FACILITY&allow_insecure_http=1' } },
   });
   expect(JSON.stringify(allowed)).not.toMatch(/password|cookie|token/i);
+
+  const localSearch = await page.evaluate(async () => {
+    const response = await fetch('/api/v1/sources/HSS_OSS/companion', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        case_id: 'case-1',
+        service: 'HSS_FACILITY',
+        intent: 'LOCAL_SEARCH',
+        acknowledge_insecure_transport: true,
+      }),
+    });
+    return { status: response.status, body: await response.json() };
+  });
+  expect(localSearch.status).toBe(200);
+  expect(localSearch.body.data.companion_uri).toContain('case_id=case-1');
+  expect(JSON.stringify(localSearch)).not.toMatch(/query|purpose|0800000000/i);
+
+  const leakedQuery = await page.evaluate(async () => {
+    const response = await fetch('/api/v1/sources/HSS_OSS/companion', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        case_id: 'case-1', service: 'HSS_FACILITY', intent: 'LOCAL_SEARCH',
+        acknowledge_insecure_transport: true, query: 'ข้อมูลต้องห้าม',
+      }),
+    });
+    return { status: response.status, body: await response.json() };
+  });
+  expect(leakedQuery).toMatchObject({ status: 400, body: { error: { code: 'INVALID_REQUEST' } } });
 });
 
 test('denies source registry access to viewer role', async ({ page }) => {

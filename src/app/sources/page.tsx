@@ -17,10 +17,26 @@ import {
   ShieldAlert,
 } from 'lucide-react';
 import type { ExternalSource, ReconServiceKey } from '@/lib/external-sources';
+import type { Case } from '@/lib/demo-data';
 
 const LOCAL_RECON_BRIDGE_URL = 'http://127.0.0.1:32147/v1/command';
 
-async function invokeLocalCompanion(uri: string): Promise<'LOCAL_BRIDGE' | 'WINDOWS_PROTOCOL'> {
+type LocalSearchRequest = {
+  field: string;
+  value: string;
+  purpose: string;
+  confirmed: true;
+};
+
+type SearchDraft = {
+  caseId: string;
+  field: string;
+  value: string;
+  purpose: string;
+  confirmed: boolean;
+};
+
+async function invokeLocalCompanion(uri: string, search?: LocalSearchRequest): Promise<'LOCAL_BRIDGE' | 'WINDOWS_PROTOCOL'> {
   try {
     const response = await fetch(LOCAL_RECON_BRIDGE_URL, {
       method: 'POST',
@@ -28,7 +44,7 @@ async function invokeLocalCompanion(uri: string): Promise<'LOCAL_BRIDGE' | 'WIND
         'Content-Type': 'application/json',
         'X-LawiRisk-Recon-Client': 'lawirisk-web-1',
       },
-      body: JSON.stringify({ uri }),
+      body: JSON.stringify(search ? { uri, search } : { uri }),
       signal: AbortSignal.timeout(3_500),
     });
     const body = await response.json().catch(() => null);
@@ -36,6 +52,9 @@ async function invokeLocalCompanion(uri: string): Promise<'LOCAL_BRIDGE' | 'WIND
     return 'LOCAL_BRIDGE';
   }
   catch {
+    if (search) {
+      throw new Error('ไม่พบ Recon Companion รุ่นที่รองรับการค้นอัตโนมัติ กรุณาติดตั้ง/เปิด Companion แล้วลองใหม่');
+    }
     window.location.assign(uri);
     return 'WINDOWS_PROTOCOL';
   }
@@ -58,6 +77,7 @@ const statusMeta = {
 
 export default function SourcesPage() {
   const [sources, setSources] = useState<ExternalSource[]>([]);
+  const [cases, setCases] = useState<Case[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState('');
   const [notice, setNotice] = useState('');
@@ -66,6 +86,22 @@ export default function SourcesPage() {
   const [settingUpKey, setSettingUpKey] = useState<string>('');
   const [insecureAcknowledged, setInsecureAcknowledged] = useState(false);
   const [selectedServices, setSelectedServices] = useState<Partial<Record<ExternalSource['key'], ReconServiceKey>>>({});
+  const [searchDrafts, setSearchDrafts] = useState<Partial<Record<ExternalSource['key'], SearchDraft>>>({});
+
+  function updateSearchDraft(source: ExternalSource, patch: Partial<SearchDraft>) {
+    const service = source.services.find((item) => item.key === (selectedServices[source.key] || source.services[0]?.key));
+    setSearchDrafts((current) => ({
+      ...current,
+      [source.key]: {
+        caseId: current[source.key]?.caseId || '',
+        field: current[source.key]?.field || service?.searchFields[0]?.key || '',
+        value: current[source.key]?.value || '',
+        purpose: current[source.key]?.purpose || '',
+        confirmed: current[source.key]?.confirmed || false,
+        ...patch,
+      },
+    }));
+  }
 
   async function setupCompanion(source: ExternalSource) {
     setSettingUpKey(source.key);
@@ -114,13 +150,65 @@ export default function SourcesPage() {
     }
   }
 
+  async function runLocalSearch(source: ExternalSource) {
+    const serviceKey = selectedServices[source.key] || source.services[0]?.key;
+    const service = source.services.find((item) => item.key === serviceKey);
+    const draft = searchDrafts[source.key];
+    if (!service || service.automationMode !== 'LOCAL_SEARCH') {
+      setError('บริการนี้ยังไม่รองรับการค้นอัตโนมัติ');
+      return;
+    }
+    if (!draft?.caseId || !draft.field || draft.value.trim().length < 2 || draft.purpose.trim().length < 10 || !draft.confirmed) {
+      setError('กรุณาเลือกคดี กรอกคำค้นอย่างน้อย 2 ตัวอักษร ระบุวัตถุประสงค์อย่างน้อย 10 ตัวอักษร และยืนยันสิทธิ์ก่อนค้น');
+      return;
+    }
+
+    setLaunchingKey(`${source.key}:search`);
+    setError('');
+    setNotice('');
+    try {
+      const response = await fetch(`/api/v1/sources/${source.key}/companion`, {
+        method: 'POST',
+        credentials: 'same-origin',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          case_id: draft.caseId,
+          service: service.key,
+          intent: 'LOCAL_SEARCH',
+          acknowledge_insecure_transport: source.transport === 'HTTP_ONLY' ? insecureAcknowledged : false,
+        }),
+      });
+      const body = await response.json().catch(() => null);
+      if (!response.ok) throw new Error(body?.error?.message || 'ขออนุญาตค้นอัตโนมัติไม่สำเร็จ');
+      await invokeLocalCompanion(body.data.companion_uri, {
+        field: draft.field,
+        value: draft.value.trim(),
+        purpose: draft.purpose.trim(),
+        confirmed: true,
+      });
+      updateSearchDraft(source, { value: '', confirmed: false });
+      setNotice(`ส่งงานค้น ${service.name} ไปยัง Recon Companion แล้ว ผลจะถูกบันทึกเป็น PDF พร้อม SHA-256 บนเครื่องเพื่อให้ตรวจและนำเข้าคลังหลักฐาน`);
+    }
+    catch (caught: unknown) {
+      setError(caught instanceof Error ? caught.message : 'ค้นอัตโนมัติไม่สำเร็จ');
+    }
+    finally {
+      setLaunchingKey('');
+    }
+  }
+
   useEffect(() => {
     const controller = new AbortController();
-    fetch('/api/v1/sources', { credentials: 'same-origin', signal: controller.signal })
-      .then(async (response) => {
-        const body = await response.json();
-        if (!response.ok) throw new Error(body.error?.message || 'โหลดแหล่งสืบค้นไม่สำเร็จ');
-        setSources(body.data as ExternalSource[]);
+    Promise.all([
+      fetch('/api/v1/sources', { credentials: 'same-origin', signal: controller.signal }),
+      fetch('/api/v1/cases', { credentials: 'same-origin', signal: controller.signal }),
+    ])
+      .then(async ([sourceResponse, caseResponse]) => {
+        const [sourceBody, caseBody] = await Promise.all([sourceResponse.json(), caseResponse.json()]);
+        if (!sourceResponse.ok) throw new Error(sourceBody.error?.message || 'โหลดแหล่งสืบค้นไม่สำเร็จ');
+        if (!caseResponse.ok) throw new Error(caseBody.error?.message || 'โหลดสำนวนคดีไม่สำเร็จ');
+        setSources(sourceBody.data as ExternalSource[]);
+        setCases(caseBody.data as Case[]);
         setError('');
       })
       .catch((caught: unknown) => {
@@ -168,6 +256,14 @@ export default function SourcesPage() {
           const SourceIcon = source.key === 'FDA_SKYNET' ? DatabaseZap : Building2;
           const launchable = source.transport === 'HTTPS';
           const insecure = source.transport === 'HTTP_ONLY';
+          const selectedService = source.services.find((service) => service.key === (selectedServices[source.key] || source.services[0]?.key));
+          const searchDraft: SearchDraft = searchDrafts[source.key] || {
+            caseId: '',
+            field: selectedService?.searchFields[0]?.key || '',
+            value: '',
+            purpose: '',
+            confirmed: false,
+          };
           return (
             <article key={source.key} className="soft-panel interactive-card flex min-h-[390px] flex-col rounded-[26px] p-6 sm:p-7">
               <div className="flex items-start justify-between gap-4">
@@ -201,7 +297,10 @@ export default function SourcesPage() {
                             name={`service-${source.key}`}
                             value={service.key}
                             checked={selected}
-                            onChange={() => setSelectedServices((current) => ({ ...current, [source.key]: service.key }))}
+                            onChange={() => {
+                              setSelectedServices((current) => ({ ...current, [source.key]: service.key }));
+                              updateSearchDraft(source, { field: service.searchFields[0]?.key || '', value: '', confirmed: false });
+                            }}
                             className="mt-1 h-4 w-4 accent-teal-400"
                           />
                           <span>
@@ -214,6 +313,82 @@ export default function SourcesPage() {
                   })}
                 </div>
               </fieldset>
+
+              {selectedService?.automationMode === 'LOCAL_SEARCH' ? (
+                <fieldset className="mt-5 space-y-3 rounded-2xl border border-teal-300/15 bg-teal-300/[0.035] p-4">
+                  <legend className="px-2 text-[10px] font-semibold uppercase tracking-[0.14em] text-teal-200">ค้นอัตโนมัติแบบ local-only</legend>
+                  <label className="block text-[11px] font-medium text-slate-300">
+                    สำนวนคดี
+                    <select
+                      value={searchDraft.caseId}
+                      onChange={(event) => updateSearchDraft(source, { caseId: event.target.value, confirmed: false })}
+                      className="mt-1.5 min-h-11 w-full rounded-xl border border-white/[0.08] bg-slate-950 px-3 text-sm text-slate-100"
+                    >
+                      <option value="">เลือกสำนวนคดี</option>
+                      {cases.filter((item) => item.status === 'ACTIVE').map((item) => (
+                        <option key={item.id} value={item.id}>{item.number} — {item.title}</option>
+                      ))}
+                    </select>
+                  </label>
+                  <div className="grid gap-3 sm:grid-cols-2">
+                    <label className="block text-[11px] font-medium text-slate-300">
+                      ประเภทคำค้น
+                      <select
+                        value={searchDraft.field}
+                        onChange={(event) => updateSearchDraft(source, { field: event.target.value, value: '', confirmed: false })}
+                        className="mt-1.5 min-h-11 w-full rounded-xl border border-white/[0.08] bg-slate-950 px-3 text-sm text-slate-100"
+                      >
+                        {selectedService.searchFields.map((field) => <option key={field.key} value={field.key}>{field.label}</option>)}
+                      </select>
+                    </label>
+                    <label className="block text-[11px] font-medium text-slate-300">
+                      คำค้น
+                      <input
+                        value={searchDraft.value}
+                        inputMode={selectedService.searchFields.find((field) => field.key === searchDraft.field)?.inputMode || 'text'}
+                        maxLength={200}
+                        autoComplete="off"
+                        onChange={(event) => updateSearchDraft(source, { value: event.target.value, confirmed: false })}
+                        className="mt-1.5 min-h-11 w-full rounded-xl border border-white/[0.08] bg-slate-950 px-3 text-sm text-slate-100"
+                        placeholder="ข้อมูลตามอำนาจหน้าที่"
+                      />
+                    </label>
+                  </div>
+                  <label className="block text-[11px] font-medium text-slate-300">
+                    วัตถุประสงค์การค้น
+                    <textarea
+                      value={searchDraft.purpose}
+                      maxLength={500}
+                      rows={3}
+                      onChange={(event) => updateSearchDraft(source, { purpose: event.target.value, confirmed: false })}
+                      className="mt-1.5 w-full rounded-xl border border-white/[0.08] bg-slate-950 px-3 py-2.5 text-sm text-slate-100"
+                      placeholder="ระบุเหตุผลและขอบเขตที่ได้รับมอบหมาย (อย่างน้อย 10 ตัวอักษร)"
+                    />
+                  </label>
+                  <label className="flex cursor-pointer items-start gap-3 rounded-xl border border-amber-300/15 bg-amber-300/[0.04] p-3 text-[11px] leading-5 text-amber-50/85">
+                    <input
+                      type="checkbox"
+                      checked={searchDraft.confirmed}
+                      onChange={(event) => updateSearchDraft(source, { confirmed: event.target.checked })}
+                      className="mt-1 h-4 w-4 accent-amber-400"
+                    />
+                    <span>ยืนยันว่ามีอำนาจและวัตถุประสงค์ตามสำนวนที่เลือก คำค้นจะส่งตรงจากเบราว์เซอร์ไป Recon Companion บนเครื่องนี้ ไม่ผ่าน Cloudflare/Supabase และต้องให้มนุษย์ตรวจผลก่อนใช้อ้างอิง</span>
+                  </label>
+                  <button
+                    type="button"
+                    onClick={() => void runLocalSearch(source)}
+                    disabled={launchingKey === `${source.key}:search` || (insecure && !insecureAcknowledged) || !searchDraft.confirmed}
+                    className="primary-action inline-flex min-h-11 w-full items-center justify-center gap-2 rounded-xl px-5 text-sm font-bold disabled:cursor-not-allowed disabled:opacity-45"
+                  >
+                    {launchingKey === `${source.key}:search` ? <Loader2 className="h-4 w-4 animate-spin" /> : <SearchCheck className="h-4 w-4" />}
+                    ล็อกอิน ค้น และบันทึกผล PDF อัตโนมัติ
+                  </button>
+                </fieldset>
+              ) : (
+                <p className="mt-5 rounded-xl border border-amber-300/10 bg-amber-300/[0.035] p-3 text-[11px] leading-5 text-amber-100/70">
+                  บริการนี้เปิดฟอร์มให้อัตโนมัติเท่านั้น ยังไม่กรอกหรือกดค้นจนกว่าจะตรวจยืนยัน field contract ของระบบต้นทาง
+                </p>
+              )}
 
               <div className="mt-auto space-y-3 pt-6">
                 <button

@@ -27,6 +27,17 @@ export async function POST(request: NextRequest, context: RouteContext<'/api/v1/
   if (parsed.data.service && !source.services.some((service) => service.key === parsed.data.service)) {
     return apiError('SERVICE_NOT_ALLOWED', 'บริการย่อยไม่อยู่ในแหล่งสืบค้นที่เลือก', 400);
   }
+  const selectedService = parsed.data.service
+    ? source.services.find((service) => service.key === parsed.data.service)
+    : undefined;
+  if (parsed.data.intent === 'LOCAL_SEARCH') {
+    if (!parsed.data.case_id) {
+      return apiError('CASE_REQUIRED', 'ต้องเลือกสำนวนคดีก่อนค้นอัตโนมัติ', 400);
+    }
+    if (!selectedService || selectedService.automationMode !== 'LOCAL_SEARCH') {
+      return apiError('LOCAL_SEARCH_NOT_ALLOWED', 'บริการนี้ยังไม่รองรับการค้นอัตโนมัติ', 409);
+    }
+  }
   if (source.accessMode === 'LOCAL_AUTO_LOGIN_RISK_ACK_REQUIRED' && !parsed.data.acknowledge_insecure_transport) {
     return apiError('INSECURE_TRANSPORT_ACK_REQUIRED', 'ต้องยืนยันความเสี่ยง HTTP ก่อนเรียกใช้แหล่งนี้', 409);
   }
@@ -56,15 +67,21 @@ export async function POST(request: NextRequest, context: RouteContext<'/api/v1/
     }
   }
 
-  const outcome = source.transport === 'HTTP_ONLY'
-    ? 'LOCAL_AUTO_LOGIN_INSECURE_HTTP_ACKNOWLEDGED'
-    : 'LOCAL_AUTO_LOGIN_REQUESTED';
+  const outcome = parsed.data.intent === 'LOCAL_SEARCH'
+    ? (source.transport === 'HTTP_ONLY'
+        ? 'LOCAL_SEARCH_INSECURE_HTTP_ACKNOWLEDGED'
+        : 'LOCAL_SEARCH_AUTHORIZED')
+    : (source.transport === 'HTTP_ONLY'
+        ? 'LOCAL_AUTO_LOGIN_INSECURE_HTTP_ACKNOWLEDGED'
+        : 'LOCAL_AUTO_LOGIN_REQUESTED');
   const details = {
     source_key: source.key,
     outcome,
+    intent: parsed.data.intent,
     case_id: parsed.data.case_id || null,
     service: parsed.data.service || null,
     credentials_received_by_server: false,
+    search_query_received_by_server: false,
   };
   if (auth.identity.mode === 'demo') {
     addAuditLog(auth.identity.name, 'RECON_COMPANION_LAUNCH', `${source.key}:${outcome}`);

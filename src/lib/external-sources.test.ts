@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { buildReconCompanionUri, EXTERNAL_SOURCES, externalSourceKeySchema, findExternalSource, isLaunchableSource } from './external-sources';
+import { buildReconCompanionUri, companionLaunchRequestSchema, EXTERNAL_SOURCES, externalSourceKeySchema, findExternalSource, isLaunchableSource } from './external-sources';
 
 describe('external source allowlist', () => {
   it('contains only the two reviewed government sources', () => {
@@ -35,5 +35,30 @@ describe('external source allowlist', () => {
       service: 'DOPA',
       acknowledgeInsecureTransport: true,
     })).toThrow('SERVICE_NOT_ALLOWED');
+  });
+
+  it('advertises local automatic search only for reviewed HSS forms', () => {
+    const fda = findExternalSource('FDA_SKYNET');
+    const hss = findExternalSource('HSS_OSS');
+    expect(fda?.services.every((service) => service.automationMode === 'FORM_ONLY' && service.searchFields.length === 0)).toBe(true);
+    expect(hss?.services.every((service) => service.automationMode === 'LOCAL_SEARCH' && service.searchFields.length > 0)).toBe(true);
+    expect(hss?.services.find((service) => service.key === 'HSS_FACILITY')?.searchFields.map((field) => field.key)).toContain('PHONE');
+    expect(hss?.services.find((service) => service.key === 'HSS_PROFESSIONAL')?.searchFields.map((field) => field.key)).toContain('CITIZEN_ID');
+  });
+
+  it('never accepts a raw query in the cloud companion authorization contract', () => {
+    expect(companionLaunchRequestSchema.safeParse({
+      case_id: 'case-1',
+      service: 'HSS_FACILITY',
+      intent: 'LOCAL_SEARCH',
+      acknowledge_insecure_transport: true,
+    }).success).toBe(true);
+    expect(companionLaunchRequestSchema.safeParse({
+      case_id: 'case-1',
+      service: 'HSS_FACILITY',
+      intent: 'LOCAL_SEARCH',
+      acknowledge_insecure_transport: true,
+      query: 'ข้อมูลส่วนบุคคล',
+    }).success).toBe(false);
   });
 });

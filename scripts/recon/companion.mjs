@@ -1,19 +1,26 @@
 #!/usr/bin/env node
 
 import { execFile, spawn } from 'node:child_process';
+import { createHash } from 'node:crypto';
 import { promisify } from 'node:util';
-import { mkdir, writeFile } from 'node:fs/promises';
+import { mkdir, readFile, writeFile } from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
 import process from 'node:process';
 import { fileURLToPath } from 'node:url';
 import { chromium } from '@playwright/test';
-import { assertSourceLaunchAllowed, parseReconUri, safeCompanionMessage } from './companion-contract.mjs';
+import {
+  assertSourceLaunchAllowed,
+  parseReconUri,
+  resolveHssSearchFilter,
+  safeCompanionMessage,
+} from './companion-contract.mjs';
 
 const execFileAsync = promisify(execFile);
 const scriptDir = path.dirname(fileURLToPath(import.meta.url));
 const credentialScript = path.join(scriptDir, 'credential-store.ps1');
 const localRoot = path.join(process.env.LOCALAPPDATA || path.join(os.homedir(), 'AppData', 'Local'), 'LawiRisk-SSK');
+const localBridgeOrigin = 'http://127.0.0.1:32147';
 
 function powershellArgs(action, source) {
   return ['-NoProfile', '-ExecutionPolicy', 'Bypass', '-File', credentialScript, '-Action', action, '-Source', source];
@@ -165,6 +172,82 @@ async function navigateToService(page, request) {
   return targetPage;
 }
 
+async function consumeLocalSearchJob(request) {
+  if (!request.jobId) return undefined;
+  const response = await fetch(`${localBridgeOrigin}/v1/jobs/${request.jobId}`, {
+    headers: { 'X-LawiRisk-Recon-Job': request.jobId },
+    signal: AbortSignal.timeout(5_000),
+  }).catch(() => undefined);
+  if (!response?.ok) throw new Error('SEARCH_JOB_NOT_FOUND');
+  const body = await response.json().catch(() => undefined);
+  const search = body?.data;
+  if (!search || search.source !== request.source.key || search.service !== request.service || search.caseId !== request.caseId) {
+    throw new Error('SEARCH_JOB_NOT_FOUND');
+  }
+  return search;
+}
+
+async function runHssLocalSearch(page, request, search) {
+  if (!search) return undefined;
+  if (request.source.key !== 'HSS_OSS' || !request.service) throw new Error('SEARCH_FIELD_NOT_ALLOWED');
+  const filterValue = resolveHssSearchFilter(request.service, search.field);
+  const filter = page.locator('#lstFilter');
+  const value = page.locator('#txtSearch');
+  const submit = page.getByRole('button', { name: 'ค้นหา', exact: true }).first();
+  if (!await filter.isVisible().catch(() => false)
+    || !await value.isVisible().catch(() => false)
+    || !await submit.isVisible().catch(() => false)) {
+    throw new Error('SEARCH_FORM_CHANGED');
+  }
+
+  const querySha256 = createHash('sha256').update(search.value, 'utf8').digest('hex');
+  await filter.selectOption(filterValue);
+  await value.fill(search.value);
+  search.value = '';
+  await submit.click();
+  await page.waitForTimeout(3_000);
+  return { querySha256 };
+}
+
+async function captureLocalSearchResult(page, request, search, searchResult) {
+  if (!search || !searchResult || !request.jobId) return;
+  const resultDir = path.join(localRoot, 'recon-results');
+  await mkdir(resultDir, { recursive: true });
+  const timestamp = new Date().toISOString().replace(/[:.]/g, '-');
+  const baseName = `${request.source.key}-${request.service}-${timestamp}-${request.jobId}`;
+  const pdfPath = path.join(resultDir, `${baseName}.pdf`);
+  const metadataPath = path.join(resultDir, `${baseName}.json`);
+  try {
+    await page.pdf({ path: pdfPath, format: 'A4', printBackground: true });
+    const pdfBytes = await readFile(pdfPath);
+    const metadata = {
+      schemaVersion: 1,
+      status: 'LOCAL_CAPTURE_PENDING_IMPORT',
+      caseId: search.caseId,
+      purpose: search.purpose,
+      source: request.source.key,
+      service: request.service,
+      searchField: search.field,
+      querySha256: searchResult.querySha256,
+      sourceUrl: toPathOnly(page.url(), page.url()),
+      capturedAt: new Date().toISOString(),
+      adapterVersion: request.source.adapterVersion,
+      pdfFilename: path.basename(pdfPath),
+      pdfSha256: createHash('sha256').update(pdfBytes).digest('hex'),
+      rawQueryStoredInMetadata: false,
+      resultPdfMayContainQuery: true,
+      importedToEvidenceVault: false,
+      humanReviewed: false,
+    };
+    await writeFile(metadataPath, JSON.stringify(metadata, null, 2), 'utf8');
+    console.log(`บันทึกผลค้นและ SHA-256 ไว้บนเครื่องแล้ว: ${pdfPath}`);
+    search.purpose = '';
+  }
+  catch {
+    throw new Error('SEARCH_CAPTURE_FAILED');
+  }
+}
+
 function toPathOnly(rawUrl, baseUrl) {
   if (!rawUrl) return undefined;
   try {
@@ -271,6 +354,7 @@ async function main() {
     return;
   }
   assertSourceLaunchAllowed(request);
+  const localSearch = await consumeLocalSearchJob(request);
   if (!request.source.secureTransport) {
     console.warn('คำเตือน: HSS ใช้ HTTP รหัสผ่านจะถูกส่งโดยไม่มี TLS ตามข้อจำกัดของระบบต้นทาง');
   }
@@ -290,6 +374,8 @@ async function main() {
     const targetPage = await navigateToService(page, request);
     await targetPage.waitForTimeout(1_000);
     await captureSanitizedPageContract(targetPage, request.source, request.service);
+    const searchResult = await runHssLocalSearch(targetPage, request, localSearch);
+    await captureLocalSearchResult(targetPage, request, localSearch, searchResult);
   }
   catch (error) {
     await context.close().catch(() => undefined);

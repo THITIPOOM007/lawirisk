@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 import {
   assertSourceLaunchAllowed,
   parseReconUri,
+  resolveHssSearchFilter,
   safeCompanionMessage,
 } from '../../scripts/recon/companion-contract.mjs';
 
@@ -26,6 +27,19 @@ describe('local recon companion contract', () => {
     expect(parseReconUri('lawirisk-recon://launch?source=FDA_SKYNET&service=DBD').service).toBe('DBD');
     expect(parseReconUri('lawirisk-recon://launch?source=HSS_OSS&service=HSS_FACILITY&allow_insecure_http=1').service).toBe('HSS_FACILITY');
     expect(() => parseReconUri('lawirisk-recon://launch?source=HSS_OSS&service=DBD&allow_insecure_http=1')).toThrow('SERVICE_NOT_ALLOWED');
+  });
+
+  it('accepts only UUID v4 one-time job identifiers', () => {
+    const request = parseReconUri('lawirisk-recon://launch?source=HSS_OSS&case_id=case-1&service=HSS_FACILITY&allow_insecure_http=1&job_id=123e4567-e89b-42d3-a456-426614174000');
+    expect(request.jobId).toBe('123e4567-e89b-42d3-a456-426614174000');
+    expect(() => parseReconUri('lawirisk-recon://launch?source=HSS_OSS&job_id=not-a-job')).toThrow('INVALID_JOB_ID');
+  });
+
+  it('maps each HSS search field to a reviewed form value and rejects cross-service fields', () => {
+    expect(resolveHssSearchFilter('HSS_FACILITY', 'PHONE')).toBe('Telphone');
+    expect(resolveHssSearchFilter('HSS_PROFESSIONAL', 'CITIZEN_ID')).toBe('CitizenID');
+    expect(() => resolveHssSearchFilter('HSS_PROFESSIONAL', 'PHONE')).toThrow('SEARCH_FIELD_NOT_ALLOWED');
+    expect(() => resolveHssSearchFilter('DBD', 'PERSON_NAME')).toThrow('SEARCH_FIELD_NOT_ALLOWED');
   });
 
   it('returns safe messages without reflecting arbitrary errors or credentials', () => {

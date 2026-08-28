@@ -17,6 +17,36 @@ export const RECON_SOURCES = Object.freeze({
   }),
 });
 
+export const HSS_SEARCH_FILTERS = Object.freeze({
+  HSS_FACILITY: Object.freeze({
+    FACILITY_NAME: 'MedicalName',
+    OPERATOR_NAME: 'PermiteeName',
+    OPERATOR_ID: 'PermiteeCode',
+    MANAGER_NAME: 'ManagerName',
+    MANAGER_ID: 'ManagerCode',
+    BUSINESS_LICENSE: 'LicenseSp07Code',
+    OPERATION_LICENSE: 'LicenseSp19Code',
+    PHONE: 'Telphone',
+    ADDRESS_NUMBER: 'Address',
+  }),
+  HSS_PROFESSIONAL: Object.freeze({
+    CITIZEN_ID: 'CitizenID',
+    PASSPORT: 'PassportNumber',
+    PERSON_NAME: 'PersonsName',
+    FORMER_NAME: 'PersonsOldName',
+    PROFESSIONAL_LICENSE: 'CertificateCode',
+    BUSINESS_LICENSE: 'LicenseSp07Code',
+    OPERATION_LICENSE: 'LicenseSp19Code',
+  }),
+});
+
+export function resolveHssSearchFilter(service, field) {
+  const serviceFilters = HSS_SEARCH_FILTERS[service];
+  const filter = serviceFilters?.[field];
+  if (!filter) throw new Error('SEARCH_FIELD_NOT_ALLOWED');
+  return filter;
+}
+
 export function parseReconUri(rawUri) {
   const uri = new URL(rawUri);
   if (uri.protocol !== 'lawirisk-recon:') throw new Error('INVALID_RECON_PROTOCOL');
@@ -29,11 +59,16 @@ export function parseReconUri(rawUri) {
   if (caseId && (caseId.length > 100 || /[\r\n\0]/.test(caseId))) throw new Error('INVALID_CASE_ID');
   const service = uri.searchParams.get('service');
   if (service && !source.services.includes(service)) throw new Error('SERVICE_NOT_ALLOWED');
+  const jobId = uri.searchParams.get('job_id');
+  if (jobId && !/^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(jobId)) {
+    throw new Error('INVALID_JOB_ID');
+  }
   return {
     action,
     source,
     caseId: caseId || undefined,
     service: service || undefined,
+    jobId: jobId || undefined,
     allowInsecureHttp: uri.searchParams.get('allow_insecure_http') === '1',
   };
 }
@@ -52,6 +87,11 @@ export function safeCompanionMessage(error) {
     SOURCE_NOT_ALLOWED: 'แหล่งข้อมูลนี้ไม่อยู่ใน allowlist',
     INVALID_CASE_ID: 'รหัสสำนวนในคำขอไม่ถูกต้อง',
     SERVICE_NOT_ALLOWED: 'บริการย่อยนี้ไม่อยู่ใน allowlist ของแหล่งข้อมูล',
+    INVALID_JOB_ID: 'รหัสงานค้นบนเครื่องไม่ถูกต้อง',
+    SEARCH_JOB_NOT_FOUND: 'งานค้นหมดอายุหรือถูกใช้งานไปแล้ว กรุณาสั่งค้นใหม่จาก LAW-i-RISK',
+    SEARCH_FIELD_NOT_ALLOWED: 'ประเภทคำค้นนี้ไม่ได้รับอนุญาตสำหรับบริการที่เลือก',
+    SEARCH_FORM_CHANGED: 'ฟอร์มค้นของระบบต้นทางเปลี่ยนแปลง กรุณาให้ผู้ดูแลตรวจ adapter',
+    SEARCH_CAPTURE_FAILED: 'ค้นสำเร็จแต่บันทึกผลบนเครื่องไม่สำเร็จ กรุณาส่งออกผลด้วยตนเอง',
     HSS_SERVICE_SWITCH_UNAVAILABLE: 'บัญชี HSS นี้ไม่แสดงเมนูเปลี่ยนไปยังบริการย่อยที่เลือก',
     HSS_SERVICE_SWITCH_FAILED: 'เปิดบริการย่อย HSS ที่เลือกไม่สำเร็จ โปรดตรวจสิทธิ์ของบัญชีในหน้าต่างต้นทาง',
     HSS_SERVICE_PAGE_FAILED: 'บริการย่อย HSS ไม่ยอมเปิดหน้ารายการที่กำหนด',
