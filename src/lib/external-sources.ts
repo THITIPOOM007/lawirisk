@@ -147,7 +147,7 @@ export const EXTERNAL_SOURCES: readonly ExternalSource[] = [
         description: 'ค้นชื่อร้านนวด/สถานประกอบการเพื่อสุขภาพในรายการที่ได้รับอนุญาตตามสิทธิ์ของบัญชี',
         automationMode: 'LOCAL_SEARCH',
         searchFields: [
-          { key: 'FACILITY_NAME', label: 'ชื่อสถานประกอบการ', inputMode: 'text' },
+          { key: 'FACILITY_NAME', label: 'ชื่อสถานประกอบการ (ภาษาไทย)', inputMode: 'text' },
         ],
       },
     ],

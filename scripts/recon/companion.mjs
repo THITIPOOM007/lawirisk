@@ -124,12 +124,17 @@ async function loginHss(page, credential) {
 
 async function loginEsta2(page, credential) {
   await page.goto('https://esta2.hss.moph.go.th/login', { waitUntil: 'domcontentloaded' });
-  const currentUrl = new URL(page.url());
+  let currentUrl = new URL(page.url());
   if (currentUrl.hostname !== 'esta2.hss.moph.go.th' || currentUrl.protocol !== 'https:') {
     throw new Error('ESTA2_LOGIN_FAILED');
   }
   const loginButton = page.locator('#login-btn');
   if (!await loginButton.isVisible().catch(() => false)) {
+    await Promise.race([
+      page.waitForURL((url) => url.hostname === 'esta2.hss.moph.go.th' && url.pathname !== '/login', { timeout: 5_000 }),
+      loginButton.waitFor({ state: 'visible', timeout: 5_000 }),
+    ]).catch(() => undefined);
+    currentUrl = new URL(page.url());
     if (currentUrl.pathname !== '/login') {
       console.log('ใช้ ESTA2 session เดิมสำเร็จ');
       return;
@@ -397,21 +402,24 @@ async function captureSanitizedPageContract(page, source, service) {
         const controls = [...document.querySelectorAll('input, select, textarea, button')]
           .filter((element) => !(element instanceof HTMLInputElement) || !['hidden', 'password'].includes(element.type))
           .slice(0, 250)
-          .map((element) => ({
-            tag: element.tagName.toLowerCase(),
-            id: element.id || undefined,
-            name: element.getAttribute('name') || undefined,
-            type: element.getAttribute('type') || undefined,
-            label: labelFor(element),
-            ariaLabel: element.getAttribute('aria-label') || undefined,
-            placeholder: element.getAttribute('placeholder') || undefined,
-            displayText: element instanceof HTMLInputElement && ['submit', 'button', 'reset'].includes(element.type)
-              ? cleanText(element.value)
-              : cleanText(element.textContent),
-            options: element instanceof HTMLSelectElement
-              ? [...element.options].slice(0, 60).map((option) => ({ value: option.value.slice(0, 80), text: cleanText(option.textContent) }))
-              : undefined,
-          }));
+          .map((element) => {
+            const isNavigationChrome = Boolean(element.closest('header, nav, .navbar')) && !element.closest('form');
+            return {
+              tag: element.tagName.toLowerCase(),
+              id: element.id || undefined,
+              name: element.getAttribute('name') || undefined,
+              type: element.getAttribute('type') || undefined,
+              label: labelFor(element),
+              ariaLabel: element.getAttribute('aria-label') || undefined,
+              placeholder: element.getAttribute('placeholder') || undefined,
+              displayText: element instanceof HTMLInputElement && ['submit', 'button', 'reset'].includes(element.type)
+                ? cleanText(element.value)
+                : (isNavigationChrome ? undefined : cleanText(element.textContent)),
+              options: element instanceof HTMLSelectElement
+                ? [...element.options].slice(0, 60).map((option) => ({ value: option.value.slice(0, 80), text: cleanText(option.textContent) }))
+                : undefined,
+            };
+          });
         const forms = [...document.forms].slice(0, 40).map((form) => ({
           id: form.id || undefined,
           name: form.getAttribute('name') || undefined,
@@ -421,7 +429,7 @@ async function captureSanitizedPageContract(page, source, service) {
         const links = [...document.querySelectorAll('a[href]')].slice(0, 250).map((link) => ({
           id: link.id || undefined,
           ariaLabel: link.getAttribute('aria-label') || undefined,
-          displayText: cleanText(link.textContent),
+          displayText: link.closest('header, nav, .navbar') ? undefined : cleanText(link.textContent),
           href: link.getAttribute('href') || undefined,
         }));
         return { title: document.title, controls, forms, links };

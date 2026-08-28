@@ -34,7 +34,7 @@ describe('local recon companion contract', () => {
   });
 
   it('maps only the reviewed ESTA2 approved-business search field', () => {
-    expect(resolveEsta2SearchOption('HSS_HEALTH_BUSINESS_APPROVED', 'FACILITY_NAME')).toBe('ชื่อสถานประกอบการ');
+    expect(resolveEsta2SearchOption('HSS_HEALTH_BUSINESS_APPROVED', 'FACILITY_NAME')).toBe('ชื่อสถานประกอบการ ( ภาษาไทย )');
     expect(() => resolveEsta2SearchOption('HSS_HEALTH_BUSINESS_APPROVED', 'PHONE')).toThrow('SEARCH_FIELD_NOT_ALLOWED');
     expect(() => resolveEsta2SearchOption('HSS_FACILITY', 'FACILITY_NAME')).toThrow('SEARCH_FIELD_NOT_ALLOWED');
   });

@@ -57,7 +57,7 @@ export function resolveHssSearchFilter(service, field) {
 
 export const ESTA2_SEARCH_OPTIONS = Object.freeze({
   HSS_HEALTH_BUSINESS_APPROVED: Object.freeze({
-    FACILITY_NAME: 'ชื่อสถานประกอบการ',
+    FACILITY_NAME: 'ชื่อสถานประกอบการ ( ภาษาไทย )',
   }),
 });
 
