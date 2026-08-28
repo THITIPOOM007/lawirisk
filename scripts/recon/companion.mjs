@@ -11,6 +11,7 @@ import { fileURLToPath } from 'node:url';
 import { chromium } from '@playwright/test';
 import {
   assertSourceLaunchAllowed,
+  buildLocalSearchCandidates,
   isHssResultBoundToQuery,
   parseReconUri,
   resolveEsta2SearchOption,
@@ -249,23 +250,40 @@ async function runHssLocalSearch(page, request, search) {
     throw new Error('SEARCH_FORM_CHANGED');
   }
 
+  const candidates = buildLocalSearchCandidates(request.source.key, request.service, search.field, search.value);
   const querySha256 = createHash('sha256').update(search.value, 'utf8').digest('hex');
-  const searchValue = search.value;
-  await filter.selectOption(filterValue);
-  await value.fill(searchValue);
   search.value = '';
-  await submit.click();
-  await page.waitForTimeout(3_000);
-  const echoedValue = await value.evaluate((element) => element instanceof HTMLInputElement ? element.value : '');
-  if (echoedValue !== searchValue) throw new Error('SEARCH_REQUEST_NOT_RETAINED');
-  const resultRows = await page.locator('table tr').evaluateAll((rows) => rows
-    .filter((row) => row.querySelectorAll('td').length > 0)
-    .map((row) => Array.from(row.querySelectorAll('td')).map((cell) => cell.textContent || '').join(' '))
-    .filter(Boolean));
-  if (!isHssResultBoundToQuery(resultRows, searchValue)) {
-    throw new Error('SEARCH_RESULT_NOT_BOUND_TO_QUERY');
+  const attempts = [];
+  for (const candidate of candidates) {
+    await filter.selectOption(filterValue);
+    await value.fill(candidate.value);
+    await submit.click();
+    await page.waitForTimeout(3_000);
+    const echoedValue = await value.evaluate((element) => element instanceof HTMLInputElement ? element.value : '');
+    if (echoedValue !== candidate.value) throw new Error('SEARCH_REQUEST_NOT_RETAINED');
+    const resultRows = await page.locator('table tr').evaluateAll((rows) => rows
+      .filter((row) => row.querySelectorAll('td').length > 0)
+      .map((row) => Array.from(row.querySelectorAll('td')).map((cell) => cell.textContent || '').join(' '))
+      .filter(Boolean));
+    if (!isHssResultBoundToQuery(resultRows, candidate.value)) {
+      throw new Error('SEARCH_RESULT_NOT_BOUND_TO_QUERY');
+    }
+    attempts.push({
+      strategy: candidate.strategy,
+      querySha256: createHash('sha256').update(candidate.value, 'utf8').digest('hex'),
+      resultRowCount: resultRows.length,
+    });
+    if (resultRows.length > 0) break;
   }
-  return { querySha256 };
+  const executed = attempts.at(-1);
+  return {
+    querySha256,
+    executedQuerySha256: executed?.querySha256 || querySha256,
+    searchStrategy: executed?.strategy || 'EXACT',
+    attemptCount: attempts.length,
+    attempts,
+    resultRowCount: executed?.resultRowCount || 0,
+  };
 }
 
 async function runEsta2LocalSearch(page, request, search) {
@@ -293,34 +311,51 @@ async function runEsta2LocalSearch(page, request, search) {
     throw new Error('SEARCH_FORM_CHANGED');
   }
 
+  const candidates = buildLocalSearchCandidates(request.source.key, request.service, search.field, search.value);
   const querySha256 = createHash('sha256').update(search.value, 'utf8').digest('hex');
-  const searchValue = search.value;
-  await filter.selectOption({ label: optionLabel });
-  await value.fill(searchValue);
   search.value = '';
-  const form = value.locator('xpath=ancestor::form[1]');
-  if (await form.count()) {
-    await form.evaluate((element) => element.requestSubmit());
+  const attempts = [];
+  for (const candidate of candidates) {
+    await filter.selectOption({ label: optionLabel });
+    await value.fill(candidate.value);
+    const form = value.locator('xpath=ancestor::form[1]');
+    if (await form.count()) {
+      await form.evaluate((element) => element.requestSubmit());
+    }
+    else {
+      const submit = page.locator('button[type="submit"]').filter({ visible: true }).first();
+      if (!await submit.isVisible().catch(() => false)) throw new Error('SEARCH_FORM_CHANGED');
+      await submit.click();
+    }
+    await page.waitForTimeout(3_000);
+    const currentUrl = new URL(page.url());
+    if (currentUrl.hostname !== 'esta2.hss.moph.go.th' || currentUrl.pathname !== '/business/approved') {
+      throw new Error('SEARCH_FORM_CHANGED');
+    }
+    const echoedValue = await value.evaluate((element) => element instanceof HTMLInputElement ? element.value : '');
+    if (echoedValue !== candidate.value) throw new Error('SEARCH_REQUEST_NOT_RETAINED');
+    const resultRows = await page.locator('table tbody tr').evaluateAll((rows) => rows
+      .map((row) => Array.from(row.querySelectorAll('td')).map((cell) => cell.textContent || '').join(' '))
+      .filter(Boolean));
+    if (!isHssResultBoundToQuery(resultRows, candidate.value)) {
+      throw new Error('SEARCH_RESULT_NOT_BOUND_TO_QUERY');
+    }
+    attempts.push({
+      strategy: candidate.strategy,
+      querySha256: createHash('sha256').update(candidate.value, 'utf8').digest('hex'),
+      resultRowCount: resultRows.length,
+    });
+    if (resultRows.length > 0) break;
   }
-  else {
-    const submit = page.locator('button[type="submit"]').filter({ visible: true }).first();
-    if (!await submit.isVisible().catch(() => false)) throw new Error('SEARCH_FORM_CHANGED');
-    await submit.click();
-  }
-  await page.waitForTimeout(3_000);
-  const currentUrl = new URL(page.url());
-  if (currentUrl.hostname !== 'esta2.hss.moph.go.th' || currentUrl.pathname !== '/business/approved') {
-    throw new Error('SEARCH_FORM_CHANGED');
-  }
-  const echoedValue = await value.evaluate((element) => element instanceof HTMLInputElement ? element.value : '');
-  if (echoedValue !== searchValue) throw new Error('SEARCH_REQUEST_NOT_RETAINED');
-  const resultRows = await page.locator('table tbody tr').evaluateAll((rows) => rows
-    .map((row) => Array.from(row.querySelectorAll('td')).map((cell) => cell.textContent || '').join(' '))
-    .filter(Boolean));
-  if (!isHssResultBoundToQuery(resultRows, searchValue)) {
-    throw new Error('SEARCH_RESULT_NOT_BOUND_TO_QUERY');
-  }
-  return { querySha256 };
+  const executed = attempts.at(-1);
+  return {
+    querySha256,
+    executedQuerySha256: executed?.querySha256 || querySha256,
+    searchStrategy: executed?.strategy || 'EXACT',
+    attemptCount: attempts.length,
+    attempts,
+    resultRowCount: executed?.resultRowCount || 0,
+  };
 }
 
 async function runLocalSearch(page, request, search) {
@@ -342,7 +377,7 @@ async function captureLocalSearchResult(page, request, search, searchResult) {
     await page.pdf({ path: pdfPath, format: 'A4', printBackground: true });
     const pdfBytes = await readFile(pdfPath);
     const metadata = {
-      schemaVersion: 1,
+      schemaVersion: 2,
       status: 'LOCAL_CAPTURE_PENDING_IMPORT',
       caseId: search.caseId,
       purpose: search.purpose,
@@ -350,6 +385,11 @@ async function captureLocalSearchResult(page, request, search, searchResult) {
       service: request.service,
       searchField: search.field,
       querySha256: searchResult.querySha256,
+      executedQuerySha256: searchResult.executedQuerySha256,
+      searchStrategy: searchResult.searchStrategy,
+      searchAttemptCount: searchResult.attemptCount,
+      searchAttempts: searchResult.attempts,
+      resultRowCount: searchResult.resultRowCount,
       sourceUrl: toPathOnly(page.url(), page.url()),
       capturedAt: new Date().toISOString(),
       adapterVersion: request.source.adapterVersion,

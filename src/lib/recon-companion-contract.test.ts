@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import {
   assertSourceLaunchAllowed,
+  buildLocalSearchCandidates,
   isHssResultBoundToQuery,
   parseReconUri,
   resolveEsta2SearchOption,
@@ -41,6 +42,43 @@ describe('local recon companion contract', () => {
     expect(resolveEsta2SearchOption('HSS_HEALTH_BUSINESS_APPROVED', 'LICENSE_NUMBER')).toBe('เลขที่ใบอนุญาต');
     expect(() => resolveEsta2SearchOption('HSS_HEALTH_BUSINESS_APPROVED', 'PHONE')).toThrow('SEARCH_FIELD_NOT_ALLOWED');
     expect(() => resolveEsta2SearchOption('HSS_FACILITY', 'FACILITY_NAME')).toThrow('SEARCH_FIELD_NOT_ALLOWED');
+  });
+
+  it('builds bounded fallback searches for business names without broadening identifiers', () => {
+    expect(buildLocalSearchCandidates(
+      'HSS_ESTA2',
+      'HSS_HEALTH_BUSINESS_APPROVED',
+      'FACILITY_NAME',
+      '  บีบี   ไทยอโรม่า นวดเพื่อสุขภาพ  ',
+    )).toEqual([
+      { value: 'บีบี ไทยอโรม่า นวดเพื่อสุขภาพ', strategy: 'EXACT' },
+      { value: 'บีบี ไทยอโรม่า', strategy: 'BUSINESS_CORE' },
+      { value: 'บีบี', strategy: 'DISTINCTIVE_TOKEN' },
+    ]);
+
+    expect(buildLocalSearchCandidates(
+      'HSS_OSS',
+      'HSS_FACILITY',
+      'FACILITY_NAME',
+      'ร้าน คลินิกตัวอย่าง เพื่อสุขภาพ',
+    )).toEqual([
+      { value: 'ร้าน คลินิกตัวอย่าง เพื่อสุขภาพ', strategy: 'EXACT' },
+      { value: 'คลินิกตัวอย่าง', strategy: 'DISTINCTIVE_TOKEN' },
+    ]);
+
+    expect(buildLocalSearchCandidates(
+      'HSS_ESTA2',
+      'HSS_HEALTH_BUSINESS_APPROVED',
+      'APPLICANT_ID',
+      ' 1234567890123 ',
+    )).toEqual([{ value: '1234567890123', strategy: 'EXACT' }]);
+
+    expect(buildLocalSearchCandidates(
+      'HSS_OSS',
+      'HSS_PROFESSIONAL',
+      'PERSON_NAME',
+      'นาย ตัวอย่าง ทดสอบ',
+    )).toEqual([{ value: 'นาย ตัวอย่าง ทดสอบ', strategy: 'EXACT' }]);
   });
 
   it('accepts only UUID v4 one-time job identifiers', () => {

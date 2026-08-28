@@ -12,7 +12,7 @@ export const RECON_SOURCES = Object.freeze({
     name: 'OSS สบส.',
     startUrl: 'http://oss.hss.moph.go.th/auth/login',
     secureTransport: false,
-    adapterVersion: 'hss-login-2026-08-27',
+    adapterVersion: 'hss-search-2026-08-28.2',
     services: Object.freeze(['HSS_FACILITY', 'HSS_PROFESSIONAL']),
   }),
   HSS_ESTA2: Object.freeze({
@@ -20,7 +20,7 @@ export const RECON_SOURCES = Object.freeze({
     name: 'ESTA2 สบส.',
     startUrl: 'https://esta2.hss.moph.go.th/login',
     secureTransport: true,
-    adapterVersion: 'esta2-approved-business-2026-08-28',
+    adapterVersion: 'esta2-approved-business-2026-08-28.2',
     services: Object.freeze(['HSS_HEALTH_BUSINESS_APPROVED']),
   }),
 });
@@ -70,6 +70,67 @@ export function resolveEsta2SearchOption(service, field) {
   const option = serviceOptions?.[field];
   if (!option) throw new Error('SEARCH_FIELD_NOT_ALLOWED');
   return option;
+}
+
+const BUSINESS_NAME_FALLBACK_FIELDS = new Set([
+  'HSS_OSS:HSS_FACILITY:FACILITY_NAME',
+  'HSS_ESTA2:HSS_HEALTH_BUSINESS_APPROVED:FACILITY_NAME',
+  'HSS_ESTA2:HSS_HEALTH_BUSINESS_APPROVED:FACILITY_NAME_ENGLISH',
+]);
+
+const BUSINESS_NAME_NOISE_TOKENS = new Set([
+  'ร้าน',
+  'สถานประกอบการ',
+  'สถานพยาบาล',
+  'คลินิก',
+  'บริษัท',
+  'บริษัทจำกัด',
+  'บจก',
+  'ห้างหุ้นส่วน',
+  'ห้างหุ้นส่วนจำกัด',
+  'หจก',
+  'นวด',
+  'นวดเพื่อสุขภาพ',
+  'สปา',
+  'สปาเพื่อสุขภาพ',
+  'เพื่อสุขภาพ',
+  'จำกัด',
+  'company',
+  'limited',
+  'ltd',
+  'clinic',
+  'spa',
+]);
+
+function compactSearchValue(value) {
+  return typeof value === 'string'
+    ? value.normalize('NFKC').replace(/[\r\n\t]+/g, ' ').replace(/\s+/g, ' ').trim()
+    : '';
+}
+
+/**
+ * Builds at most three deterministic, progressively broader searches for
+ * reviewed business/facility name fields. Identifiers and person-name fields
+ * deliberately remain exact-only to avoid over-collection and false matches.
+ */
+export function buildLocalSearchCandidates(source, service, field, rawValue) {
+  const exact = compactSearchValue(rawValue);
+  if (!exact) return [];
+
+  const candidates = [{ value: exact, strategy: 'EXACT' }];
+  if (!BUSINESS_NAME_FALLBACK_FIELDS.has(`${source}:${service}:${field}`)) return candidates;
+
+  const tokens = exact.split(' ').filter(Boolean);
+  const meaningfulTokens = tokens.filter((token) => !BUSINESS_NAME_NOISE_TOKENS.has(token.toLocaleLowerCase('th-TH')));
+  const addCandidate = (value, strategy) => {
+    const normalized = compactSearchValue(value);
+    if (normalized.length < 2 || candidates.some((candidate) => candidate.value === normalized)) return;
+    candidates.push({ value: normalized, strategy });
+  };
+
+  if (meaningfulTokens.length > 1) addCandidate(meaningfulTokens.join(' '), 'BUSINESS_CORE');
+  if (meaningfulTokens.length > 0) addCandidate(meaningfulTokens[0], 'DISTINCTIVE_TOKEN');
+  return candidates.slice(0, 3);
 }
 
 function normalizeSearchText(value) {

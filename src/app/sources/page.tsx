@@ -187,7 +187,7 @@ export default function SourcesPage() {
         confirmed: true,
       });
       updateSearchDraft(source, { value: '', confirmed: false });
-      setNotice(`ส่งงานค้น ${service.name} ไปยัง Recon Companion แล้ว ผลจะถูกบันทึกเป็น PDF พร้อม SHA-256 บนเครื่องเพื่อให้ตรวจและนำเข้าคลังหลักฐาน`);
+      setNotice(`ส่งงานค้น ${service.name} ไปยัง Recon Companion แล้ว หากเป็นชื่อสถานประกอบการ ระบบจะลองชื่อเต็ม ชื่อแกน และคำสำคัญไม่เกิน 3 ระดับ ก่อนบันทึก PDF พร้อม SHA-256 บนเครื่องเพื่อให้ตรวจและนำเข้าคลังหลักฐาน`);
     }
     catch (caught: unknown) {
       setError(caught instanceof Error ? caught.message : 'ค้นอัตโนมัติไม่สำเร็จ');
@@ -316,7 +316,7 @@ export default function SourcesPage() {
 
               {selectedService?.automationMode === 'LOCAL_SEARCH' ? (
                 <fieldset className="mt-5 space-y-3 rounded-2xl border border-teal-300/15 bg-teal-300/[0.035] p-4">
-                  <legend className="px-2 text-[10px] font-semibold uppercase tracking-[0.14em] text-teal-200">ค้นอัตโนมัติแบบ local-only</legend>
+                  <legend className="px-2 text-[10px] font-semibold uppercase tracking-[0.14em] text-teal-200">ค้นอัตโนมัติหลายระดับแบบ local-only</legend>
                   <label className="block text-[11px] font-medium text-slate-300">
                     สำนวนคดี
                     <select
@@ -372,7 +372,7 @@ export default function SourcesPage() {
                       onChange={(event) => updateSearchDraft(source, { confirmed: event.target.checked })}
                       className="mt-1 h-4 w-4 accent-amber-400"
                     />
-                    <span>ยืนยันว่ามีอำนาจและวัตถุประสงค์ตามสำนวนที่เลือก คำค้นจะส่งตรงจากเบราว์เซอร์ไป Recon Companion บนเครื่องนี้ ไม่ผ่าน Cloudflare/Supabase และต้องให้มนุษย์ตรวจผลก่อนใช้อ้างอิง</span>
+                    <span>ยืนยันว่ามีอำนาจและวัตถุประสงค์ตามสำนวนที่เลือก คำค้นจะส่งตรงจากเบราว์เซอร์ไป Recon Companion บนเครื่องนี้ ไม่ผ่าน Cloudflare/Supabase ชื่อสถานประกอบการอาจถูกย่ออย่างจำกัดเพื่อค้นซ้ำ และต้องให้มนุษย์ตรวจผลก่อนใช้อ้างอิง</span>
                   </label>
                   <button
                     type="button"

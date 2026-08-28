@@ -158,7 +158,7 @@ test('offers local auto-login and requires per-launch acknowledgement for insecu
   await expect(page.getByRole('heading', { name: 'OSS สบส.' })).toBeVisible();
   const hssCard = page.getByRole('heading', { name: 'OSS สบส.' }).locator('xpath=ancestor::article[1]');
   await expect(hssCard.getByRole('radio', { name: /ข้อมูลสถานพยาบาล/ })).toBeChecked();
-  await expect(hssCard.getByText('ค้นอัตโนมัติแบบ local-only')).toBeVisible();
+  await expect(hssCard.getByText('ค้นอัตโนมัติหลายระดับแบบ local-only')).toBeVisible();
   await expect(hssCard.getByLabel('สำนวนคดี')).toBeVisible();
   await expect(hssCard.getByLabel('ประเภทคำค้น')).toHaveValue('FACILITY_NAME');
   await expect(hssCard.getByRole('button', { name: 'ล็อกอิน ค้น และบันทึกผล PDF อัตโนมัติ' })).toBeDisabled();
