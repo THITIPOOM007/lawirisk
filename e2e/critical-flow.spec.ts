@@ -22,6 +22,20 @@ test('loads authenticated dashboard data and case registry', async ({ page }) =>
   await expect(page.getByText(/ค\.123\/2569/).first()).toBeVisible();
 });
 
+test('creates a case without the onboarding nudge covering the primary action', async ({ page }) => {
+  const caseNumber = `E2E-NUDGE-${Date.now()}/2569`;
+  await page.setViewportSize({ width: 1280, height: 800 });
+  await loginAsInvestigator(page);
+  await page.goto('/cases/new');
+  await expect(page.getByText('เพิ่งเริ่มใช้งานใช่ไหม?')).toBeHidden();
+  await page.getByLabel('เลขคดี / หมายเลขรับเรื่อง *').fill(caseNumber);
+  await page.getByLabel('ชื่อคดีสืบสวน *').fill('ข้อมูลสังเคราะห์: ทดสอบพื้นที่ปุ่มบันทึก');
+  await page.getByLabel('รายละเอียดคดีและเป้าหมายสืบสวน').fill('ทดสอบว่าข้อความแนะนำไม่ปิดทับปุ่มบันทึกบนหน้าจอขนาดกลาง');
+  await page.getByRole('button', { name: 'บันทึกข้อมูล', exact: true }).click();
+  await expect(page).toHaveURL('/cases');
+  await expect(page.getByText(caseNumber)).toBeVisible();
+});
+
 test('imports a validated UTF-8 CSV batch through the real API route', async ({ page }) => {
   await loginAsInvestigator(page);
   await page.goto('/intake');
@@ -54,14 +68,15 @@ test('opens the source-bound intelligence workspace and generates safe dossier d
 });
 
 test('creates a text-only manual intake that is immediately ready for triage', async ({ page }) => {
+  const incidentSummary = `ทดสอบรับเรื่องด้วยมือพร้อมเข้าสู่การคัดกรอง ${Date.now()}`;
   await loginAsInvestigator(page);
   await page.goto('/intake');
   await page.getByRole('button', { name: /บันทึกรับเรื่องร้องเรียน/ }).click();
   await expect(page.getByLabel(/สถานะข้อมูลผู้ร้อง/)).toHaveValue('INCOMPLETE');
-  await page.getByLabel(/สรุปพฤติการณ์/).fill('ทดสอบรับเรื่องด้วยมือพร้อมเข้าสู่การคัดกรอง');
+  await page.getByLabel(/สรุปพฤติการณ์/).fill(incidentSummary);
   await page.getByRole('button', { name: 'บันทึกรับเรื่อง', exact: true }).click();
   await expect(page.getByRole('status').filter({ hasText: 'รับคำร้องแล้วและพร้อมเข้าสู่การคัดกรอง' })).toBeVisible();
-  await expect(page.getByText('ทดสอบรับเรื่องด้วยมือพร้อมเข้าสู่การคัดกรอง')).toBeVisible();
+  await expect(page.getByText(incidentSummary)).toBeVisible();
   await expect(page.getByText('ปลอดภัย').last()).toBeVisible();
 });
 

@@ -47,6 +47,26 @@ export function resolveHssSearchFilter(service, field) {
   return filter;
 }
 
+function normalizeSearchText(value) {
+  return typeof value === 'string'
+    ? value.normalize('NFKC').toLocaleLowerCase('th-TH').replace(/[\s\-()/.]/g, '')
+    : '';
+}
+
+/**
+ * Allows an empty result set, but never treats a populated, unrelated result
+ * table as evidence for a local automatic search. The caller deliberately
+ * passes only table-row text, excluding the search input itself.
+ */
+export function isHssResultBoundToQuery(resultRows, query) {
+  const normalizedQuery = normalizeSearchText(query);
+  if (!normalizedQuery) return false;
+  const normalizedRows = Array.isArray(resultRows)
+    ? resultRows.map(normalizeSearchText).filter(Boolean)
+    : [];
+  return normalizedRows.length === 0 || normalizedRows.some((row) => row.includes(normalizedQuery));
+}
+
 export function parseReconUri(rawUri) {
   const uri = new URL(rawUri);
   if (uri.protocol !== 'lawirisk-recon:') throw new Error('INVALID_RECON_PROTOCOL');
@@ -91,6 +111,8 @@ export function safeCompanionMessage(error) {
     SEARCH_JOB_NOT_FOUND: 'งานค้นหมดอายุหรือถูกใช้งานไปแล้ว กรุณาสั่งค้นใหม่จาก LAW-i-RISK',
     SEARCH_FIELD_NOT_ALLOWED: 'ประเภทคำค้นนี้ไม่ได้รับอนุญาตสำหรับบริการที่เลือก',
     SEARCH_FORM_CHANGED: 'ฟอร์มค้นของระบบต้นทางเปลี่ยนแปลง กรุณาให้ผู้ดูแลตรวจ adapter',
+    SEARCH_REQUEST_NOT_RETAINED: 'ระบบต้นทางไม่ยืนยันคำค้นที่ส่งไป จึงไม่บันทึกผลเป็นหลักฐาน',
+    SEARCH_RESULT_NOT_BOUND_TO_QUERY: 'ผลลัพธ์จากระบบต้นทางไม่สัมพันธ์กับคำค้น จึงไม่บันทึกผลเป็นหลักฐาน',
     SEARCH_CAPTURE_FAILED: 'ค้นสำเร็จแต่บันทึกผลบนเครื่องไม่สำเร็จ กรุณาส่งออกผลด้วยตนเอง',
     HSS_SERVICE_SWITCH_UNAVAILABLE: 'บัญชี HSS นี้ไม่แสดงเมนูเปลี่ยนไปยังบริการย่อยที่เลือก',
     HSS_SERVICE_SWITCH_FAILED: 'เปิดบริการย่อย HSS ที่เลือกไม่สำเร็จ โปรดตรวจสิทธิ์ของบัญชีในหน้าต่างต้นทาง',

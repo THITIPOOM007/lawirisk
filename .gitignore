@@ -38,6 +38,9 @@ coverage/
 playwright-report/
 test-results/
 
+# Local QA captures and generated test evidence (never commit source results).
+artifacts/
+
 # turbopack
 .turbo/
 *.tsbuildinfo

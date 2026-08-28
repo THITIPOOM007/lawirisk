@@ -11,6 +11,7 @@ import { fileURLToPath } from 'node:url';
 import { chromium } from '@playwright/test';
 import {
   assertSourceLaunchAllowed,
+  isHssResultBoundToQuery,
   parseReconUri,
   resolveHssSearchFilter,
   safeCompanionMessage,
@@ -201,11 +202,21 @@ async function runHssLocalSearch(page, request, search) {
   }
 
   const querySha256 = createHash('sha256').update(search.value, 'utf8').digest('hex');
+  const searchValue = search.value;
   await filter.selectOption(filterValue);
-  await value.fill(search.value);
+  await value.fill(searchValue);
   search.value = '';
   await submit.click();
   await page.waitForTimeout(3_000);
+  const echoedValue = await value.evaluate((element) => element instanceof HTMLInputElement ? element.value : '');
+  if (echoedValue !== searchValue) throw new Error('SEARCH_REQUEST_NOT_RETAINED');
+  const resultRows = await page.locator('table tr').evaluateAll((rows) => rows
+    .filter((row) => row.querySelectorAll('td').length > 0)
+    .map((row) => Array.from(row.querySelectorAll('td')).map((cell) => cell.textContent || '').join(' '))
+    .filter(Boolean));
+  if (!isHssResultBoundToQuery(resultRows, searchValue)) {
+    throw new Error('SEARCH_RESULT_NOT_BOUND_TO_QUERY');
+  }
   return { querySha256 };
 }
 

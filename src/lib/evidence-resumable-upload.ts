@@ -1,6 +1,7 @@
 'use client';
 
 import { Upload } from 'tus-js-client';
+import { createClient } from '@/lib/supabase';
 
 const TUS_CHUNK_BYTES = 6 * 1024 * 1024;
 
@@ -8,9 +9,7 @@ export interface EvidenceUploadGrant {
   evidence_id: string;
   bucket: string;
   object_path: string;
-  upload_token: string;
   resumable_endpoint: string;
-  expires_in_seconds: number;
 }
 interface StartUploadOptions {
   file: File;
@@ -22,6 +21,13 @@ interface StartUploadOptions {
 export async function uploadEvidenceResumable(options: StartUploadOptions): Promise<void> {
   const { file, grant, signal, onProgress } = options;
   if (signal?.aborted) throw new DOMException('Upload cancelled', 'AbortError');
+
+  const supabase = createClient();
+  const { data: { session }, error: sessionError } = await supabase.auth.getSession();
+  const publishableKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
+  if (sessionError || !session?.access_token || !publishableKey) {
+    throw new Error('เซสชันอัปโหลดหมดอายุหรือการตั้งค่าระบบไม่พร้อม กรุณาเข้าสู่ระบบใหม่แล้วลองอีกครั้ง');
+  }
 
   await new Promise<void>((resolve, reject) => {
     let settled = false;
@@ -39,7 +45,14 @@ export async function uploadEvidenceResumable(options: StartUploadOptions): Prom
       endpoint: grant.resumable_endpoint,
       chunkSize: TUS_CHUNK_BYTES,
       retryDelays: [0, 3_000, 5_000, 10_000, 20_000],
-      headers: { 'x-signature': grant.upload_token },
+      // Supabase Storage authorizes this direct TUS request with the active
+      // browser session; Storage RLS additionally binds the path to the
+      // server-created RESERVED evidence row.
+      headers: {
+        authorization: `Bearer ${session.access_token}`,
+        apikey: publishableKey,
+        'x-upsert': 'false',
+      },
       metadata: {
         bucketName: grant.bucket,
         objectName: grant.object_path,
@@ -47,11 +60,10 @@ export async function uploadEvidenceResumable(options: StartUploadOptions): Prom
         cacheControl: 'no-cache',
       },
       uploadSize: file.size,
-      uploadDataDuringCreation: false,
+      uploadDataDuringCreation: true,
       removeFingerprintOnSuccess: true,
-      // Disable fingerprint-based resume: each reserve call creates a new
-      // object path with a fresh signed token, so stale fingerprints always
-      // point to expired tokens and cause Supabase Storage to return 400.
+      // Each server-side reservation creates a fresh immutable object path.
+      // A retry starts from that reservation rather than resuming an older one.
       storeFingerprintForResuming: false,
       onProgress: (bytesSent, bytesTotal) => {
         const percentage = bytesTotal > 0 ? Math.min(100, Math.round((bytesSent / bytesTotal) * 100)) : 0;

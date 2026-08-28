@@ -129,6 +129,8 @@ export default function EvidencePage() {
     let failed = fileQueue.filter((item) => item.status === 'failed').length;
     for (const queued of fileQueue) {
       if (queued.status !== 'ready') continue;
+      let reservationId: string | null = null;
+      let objectUploaded = false;
       setFileQueue((current) => current.map((item) => item.id === queued.id ? { ...item, status: 'uploading', progress: 0, error: undefined } : item));
       try {
         if (!queued.sha256) throw new Error('ไม่พบ SHA-256 ของไฟล์ กรุณานำไฟล์ออกแล้วเลือกใหม่');
@@ -162,12 +164,14 @@ export default function EvidencePage() {
         if (!reserveResponse.ok || !reservePayload?.success || !reservePayload.data) {
           throw new Error(reservePayload?.error?.message || 'ไม่สามารถเริ่มการอัปโหลดแบบต่อเนื่องได้');
         }
+        reservationId = reservePayload.data.evidence_id;
         const { uploadEvidenceResumable } = await import('@/lib/evidence-resumable-upload');
         await uploadEvidenceResumable({
           file: queued.file,
           grant: reservePayload.data,
           onProgress: (progress) => setFileQueue((current) => current.map((item) => item.id === queued.id ? { ...item, progress } : item)),
         });
+        objectUploaded = true;
         setFileQueue((current) => current.map((item) => item.id === queued.id ? { ...item, status: 'finalizing', progress: 100 } : item));
 
         const completeResponse = await fetch(`/api/v1/evidence/uploads/${reservePayload.data.evidence_id}/complete`, {
@@ -203,6 +207,9 @@ export default function EvidencePage() {
           } : item));
         }
       } catch (caught: unknown) {
+        if (reservationId && !objectUploaded) {
+          await fetch(`/api/v1/evidence/uploads/${reservationId}`, { method: 'DELETE', credentials: 'same-origin' }).catch(() => undefined);
+        }
         failed += 1;
         setFileQueue((current) => current.map((item) => item.id === queued.id ? { ...item, status: 'failed', error: caught instanceof Error ? caught.message : 'อัปโหลดไม่สำเร็จ' } : item));
       }
@@ -336,7 +343,7 @@ export default function EvidencePage() {
                       <div className="min-w-0 flex-1">
                         <p className="truncate text-xs font-medium text-slate-200">{item.file.name}</p>
                         <p className={`mt-0.5 text-[9px] ${item.status === 'failed' ? 'text-rose-300' : item.status === 'pending' ? 'text-amber-300' : 'text-slate-600'}`}>
-                          {item.status === 'validating' ? `กำลังคำนวณ SHA-256 แบบแบ่งส่วน ${item.progress || 0}%` : item.status === 'uploading' ? `กำลังอัปโหลดตรงไปพื้นที่ private ${item.progress || 0}%` : item.status === 'finalizing' ? 'อัปโหลดครบแล้ว · กำลังตรวจขนาด ชนิด และโครงสร้างไฟล์…' : item.status === 'success' ? 'จัดเก็บแล้ว · รอผลสแกน CLEAN ก่อนใช้งาน' : item.status === 'pending' || item.status === 'failed' ? item.error : `พร้อมอัปโหลด · ${(item.file.size / 1024 / 1024).toFixed(2)} MB · SHA ${item.sha256?.slice(0, 10)}…`}
+                          {item.status === 'validating' ? `กำลังคำนวณ SHA-256 แบบแบ่งส่วน ${item.progress || 0}%` : item.status === 'uploading' ? `กำลังอัปโหลดตรงไปพื้นที่ private ${item.progress || 0}%` : item.status === 'finalizing' ? 'อัปโหลดครบแล้ว · กำลังตรวจขนาด ชนิด และโครงสร้างไฟล์…' : item.status === 'success' ? 'จัดเก็บแล้ว · ตรวจขนาด ชนิด และโครงสร้างไฟล์เรียบร้อย' : item.status === 'pending' || item.status === 'failed' ? item.error : `พร้อมอัปโหลด · ${(item.file.size / 1024 / 1024).toFixed(2)} MB · SHA ${item.sha256?.slice(0, 10)}…`}
                         </p>
                         {(item.status === 'validating' || item.status === 'uploading') && <div className="mt-2 h-1.5 overflow-hidden rounded-full bg-slate-800" role="progressbar" aria-label={`ความคืบหน้า ${item.file.name}`} aria-valuemin={0} aria-valuemax={100} aria-valuenow={item.progress || 0}><div className="h-full rounded-full bg-gradient-to-r from-indigo-500 to-cyan-400 transition-[width]" style={{ width: `${item.progress || 0}%` }} /></div>}
                       </div>
@@ -354,7 +361,7 @@ export default function EvidencePage() {
                 {isUploading ? (
                   <>
                     <Loader2 className="h-5 w-5 mr-2 animate-spin shrink-0" />
-                    กำลังอัปโหลดและตรวจความปลอดภัย...
+                    กำลังอัปโหลดและตรวจสอบไฟล์...
                   </>
                 ) : (
                   <>

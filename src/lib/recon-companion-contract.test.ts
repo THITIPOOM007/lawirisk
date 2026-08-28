@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import {
   assertSourceLaunchAllowed,
+  isHssResultBoundToQuery,
   parseReconUri,
   resolveHssSearchFilter,
   safeCompanionMessage,
@@ -40,6 +41,13 @@ describe('local recon companion contract', () => {
     expect(resolveHssSearchFilter('HSS_PROFESSIONAL', 'CITIZEN_ID')).toBe('CitizenID');
     expect(() => resolveHssSearchFilter('HSS_PROFESSIONAL', 'PHONE')).toThrow('SEARCH_FIELD_NOT_ALLOWED');
     expect(() => resolveHssSearchFilter('DBD', 'PERSON_NAME')).toThrow('SEARCH_FIELD_NOT_ALLOWED');
+  });
+
+  it('fails closed when populated HSS result rows are not bound to the confirmed query', () => {
+    expect(isHssResultBoundToQuery([], 'สถานพยาบาลทดสอบ')).toBe(true);
+    expect(isHssResultBoundToQuery(['สถานพยาบาลทดสอบ 999999'], 'สถานพยาบาลทดสอบ')).toBe(true);
+    expect(isHssResultBoundToQuery(['บริษัทที่ไม่เกี่ยวข้อง', 'ข้อมูลผู้ประกอบการอื่น'], 'สถานพยาบาลทดสอบ')).toBe(false);
+    expect(isHssResultBoundToQuery(['080-000-0000'], '0800000000')).toBe(true);
   });
 
   it('returns safe messages without reflecting arbitrary errors or credentials', () => {

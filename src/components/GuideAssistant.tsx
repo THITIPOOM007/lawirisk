@@ -132,7 +132,7 @@ export default function GuideAssistant() {
     <>
       <div className="pointer-events-none fixed bottom-[max(1rem,env(safe-area-inset-bottom))] right-4 z-40 flex max-w-[calc(100vw-2rem)] items-end gap-3 sm:bottom-6 sm:right-6">
         {showNudge && !isOpen && (
-          <div className="guide-nudge pointer-events-auto relative hidden w-64 rounded-2xl border border-teal-300/20 bg-[#071521]/95 p-4 shadow-[0_24px_80px_rgba(0,0,0,0.45)] backdrop-blur-2xl sm:block" role="status">
+          <div className="guide-nudge pointer-events-auto relative hidden w-64 rounded-2xl border border-teal-300/20 bg-[#071521]/95 p-4 shadow-[0_24px_80px_rgba(0,0,0,0.45)] backdrop-blur-2xl 2xl:block" role="status">
             <button type="button" onClick={rememberTour} className="absolute right-2 top-2 grid h-7 w-7 place-items-center rounded-lg text-slate-500 hover:bg-white/[0.06] hover:text-slate-200" aria-label="ปิดคำแนะนำ"><X className="h-3.5 w-3.5" /></button>
             <div className="flex items-start gap-3 pr-4">
               <span className="grid h-9 w-9 shrink-0 place-items-center rounded-xl border border-teal-300/20 bg-teal-300/10 text-teal-200"><Sparkles className="h-4 w-4" /></span>

@@ -10,7 +10,7 @@ import {
 import { consumeRateLimit } from '@/lib/rate-limit';
 import { hasTrustedBrowserOrigin } from '@/lib/request-security';
 import { CASE_WRITE_ROLES } from '@/lib/roles';
-import { createServer, createServiceClient } from '@/lib/supabase-server';
+import { createServer } from '@/lib/supabase-server';
 
 const MAX_CONTROL_REQUEST_BYTES = 8 * 1024;
 
@@ -92,25 +92,13 @@ export async function POST(request: NextRequest) {
       return apiError('STORAGE_NOT_CONFIGURED', 'ระบบจัดเก็บไฟล์ขนาดใหญ่ยังไม่พร้อมใช้งาน', 503, traceId);
     }
 
-    const service = createServiceClient();
-    const { data: signedUpload, error: signedUploadError } = await service.storage
-      .from(bucket)
-      .createSignedUploadUrl(objectPath, { upsert: false });
-    if (signedUploadError || !signedUpload?.token) {
-      await supabase.rpc('cancel_evidence_reservation', { p_evidence_id: evidenceId, p_reason: 'SIGNED_UPLOAD_GRANT_FAILED' });
-      console.error('Evidence signed upload grant failed', { traceId, evidenceId, code: signedUploadError?.name });
-      return apiError('STORAGE_UNAVAILABLE', 'ไม่สามารถเริ่มการอัปโหลดแบบต่อเนื่องได้ กรุณาลองใหม่', 503, traceId);
-    }
-
     return NextResponse.json({
       success: true,
       data: {
         evidence_id: evidenceId,
         bucket,
         object_path: objectPath,
-        upload_token: signedUpload.token,
         resumable_endpoint: endpoint,
-        expires_in_seconds: 7200,
       },
     }, { status: 201, headers: { 'Cache-Control': 'no-store', 'X-Request-ID': traceId } });
   } catch (error: unknown) {
