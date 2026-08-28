@@ -4,6 +4,7 @@ import {
   buildLocalSearchCandidates,
   isHssResultBoundToQuery,
   parseReconUri,
+  resolveFdaSearchModel,
   resolveEsta2SearchOption,
   resolveHssSearchFilter,
   safeCompanionMessage,
@@ -42,6 +43,14 @@ describe('local recon companion contract', () => {
     expect(resolveEsta2SearchOption('HSS_HEALTH_BUSINESS_APPROVED', 'LICENSE_NUMBER')).toBe('เลขที่ใบอนุญาต');
     expect(() => resolveEsta2SearchOption('HSS_HEALTH_BUSINESS_APPROVED', 'PHONE')).toThrow('SEARCH_FIELD_NOT_ALLOWED');
     expect(() => resolveEsta2SearchOption('HSS_FACILITY', 'FACILITY_NAME')).toThrow('SEARCH_FIELD_NOT_ALLOWED');
+  });
+
+  it('maps only the reviewed FDA exact identifier fields', () => {
+    expect(resolveFdaSearchModel('DBD', 'JURISTIC_ID')).toBe('ENTRE_IDENTIFY');
+    expect(resolveFdaSearchModel('DOPA', 'CITIZEN_ID')).toBe('CTZNO');
+    expect(() => resolveFdaSearchModel('DBD', 'COMPANY_NAME')).toThrow('SEARCH_FIELD_NOT_ALLOWED');
+    expect(() => resolveFdaSearchModel('DOPA', 'PERSON_NAME')).toThrow('SEARCH_FIELD_NOT_ALLOWED');
+    expect(() => resolveFdaSearchModel('FDA_PLACE_DRUG', 'LICENSE_NUMBER')).toThrow('SEARCH_FIELD_NOT_ALLOWED');
   });
 
   it('builds bounded fallback searches for business names without broadening identifiers', () => {

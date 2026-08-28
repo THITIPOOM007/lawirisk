@@ -11,6 +11,7 @@ import { fileURLToPath } from 'node:url';
 import {
   assertSourceLaunchAllowed,
   parseReconUri,
+  resolveFdaSearchModel,
   resolveEsta2SearchOption,
   resolveHssSearchFilter,
 } from './companion-contract.mjs';
@@ -97,19 +98,24 @@ export function validateLocalSearch(search, command) {
   const allowedKeys = new Set(['field', 'value', 'purpose', 'confirmed']);
   if (Object.keys(search).some((key) => !allowedKeys.has(key))) throw new Error('INVALID_SEARCH_REQUEST');
   if (search.confirmed !== true) throw new Error('SEARCH_CONFIRMATION_REQUIRED');
-  if (command.action !== 'launch' || !['HSS_OSS', 'HSS_ESTA2'].includes(command.source.key)
+  if (command.action !== 'launch' || !['FDA_SKYNET', 'HSS_OSS', 'HSS_ESTA2'].includes(command.source.key)
     || !command.caseId || !command.service) {
     throw new Error('AUTOMATED_SEARCH_NOT_ALLOWED');
   }
   const field = cleanSearchText(search.field, 1, 50, 'INVALID_SEARCH_FIELD');
-  if (command.source.key === 'HSS_OSS') resolveHssSearchFilter(command.service, field);
+  if (command.source.key === 'FDA_SKYNET') resolveFdaSearchModel(command.service, field);
+  else if (command.source.key === 'HSS_OSS') resolveHssSearchFilter(command.service, field);
   else resolveEsta2SearchOption(command.service, field);
+  const value = cleanSearchText(search.value, 2, 200, 'INVALID_SEARCH_VALUE');
+  if (command.source.key === 'FDA_SKYNET' && !/^\d{13}$/.test(value)) {
+    throw new Error('INVALID_SEARCH_VALUE');
+  }
   return {
     source: command.source.key,
     service: command.service,
     caseId: command.caseId,
     field,
-    value: cleanSearchText(search.value, 2, 200, 'INVALID_SEARCH_VALUE'),
+    value,
     purpose: cleanSearchText(search.purpose, 10, 500, 'INVALID_SEARCH_PURPOSE'),
     createdAt: new Date().toISOString(),
   };

@@ -46,11 +46,22 @@ describe('external source allowlist', () => {
     })).toThrow('SERVICE_NOT_ALLOWED');
   });
 
-  it('advertises local automatic search only for reviewed HSS forms', () => {
+  it('advertises local automatic search only for reviewed source forms', () => {
     const fda = findExternalSource('FDA_SKYNET');
     const hss = findExternalSource('HSS_OSS');
     const esta2 = findExternalSource('HSS_ESTA2');
-    expect(fda?.services.every((service) => service.automationMode === 'FORM_ONLY' && service.searchFields.length === 0)).toBe(true);
+    expect(fda?.services.find((service) => service.key === 'DBD')).toMatchObject({
+      automationMode: 'LOCAL_SEARCH',
+      searchFields: [{ key: 'JURISTIC_ID', label: 'เลขนิติบุคคล 13 หลัก', inputMode: 'numeric' }],
+    });
+    expect(fda?.services.find((service) => service.key === 'DOPA')).toMatchObject({
+      automationMode: 'LOCAL_SEARCH',
+      searchFields: [{ key: 'CITIZEN_ID', label: 'เลขบัตรประชาชน 13 หลัก', inputMode: 'numeric' }],
+    });
+    expect(fda?.services.find((service) => service.key === 'FDA_PLACE_DRUG')).toMatchObject({
+      automationMode: 'FORM_ONLY',
+      searchFields: [],
+    });
     expect(hss?.services.every((service) => service.automationMode === 'LOCAL_SEARCH' && service.searchFields.length > 0)).toBe(true);
     expect(hss?.services.find((service) => service.key === 'HSS_FACILITY')?.searchFields.map((field) => field.key)).toContain('PHONE');
     expect(hss?.services.find((service) => service.key === 'HSS_PROFESSIONAL')?.searchFields.map((field) => field.key)).toContain('CITIZEN_ID');

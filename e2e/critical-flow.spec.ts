@@ -154,7 +154,11 @@ test('offers local auto-login and requires per-launch acknowledgement for insecu
   await expect(page.getByRole('button', { name: 'ตั้ง/เปลี่ยนบัญชีบนเครื่องนี้' })).toHaveCount(3);
   await expect(page.getByRole('radio', { name: /ทะเบียนนิติบุคคล/ })).toBeChecked();
   await expect(page.getByRole('radio', { name: /ทะเบียนบุคคล/ })).toBeVisible();
-  await expect(page.getByRole('button', { name: 'ล็อกอินและเปิดหน้าสืบค้นที่เลือก' }).first()).toBeEnabled();
+  const fdaCard = page.getByRole('heading', { name: 'SKYNET / Privus อย.' }).locator('xpath=ancestor::article[1]');
+  await expect(fdaCard.getByText('ค้นอัตโนมัติแบบระบุตรง local-only')).toBeVisible();
+  await expect(fdaCard.getByLabel('ประเภทคำค้น')).toHaveValue('JURISTIC_ID');
+  await expect(fdaCard.getByRole('button', { name: 'ล็อกอิน ค้น และบันทึกผล PDF อัตโนมัติ' })).toBeDisabled();
+  await expect(fdaCard.getByRole('button', { name: 'ล็อกอินและเปิดหน้าสืบค้นที่เลือก' })).toBeEnabled();
   await expect(page.getByRole('heading', { name: 'OSS สบส.' })).toBeVisible();
   const hssCard = page.getByRole('heading', { name: 'OSS สบส.' }).locator('xpath=ancestor::article[1]');
   await expect(hssCard.getByRole('radio', { name: /ข้อมูลสถานพยาบาล/ })).toBeChecked();
@@ -227,6 +231,24 @@ test('offers local auto-login and requires per-launch acknowledgement for insecu
   expect(localSearch.status).toBe(200);
   expect(localSearch.body.data.companion_uri).toContain('case_id=case-1');
   expect(JSON.stringify(localSearch)).not.toMatch(/query|purpose|0800000000/i);
+
+  const fdaLocalSearch = await page.evaluate(async () => {
+    const response = await fetch('/api/v1/sources/FDA_SKYNET/companion', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        case_id: 'case-1',
+        service: 'DBD',
+        intent: 'LOCAL_SEARCH',
+      }),
+    });
+    return { status: response.status, body: await response.json() };
+  });
+  expect(fdaLocalSearch).toMatchObject({
+    status: 200,
+    body: { data: { companion_uri: 'lawirisk-recon://launch?source=FDA_SKYNET&case_id=case-1&service=DBD' } },
+  });
+  expect(JSON.stringify(fdaLocalSearch)).not.toMatch(/query|purpose|0100000000001/i);
 
   const leakedQuery = await page.evaluate(async () => {
     const response = await fetch('/api/v1/sources/HSS_OSS/companion', {

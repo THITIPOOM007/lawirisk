@@ -162,6 +162,10 @@ export default function SourcesPage() {
       setError('กรุณาเลือกคดี กรอกคำค้นอย่างน้อย 2 ตัวอักษร ระบุวัตถุประสงค์อย่างน้อย 10 ตัวอักษร และยืนยันสิทธิ์ก่อนค้น');
       return;
     }
+    if (source.key === 'FDA_SKYNET' && !/^\d{13}$/.test(draft.value.trim())) {
+      setError('DBD/DOPA ต้องใช้เลข 13 หลักที่เป็นตัวเลขเท่านั้น');
+      return;
+    }
 
     setLaunchingKey(`${source.key}:search`);
     setError('');
@@ -316,7 +320,9 @@ export default function SourcesPage() {
 
               {selectedService?.automationMode === 'LOCAL_SEARCH' ? (
                 <fieldset className="mt-5 space-y-3 rounded-2xl border border-teal-300/15 bg-teal-300/[0.035] p-4">
-                  <legend className="px-2 text-[10px] font-semibold uppercase tracking-[0.14em] text-teal-200">ค้นอัตโนมัติหลายระดับแบบ local-only</legend>
+                  <legend className="px-2 text-[10px] font-semibold uppercase tracking-[0.14em] text-teal-200">
+                    {source.key === 'FDA_SKYNET' ? 'ค้นอัตโนมัติแบบระบุตรง local-only' : 'ค้นอัตโนมัติหลายระดับแบบ local-only'}
+                  </legend>
                   <label className="block text-[11px] font-medium text-slate-300">
                     สำนวนคดี
                     <select
@@ -346,7 +352,7 @@ export default function SourcesPage() {
                       <input
                         value={searchDraft.value}
                         inputMode={selectedService.searchFields.find((field) => field.key === searchDraft.field)?.inputMode || 'text'}
-                        maxLength={200}
+                        maxLength={source.key === 'FDA_SKYNET' ? 13 : 200}
                         autoComplete="off"
                         onChange={(event) => updateSearchDraft(source, { value: event.target.value, confirmed: false })}
                         className="mt-1.5 min-h-11 w-full rounded-xl border border-white/[0.08] bg-slate-950 px-3 text-sm text-slate-100"

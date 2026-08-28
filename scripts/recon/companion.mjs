@@ -14,6 +14,7 @@ import {
   buildLocalSearchCandidates,
   isHssResultBoundToQuery,
   parseReconUri,
+  resolveFdaSearchModel,
   resolveEsta2SearchOption,
   resolveHssSearchFilter,
   safeCompanionMessage,
@@ -212,13 +213,6 @@ async function navigateToService(page, request) {
     await targetPage.goto('http://oss.hss.moph.go.th/person/list', { waitUntil: 'domcontentloaded' })
       .catch(() => { throw new Error('HSS_SERVICE_PAGE_FAILED'); });
   }
-  else if (request.service === 'DBD' || request.service === 'DOPA') {
-    const openSearch = targetPage.locator('input[type="button"][value*="ค้นหา"]').first();
-    if (await openSearch.isVisible().catch(() => false)) {
-      await openSearch.click();
-      await targetPage.waitForTimeout(1_000);
-    }
-  }
   return targetPage;
 }
 
@@ -283,6 +277,52 @@ async function runHssLocalSearch(page, request, search) {
     attemptCount: attempts.length,
     attempts,
     resultRowCount: executed?.resultRowCount || 0,
+  };
+}
+
+async function runFdaLocalSearch(page, request, search) {
+  if (!search) return undefined;
+  if (request.source.key !== 'FDA_SKYNET' || !['DBD', 'DOPA'].includes(request.service)) {
+    throw new Error('SEARCH_FIELD_NOT_ALLOWED');
+  }
+  const model = resolveFdaSearchModel(request.service, search.field);
+  const value = page.locator(`input[type="text"][ng-model="${model}"]`).first();
+  const submit = page.locator('input[type="button"][ng-click="BTN_SEARCH();"]').first();
+  if (!await value.isVisible().catch(() => false) || !await submit.isVisible().catch(() => false)) {
+    throw new Error('SEARCH_FORM_CHANGED');
+  }
+
+  const expectedPath = request.service === 'DBD'
+    ? '/FDA_DBD//HOME/FRM_DBD_DATA_SEARCH'
+    : '/FDA_DBD//HOME/FRM_DOPA_CITIZEN_SEARCH';
+  const searchValue = search.value;
+  const querySha256 = createHash('sha256').update(searchValue, 'utf8').digest('hex');
+  await value.fill(searchValue);
+  search.value = '';
+  await submit.click();
+  await page.waitForTimeout(3_000);
+
+  const currentUrl = new URL(page.url());
+  if (currentUrl.protocol !== 'https:' || currentUrl.hostname !== 'help.fda.moph.go.th'
+    || currentUrl.pathname.toLocaleUpperCase('en-US') !== expectedPath.toLocaleUpperCase('en-US')) {
+    throw new Error('SEARCH_FORM_CHANGED');
+  }
+  const echoedValue = await value.evaluate((element) => element instanceof HTMLInputElement ? element.value : '');
+  if (echoedValue !== searchValue) throw new Error('SEARCH_REQUEST_NOT_RETAINED');
+  const resultRows = await page.locator('table tbody tr').evaluateAll((rows) => rows
+    .filter((row) => row.querySelectorAll('td').length > 0)
+    .map((row) => Array.from(row.querySelectorAll('td')).map((cell) => cell.textContent || '').join(' '))
+    .filter(Boolean));
+  if (!isHssResultBoundToQuery(resultRows, searchValue)) {
+    throw new Error('SEARCH_RESULT_NOT_BOUND_TO_QUERY');
+  }
+  return {
+    querySha256,
+    executedQuerySha256: querySha256,
+    searchStrategy: 'EXACT',
+    attemptCount: 1,
+    attempts: [{ strategy: 'EXACT', querySha256, resultRowCount: resultRows.length }],
+    resultRowCount: resultRows.length,
   };
 }
 
@@ -360,6 +400,7 @@ async function runEsta2LocalSearch(page, request, search) {
 
 async function runLocalSearch(page, request, search) {
   if (!search) return undefined;
+  if (request.source.key === 'FDA_SKYNET') return runFdaLocalSearch(page, request, search);
   if (request.source.key === 'HSS_OSS') return runHssLocalSearch(page, request, search);
   if (request.source.key === 'HSS_ESTA2') return runEsta2LocalSearch(page, request, search);
   throw new Error('SEARCH_FIELD_NOT_ALLOWED');
@@ -449,9 +490,19 @@ async function captureSanitizedPageContract(page, source, service) {
               id: element.id || undefined,
               name: element.getAttribute('name') || undefined,
               type: element.getAttribute('type') || undefined,
+              className: cleanText(element.getAttribute('class')),
               label: labelFor(element),
               ariaLabel: element.getAttribute('aria-label') || undefined,
               placeholder: element.getAttribute('placeholder') || undefined,
+              ngModel: element.getAttribute('ng-model') || element.getAttribute('data-ng-model') || undefined,
+              ngClick: element.getAttribute('ng-click') || element.getAttribute('data-ng-click') || undefined,
+              maxLength: element instanceof HTMLInputElement || element instanceof HTMLTextAreaElement
+                ? (element.maxLength > -1 ? element.maxLength : undefined)
+                : undefined,
+              contextText: isNavigationChrome
+                ? undefined
+                : cleanText(element.closest('label, td, th, .form-group, .input-group, fieldset')?.textContent
+                  || element.parentElement?.textContent),
               displayText: element instanceof HTMLInputElement && ['submit', 'button', 'reset'].includes(element.type)
                 ? cleanText(element.value)
                 : (isNavigationChrome ? undefined : cleanText(element.textContent)),
@@ -554,7 +605,19 @@ async function main() {
   await keepAlive(context);
 }
 
-main().catch((error) => {
+main().catch(async (error) => {
+  const errorCode = error instanceof Error && /^[A-Z0-9_]+$/.test(error.message)
+    ? error.message
+    : 'RECON_COMPANION_FAILED';
+  const failureDir = path.join(localRoot, 'recon-failures');
+  await mkdir(failureDir, { recursive: true }).catch(() => undefined);
+  await writeFile(path.join(failureDir, `failure-${new Date().toISOString().replace(/[:.]/g, '-')}.json`), JSON.stringify({
+    schemaVersion: 1,
+    errorCode,
+    occurredAt: new Date().toISOString(),
+    credentialsCaptured: false,
+    rawQueryCaptured: false,
+  }, null, 2), 'utf8').catch(() => undefined);
   console.error(safeCompanionMessage(error));
   process.exitCode = 1;
 });

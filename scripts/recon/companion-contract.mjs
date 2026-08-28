@@ -4,7 +4,7 @@ export const RECON_SOURCES = Object.freeze({
     name: 'SKYNET / Privus อย.',
     startUrl: 'https://privus.fda.moph.go.th/FDA_LOGIN2/HOME/SET_STATE?STATE=3',
     secureTransport: true,
-    adapterVersion: 'egov-login-2026-08-27',
+    adapterVersion: 'egov-dbd-dopa-search-2026-08-28',
     services: Object.freeze(['DBD', 'DOPA', 'FDA_PLACE_DRUG']),
   }),
   HSS_OSS: Object.freeze({
@@ -24,6 +24,21 @@ export const RECON_SOURCES = Object.freeze({
     services: Object.freeze(['HSS_HEALTH_BUSINESS_APPROVED']),
   }),
 });
+
+export const FDA_SEARCH_MODELS = Object.freeze({
+  DBD: Object.freeze({
+    JURISTIC_ID: 'ENTRE_IDENTIFY',
+  }),
+  DOPA: Object.freeze({
+    CITIZEN_ID: 'CTZNO',
+  }),
+});
+
+export function resolveFdaSearchModel(service, field) {
+  const model = FDA_SEARCH_MODELS[service]?.[field];
+  if (!model) throw new Error('SEARCH_FIELD_NOT_ALLOWED');
+  return model;
+}
 
 export const HSS_SEARCH_FILTERS = Object.freeze({
   HSS_FACILITY: Object.freeze({

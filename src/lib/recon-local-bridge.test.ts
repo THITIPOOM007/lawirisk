@@ -163,6 +163,31 @@ describe('local recon bridge boundary', () => {
     });
   });
 
+  it('holds a confirmed FDA identifier in one-time local memory without leaking it into the launch URI', async () => {
+    await withLocalBridge(async (baseUrl, launched) => {
+      const response = await fetch(`${baseUrl}/v1/command`, {
+        method: 'POST',
+        headers: { ...trustedHeaders, 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          uri: 'lawirisk-recon://launch?source=FDA_SKYNET&case_id=case-1&service=DBD',
+          search: { field: 'JURISTIC_ID', value: '0100000000001', purpose: 'ตรวจสอบตามสำนวนที่ได้รับมอบหมาย', confirmed: true },
+        }),
+      });
+      expect(response.status).toBe(202);
+      await expect(response.json()).resolves.toMatchObject({ mode: 'LOCAL_SEARCH', source: 'FDA_SKYNET' });
+      expect(launched).toHaveLength(1);
+      expect(launched[0]).not.toContain('0100000000001');
+      const jobId = new URL(launched[0]).searchParams.get('job_id');
+      const consumed = await fetch(`${baseUrl}/v1/jobs/${jobId}`, {
+        headers: { 'X-LawiRisk-Recon-Job': jobId! },
+      });
+      expect(consumed.status).toBe(200);
+      await expect(consumed.json()).resolves.toMatchObject({
+        data: { source: 'FDA_SKYNET', service: 'DBD', field: 'JURISTIC_ID', value: '0100000000001' },
+      });
+    });
+  });
+
   it('denies browser-origin access to local jobs and fails closed for unsafe search requests', async () => {
     await withLocalBridge(async (baseUrl, launched) => {
       const invalidRequests = [
@@ -210,6 +235,40 @@ describe('local recon bridge boundary', () => {
         field: 'FACILITY_NAME',
         service: 'HSS_HEALTH_BUSINESS_APPROVED',
       });
+
+      const validFdaDbd = validateLocalSearch(
+        { field: 'JURISTIC_ID', value: '0100000000001', purpose: 'ตรวจสอบตามสำนวนทดสอบที่ได้รับมอบหมาย', confirmed: true },
+        {
+          action: 'launch',
+          source: { key: 'FDA_SKYNET' },
+          caseId: 'case-1',
+          service: 'DBD',
+        },
+      );
+      expect(validFdaDbd).toMatchObject({
+        source: 'FDA_SKYNET',
+        field: 'JURISTIC_ID',
+        service: 'DBD',
+        value: '0100000000001',
+      });
+      expect(() => validateLocalSearch(
+        { field: 'JURISTIC_ID', value: '123', purpose: 'ตรวจสอบตามสำนวนทดสอบที่ได้รับมอบหมาย', confirmed: true },
+        {
+          action: 'launch',
+          source: { key: 'FDA_SKYNET' },
+          caseId: 'case-1',
+          service: 'DBD',
+        },
+      )).toThrow('INVALID_SEARCH_VALUE');
+      expect(() => validateLocalSearch(
+        { field: 'PERSON_NAME', value: 'บุคคล ทดสอบ', purpose: 'ตรวจสอบตามสำนวนทดสอบที่ได้รับมอบหมาย', confirmed: true },
+        {
+          action: 'launch',
+          source: { key: 'FDA_SKYNET' },
+          caseId: 'case-1',
+          service: 'DOPA',
+        },
+      )).toThrow('SEARCH_FIELD_NOT_ALLOWED');
 
       const unauthorized = await fetch(`${baseUrl}/v1/jobs/00000000-0000-4000-8000-000000000000`, {
         headers: { Origin: trustedHeaders.Origin, 'X-LawiRisk-Recon-Job': '00000000-0000-4000-8000-000000000000' },
