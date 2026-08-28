@@ -58,7 +58,13 @@ describe('external source allowlist', () => {
       expect.objectContaining({
         key: 'HSS_HEALTH_BUSINESS_APPROVED',
         automationMode: 'LOCAL_SEARCH',
-        searchFields: [expect.objectContaining({ key: 'FACILITY_NAME' })],
+        searchFields: expect.arrayContaining([
+          expect.objectContaining({ key: 'FACILITY_NAME' }),
+          expect.objectContaining({ key: 'APPLICANT_NAME' }),
+          expect.objectContaining({ key: 'APPLICANT_ID' }),
+          expect.objectContaining({ key: 'FACILITY_NAME_ENGLISH' }),
+          expect.objectContaining({ key: 'LICENSE_NUMBER' }),
+        ]),
       }),
     ]));
   });

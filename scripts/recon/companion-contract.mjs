@@ -57,7 +57,11 @@ export function resolveHssSearchFilter(service, field) {
 
 export const ESTA2_SEARCH_OPTIONS = Object.freeze({
   HSS_HEALTH_BUSINESS_APPROVED: Object.freeze({
+    APPLICANT_NAME: 'ชื่อผู้ยื่นคำร้อง',
+    APPLICANT_ID: 'เลขที่บัตรประจำตัวประชาชนผู้ยื่น',
     FACILITY_NAME: 'ชื่อสถานประกอบการ ( ภาษาไทย )',
+    FACILITY_NAME_ENGLISH: 'ชื่อสถานประกอบการ ( ภาษาอังกฤษ )',
+    LICENSE_NUMBER: 'เลขที่ใบอนุญาต',
   }),
 });
 

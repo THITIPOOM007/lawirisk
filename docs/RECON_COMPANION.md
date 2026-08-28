@@ -6,7 +6,7 @@ Recon Companion เป็นโปรแกรมบนเครื่อง Win
 
 - `FDA_SKYNET`: เริ่มจากหน้า Privus คงที่เพื่อให้ระบบสร้าง DGA OIDC/PKCE `state`, `nonce` และ `code_challenge` ใหม่ทุกครั้ง จากนั้นกรอกบัญชีและกดเข้าสู่ระบบอัตโนมัติ
 - `HSS_OSS`: กรอกบัญชีและกดเข้าสู่ระบบอัตโนมัติได้เมื่อผู้ใช้ยืนยันความเสี่ยง HTTP ใน LAW-i-RISK ทุกครั้ง
-- `HSS_ESTA2`: กรอกบัญชีผ่าน HTTPS เปิดหน้า `https://esta2.hss.moph.go.th/business/approved` และค้นชื่อสถานประกอบการที่ได้รับอนุญาตแบบ local-only
+- `HSS_ESTA2`: กรอกบัญชีผ่าน HTTPS เปิดหน้า `https://esta2.hss.moph.go.th/business/approved` และค้นชื่อผู้ยื่น เลขบัตรผู้ยื่น ชื่อสถานประกอบการไทย/อังกฤษ หรือเลขใบอนุญาตแบบ local-only
 - เลือกบริการย่อยจากหน้า LAW-i-RISK ได้: FDA DBD, FDA DOPA, สถานที่/ทะเบียนยา, ข้อมูลสถานพยาบาล HSS และข้อมูลผู้ประกอบโรคศิลปะ HSS
 - หลังล็อกอิน Companion เปิดหน้าค้นที่เลือกโดยตรง และบันทึก page contract แบบไม่เก็บค่าในช่องกรอกไว้ใน `%LOCALAPPDATA%\LawiRisk-SSK\recon-page-contracts`
 - HSS OSS และ ESTA2 รองรับการค้นอัตโนมัติแบบครั้งละหนึ่งคำค้น: เลือกคดี ประเภทคำค้น ระบุวัตถุประสงค์ และยืนยันอำนาจหน้าที่ใน LAW-i-RISK จากนั้น Companion จะกรอก กดค้น และบันทึกผลที่แสดงเป็น PDF พร้อม SHA-256 ไว้ใน `%LOCALAPPDATA%\LawiRisk-SSK\recon-results`
@@ -66,7 +66,7 @@ pnpm recon:launch:esta2
 - local bridge ฟังเฉพาะ `127.0.0.1` และไม่รับ arbitrary URL, credential หรือคำสั่งจากเว็บไซต์อื่น
 - API companion launch ตรวจ session, role, trusted origin, rate limit, case access และเขียน audit
 - HSS HTTPS ถูกตรวจแล้วว่าย้อนกลับ `http://oss.hss.moph.go.th/auth/login`; ควรย้ายไป HTTPS/API ที่หน่วยงานรับรองโดยเร็ว
-- ESTA2 ใช้ HTTPS และ Companion อนุญาตนำทางเฉพาะ `esta2.hss.moph.go.th/login` กับ `/business/approved`; การค้นรุ่นแรกอนุญาตเฉพาะชื่อสถานประกอบการ และจะหยุดทันทีหากชื่อ option, ฟอร์ม, URL หรือผลลัพธ์ไม่ตรง contract
+- ESTA2 ใช้ HTTPS และ Companion อนุญาตนำทางเฉพาะ `esta2.hss.moph.go.th/login` กับ `/business/approved`; จะหยุดทันทีหากชื่อ option, ฟอร์ม, URL หรือผลลัพธ์ไม่ตรง contract และไม่แตะปุ่มแก้ไข/ยกเลิก/พิมพ์เอกสาร
 
 ## ส่วนที่ยังต้องมีสัญญาการเชื่อมต่อจากหน่วยงานต้นทาง
 

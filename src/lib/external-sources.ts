@@ -148,6 +148,10 @@ export const EXTERNAL_SOURCES: readonly ExternalSource[] = [
         automationMode: 'LOCAL_SEARCH',
         searchFields: [
           { key: 'FACILITY_NAME', label: 'ชื่อสถานประกอบการ (ภาษาไทย)', inputMode: 'text' },
+          { key: 'APPLICANT_NAME', label: 'ชื่อผู้ยื่นคำร้อง', inputMode: 'text' },
+          { key: 'APPLICANT_ID', label: 'เลขบัตรประชาชนผู้ยื่น', inputMode: 'numeric' },
+          { key: 'FACILITY_NAME_ENGLISH', label: 'ชื่อสถานประกอบการ (ภาษาอังกฤษ)', inputMode: 'text' },
+          { key: 'LICENSE_NUMBER', label: 'เลขที่ใบอนุญาต', inputMode: 'text' },
         ],
       },
     ],
