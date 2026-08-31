@@ -31,6 +31,10 @@ export async function GET(request: NextRequest, { params }: { params: Promise<{ 
   if (!isEvidenceUsable(evidence.upload_state, evidence.malware_scan_status)) {
     return apiError('EVIDENCE_NOT_READY_TO_OPEN', 'ไฟล์ยังจัดเก็บหรือตรวจรูปแบบไม่สมบูรณ์', 409);
   }
+  if (evidence.file_path.startsWith('synthetic-demo/')) {
+    const syntheticUrl = new URL(`/api/v1/evidence/${id}/synthetic`, request.url);
+    return NextResponse.json({ data: { url: syntheticUrl.toString(), expires_in: 60, synthetic_test_data: true } }, { headers: { 'Cache-Control': 'private, no-store' } });
+  }
   const bucket = process.env.PRIVATE_EVIDENCE_BUCKET || 'evidence-vault';
   const { data, error } = await supabase.storage.from(bucket).createSignedUrl(evidence.file_path, 60);
   if (error || !data?.signedUrl) return apiError('SIGNED_URL_FAILED', 'สร้างลิงก์เปิดหลักฐานไม่สำเร็จ', 503);

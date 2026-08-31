@@ -2,8 +2,8 @@ import { describe, expect, it } from 'vitest';
 import { buildReconCompanionUri, companionLaunchRequestSchema, EXTERNAL_SOURCES, externalSourceKeySchema, findExternalSource, isLaunchableSource } from './external-sources';
 
 describe('external source allowlist', () => {
-  it('contains only the three reviewed government sources', () => {
-    expect(EXTERNAL_SOURCES.map((source) => source.key)).toEqual(['FDA_SKYNET', 'HSS_OSS', 'HSS_ESTA2']);
+  it('contains only the reviewed government sources', () => {
+    expect(EXTERNAL_SOURCES.map((source) => source.key)).toEqual(['FDA_PUBLIC', 'FDA_SKYNET', 'HSS_OSS', 'HSS_ESTA2']);
     expect(externalSourceKeySchema.safeParse('https://attacker.example').success).toBe(false);
   });
 
@@ -20,6 +20,17 @@ describe('external source allowlist', () => {
     expect(hss && isLaunchableSource(hss)).toBe(false);
     expect(() => hss && buildReconCompanionUri(hss)).toThrow('INSECURE_TRANSPORT_ACK_REQUIRED');
     expect(hss && buildReconCompanionUri(hss, { acknowledgeInsecureTransport: true })).toContain('allow_insecure_http=1');
+  });
+
+  it('exposes the public FDA category search without credentials', () => {
+    const source = findExternalSource('FDA_PUBLIC');
+    expect(source).toMatchObject({ authMode: 'NONE', accessMode: 'LOCAL_PUBLIC_SEARCH', companionSetupUrl: null });
+    expect(source?.services.map((service) => service.key)).toEqual([
+      'FDA_DRUG_REGISTRY', 'FDA_FOOD_REGISTRY', 'FDA_HAZARDOUS_REGISTRY',
+      'FDA_COSMETIC_REGISTRY', 'FDA_HERBAL_REGISTRY', 'FDA_MEDICAL_DEVICE_REGISTRY',
+    ]);
+    expect(source && buildReconCompanionUri(source, { caseId: 'case-1', service: 'FDA_DRUG_REGISTRY' }))
+      .toBe('lawirisk-recon://launch?source=FDA_PUBLIC&case_id=case-1&service=FDA_DRUG_REGISTRY');
   });
 
   it('allows the reviewed HTTPS ESTA2 approved-business entry point without an HTTP exception', () => {

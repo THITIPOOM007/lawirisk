@@ -772,5 +772,170 @@ html.light .floating-orb > span:first-child {
   background: transparent !important;
 }
 
+/* -------------------------------------------------------------
+ * EVIDENCE OPERATIONS OS — SPATIAL COMMAND LAYER
+ * ------------------------------------------------------------- */
+.spatial-field {
+  position: fixed;
+  inset: 80px 0 0;
+  z-index: 0;
+  overflow: hidden;
+  pointer-events: none;
+  opacity: 0.48;
+  mask-image: linear-gradient(to bottom, black 0%, rgba(0,0,0,.72) 45%, transparent 100%);
+}
+
+.spatial-field::before {
+  position: absolute;
+  left: 52%;
+  top: 46%;
+  width: min(88vw, 1200px);
+  aspect-ratio: 1.9;
+  border: 1px solid rgba(66, 232, 206, 0.075);
+  border-radius: 50%;
+  content: "";
+  transform: translate(-50%, -50%) rotate(-7deg);
+  box-shadow: 0 0 100px rgba(66, 232, 206, 0.025), inset 0 0 100px rgba(139, 140, 255, 0.018);
+}
+
+.spatial-field span {
+  position: absolute;
+  width: 5px;
+  height: 5px;
+  border-radius: 50%;
+  background: rgba(129, 246, 226, 0.7);
+  box-shadow: 0 0 0 5px rgba(66, 232, 206, 0.045), 0 0 22px rgba(66, 232, 206, 0.5);
+  animation: spatial-drift 12s ease-in-out infinite alternate;
+}
+
+.spatial-field span:nth-child(1) { left: 24%; top: 24%; }
+.spatial-field span:nth-child(2) { right: 15%; top: 40%; animation-delay: -4s; animation-duration: 15s; }
+.spatial-field span:nth-child(3) { left: 58%; bottom: 18%; animation-delay: -8s; animation-duration: 18s; }
+
+.workspace-telemetry {
+  position: relative;
+  border: 1px solid rgba(151, 178, 196, 0.08);
+  background: linear-gradient(90deg, rgba(6, 19, 31, 0.76), rgba(9, 24, 40, 0.48), rgba(6, 19, 31, 0.76));
+  box-shadow: inset 0 1px rgba(255,255,255,.025), 0 12px 36px rgba(0,4,12,.12);
+  backdrop-filter: blur(16px);
+}
+
+.workspace-telemetry::before {
+  position: absolute;
+  inset: 0 auto 0 0;
+  width: 28%;
+  content: "";
+  background: linear-gradient(90deg, transparent, rgba(66,232,206,.055), transparent);
+  animation: telemetry-sweep 8s ease-in-out infinite;
+}
+
+.route-stage {
+  position: relative;
+  transform-style: preserve-3d;
+}
+
+html.dark .route-stage h1 {
+  text-shadow: 0 0 34px rgba(125, 244, 224, 0.075);
+}
+
+html.dark .route-stage :where(input, select, textarea) {
+  box-shadow: inset 0 1px rgba(255,255,255,.025), 0 10px 28px rgba(0,4,12,.1);
+}
+
+html.dark .route-stage :where(input, select, textarea):hover:not(:disabled) {
+  border-color: rgba(66, 232, 206, 0.2) !important;
+}
+
+html.dark .route-stage .rounded-3xl.border-slate-900,
+html.dark .route-stage .rounded-3xl.border-slate-800 {
+  border-color: rgba(151, 178, 196, 0.105) !important;
+  background-image: linear-gradient(145deg, rgba(12, 27, 43, 0.72), rgba(5, 14, 25, 0.68));
+  box-shadow: inset 0 1px rgba(255,255,255,.025), 0 20px 48px rgba(0,4,12,.14);
+  backdrop-filter: blur(14px);
+}
+
+.command-deck,
+.system-status-panel,
+.notification-center {
+  border: 1px solid transparent;
+  background:
+    linear-gradient(145deg, rgba(9, 23, 39, 0.97), rgba(3, 11, 21, 0.98)) padding-box,
+    linear-gradient(135deg, rgba(122,243,223,.32), rgba(255,255,255,.07) 42%, rgba(139,140,255,.24)) border-box;
+  box-shadow: 0 50px 120px rgba(0, 3, 10, 0.72), inset 0 1px rgba(255,255,255,.055), 0 0 80px rgba(66,232,206,.07);
+  backdrop-filter: blur(32px) saturate(135%);
+}
+
+.system-status-panel {
+  top: 5.75rem;
+  right: 1rem;
+  max-height: calc(100dvh - 7rem);
+}
+
+.notification-center {
+  top: 5.75rem;
+  right: 1rem;
+  width: min(calc(100vw - 2rem), 430px);
+  max-height: calc(100dvh - 7rem);
+}
+
+.notification-stream {
+  max-height: min(60dvh, 610px);
+  scrollbar-gutter: stable;
+}
+
+.notification-center:focus-visible,
+.system-status-panel:focus-visible {
+  box-shadow: 0 0 0 2px rgba(94, 234, 212, 0.34), 0 50px 120px rgba(0, 3, 10, 0.72), inset 0 1px rgba(255,255,255,.055), 0 0 80px rgba(66,232,206,.07);
+}
+
+.system-pulse {
+  border: 1px solid;
+  backdrop-filter: blur(14px);
+  transition: transform 260ms var(--ease-spring), box-shadow 260ms ease, border-color 260ms ease;
+}
+
+.system-pulse:hover { transform: translateY(-1px); }
+.system-pulse-emerald { border-color: rgba(110,231,183,.18); background: rgba(6,78,59,.22); color: #a7f3d0; box-shadow: 0 0 24px rgba(52,211,153,.075), inset 0 1px rgba(255,255,255,.04); }
+.system-pulse-amber { border-color: rgba(252,211,77,.2); background: rgba(120,53,15,.22); color: #fde68a; }
+.system-pulse-rose { border-color: rgba(253,164,175,.2); background: rgba(76,5,25,.3); color: #fecdd3; }
+
+@keyframes spatial-drift {
+  from { opacity: .28; transform: translate3d(-8px, 8px, 0) scale(.75); }
+  to { opacity: .95; transform: translate3d(14px, -16px, 0) scale(1.18); }
+}
+
+@keyframes telemetry-sweep {
+  0%, 18% { opacity: 0; transform: translateX(-130%); }
+  45%, 60% { opacity: 1; }
+  82%, 100% { opacity: 0; transform: translateX(430%); }
+}
+
+html.light .spatial-field { display: none; }
+html.light .workspace-telemetry,
+html.light .command-deck,
+html.light .system-status-panel,
+html.light .notification-center {
+  border-color: #e2e8f0 !important;
+  background: rgba(255,255,255,.98) !important;
+  box-shadow: 0 18px 48px rgba(15,23,42,.09) !important;
+  backdrop-filter: blur(18px) !important;
+}
+html.light .system-pulse-emerald { border-color: #a7f3d0; background: #ecfdf5; color: #065f46; }
+html.light .system-pulse-amber { border-color: #fde68a; background: #fffbeb; color: #92400e; }
+html.light .system-pulse-rose { border-color: #fecdd3; background: #fff1f2; color: #9f1239; }
+
+@media (max-width: 639px) {
+  .system-status-panel,
+  .notification-center {
+    top: 4.75rem;
+    right: .75rem;
+    left: .75rem;
+    width: auto;
+    max-height: calc(100dvh - 5.5rem);
+  }
+
+  .notification-stream { max-height: calc(100dvh - 17.5rem); }
+}
+
 
 

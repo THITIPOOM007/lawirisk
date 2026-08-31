@@ -25,7 +25,7 @@
       "preview_urls": false,
       "vars": {
         "NEXT_PUBLIC_DEMO_MODE": "false",
-        "GEMINI_MODEL": "gemini-2.5-flash"
+        "GEMINI_MODEL": "gemini-3.5-flash"
       },
       "secrets": {
         "required": [

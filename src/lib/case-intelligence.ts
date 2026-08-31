@@ -1,4 +1,6 @@
 import { z } from 'zod';
+import type { ReconAutomationPlanItem, ReconBlockedAutomation } from './recon-automation';
+import type { CaseSourceRecommendation } from './case-source-scope';
 
 export const caseIntelligenceRequestSchema = z.object({
   case_id: z.string().trim().min(1).max(100),
@@ -37,6 +39,182 @@ export type CaseReconSummary = {
   dimensions: ReconDimension[];
   notice: string;
 };
+
+export type IntelligenceFindingKind = 'VERIFIED_FACT' | 'VERIFIED_RELATIONSHIP' | 'TRUSTED_REGISTRY' | 'GROUNDED_WEB';
+
+export type IntelligenceFinding = {
+  id: string;
+  kind: IntelligenceFindingKind;
+  title: string;
+  detail: string;
+  statusLabel: string;
+  source: {
+    label: string;
+    url?: string;
+    evidenceId?: string;
+    filename?: string;
+    pageNumber?: number;
+    sha256?: string;
+    publishedDate?: string;
+  };
+};
+
+export type TrustedRegistrySearchStatus = 'SEARCHED' | 'NO_ELIGIBLE_TERMS' | 'UNAVAILABLE' | 'DEMO';
+
+export type CaseIntelligenceSearchResult = {
+  generatedAt: string;
+  summary: string;
+  findings: IntelligenceFinding[];
+  evidenceInventory: Array<{
+    id: string;
+    filename: string;
+    sha256: string;
+    safetyStatus: 'CLEAN' | 'NOT_SCANNED';
+  }>;
+  verifiedFindingCount: number;
+  registryFindingCount: number;
+  publicWebFindingCount: number;
+  publicWebQueryCount: number;
+  publicWebStatus: 'SEARCHED' | 'NOT_CONFIGURED' | 'UNAVAILABLE' | 'NO_TERMS' | 'DEMO';
+  searchedRegistryTermCount: number;
+  pendingReviewCount: number;
+  registryStatus: TrustedRegistrySearchStatus;
+  automationPlan: ReconAutomationPlanItem[];
+  blockedAutomation: ReconBlockedAutomation[];
+  sourceRecommendations: CaseSourceRecommendation[];
+  notice: string;
+};
+
+type VerifiedFactInput = {
+  id: string;
+  entityType: string;
+  value: string;
+  evidenceId: string;
+  filename: string;
+  pageNumber: number;
+  snippet: string;
+  sha256: string;
+};
+
+type VerifiedRelationshipInput = {
+  id: string;
+  relationshipType: string;
+  sourceValue: string;
+  targetValue: string;
+  evidenceId: string;
+  filename: string;
+  pageNumber: number;
+  quote: string;
+  sha256: string;
+};
+
+type TrustedRegistryFindingInput = {
+  id: string;
+  title: string;
+  snippet: string;
+  source: string;
+  sourceUrl: string;
+  publishedDate: string;
+};
+
+type GroundedWebFindingInput = TrustedRegistryFindingInput;
+
+export function buildCaseIntelligenceSearchResult(input: {
+  evidenceInventory: Array<{ id: string; filename: string; sha256: string; safetyStatus: 'CLEAN' | 'NOT_SCANNED' }>;
+  verifiedFacts: VerifiedFactInput[];
+  verifiedRelationships: VerifiedRelationshipInput[];
+  trustedRegistryFindings: TrustedRegistryFindingInput[];
+  searchedRegistryTermCount: number;
+  pendingReviewCount: number;
+  registryStatus: TrustedRegistrySearchStatus;
+  groundedWebFindings?: GroundedWebFindingInput[];
+  publicWebQueryCount?: number;
+  publicWebStatus?: 'SEARCHED' | 'NOT_CONFIGURED' | 'UNAVAILABLE' | 'NO_TERMS' | 'DEMO';
+  automationPlan?: ReconAutomationPlanItem[];
+  blockedAutomation?: ReconBlockedAutomation[];
+  sourceRecommendations?: CaseSourceRecommendation[];
+}): CaseIntelligenceSearchResult {
+  const verifiedFacts: IntelligenceFinding[] = input.verifiedFacts.map((item) => ({
+    id: `fact:${item.id}`,
+    kind: 'VERIFIED_FACT',
+    title: `${item.entityType}: ${item.value}`,
+    detail: item.snippet,
+    statusLabel: 'ข้อเท็จจริงที่ตรวจทานแล้ว',
+    source: {
+      label: item.filename,
+      evidenceId: item.evidenceId,
+      filename: item.filename,
+      pageNumber: item.pageNumber,
+      sha256: item.sha256,
+    },
+  }));
+  const verifiedRelationships: IntelligenceFinding[] = input.verifiedRelationships.map((item) => ({
+    id: `relationship:${item.id}`,
+    kind: 'VERIFIED_RELATIONSHIP',
+    title: `${item.sourceValue} — ${item.relationshipType} — ${item.targetValue}`,
+    detail: item.quote,
+    statusLabel: 'ความสัมพันธ์ที่เจ้าหน้าที่ยืนยันแล้ว',
+    source: {
+      label: item.filename,
+      evidenceId: item.evidenceId,
+      filename: item.filename,
+      pageNumber: item.pageNumber,
+      sha256: item.sha256,
+    },
+  }));
+  const trustedRegistryFindings: IntelligenceFinding[] = input.trustedRegistryFindings.map((item) => ({
+    id: `registry:${item.id}`,
+    kind: 'TRUSTED_REGISTRY',
+    title: item.title,
+    detail: item.snippet,
+    statusLabel: 'พบรายการเกี่ยวข้องในทะเบียนที่อนุมัติ',
+    source: {
+      label: item.source,
+      url: item.sourceUrl,
+      publishedDate: item.publishedDate,
+    },
+  }));
+  const groundedWebFindings: IntelligenceFinding[] = (input.groundedWebFindings || []).map((item) => ({
+    id: `grounded:${item.id}`,
+    kind: 'GROUNDED_WEB',
+    title: item.title,
+    detail: item.snippet,
+    statusLabel: 'พบจากเว็บสาธารณะ · รอตรวจทาน',
+    source: { label: item.source, url: item.sourceUrl, publishedDate: item.publishedDate },
+  }));
+  const findings = [...verifiedFacts, ...verifiedRelationships, ...trustedRegistryFindings, ...groundedWebFindings];
+  const verifiedFindingCount = verifiedFacts.length + verifiedRelationships.length;
+  const registryFindingCount = trustedRegistryFindings.length;
+  const publicWebFindingCount = groundedWebFindings.length;
+
+  let summary = `พบข้อมูลที่ตรวจย้อนกลับได้ ${findings.length} รายการ: จากหลักฐานในคดี ${verifiedFindingCount} รายการ ทะเบียนที่อนุมัติ ${registryFindingCount} รายการ และเว็บสาธารณะที่มี citation ${publicWebFindingCount} รายการ`;
+  if (findings.length === 0 && input.pendingReviewCount > 0) {
+    summary = `ยังไม่มีข้อค้นพบที่ยืนยันและอ้างอิงได้ ขณะนี้มีข้อเสนอรอตรวจทาน ${input.pendingReviewCount} รายการ`;
+  } else if (findings.length === 0 && input.evidenceInventory.length > 0) {
+    summary = `พบหลักฐานต้นฉบับที่ตรวจโครงสร้างแล้ว ${input.evidenceInventory.length} ไฟล์ แต่ยังไม่มีข้อเท็จจริงที่ผ่านการสกัดและตรวจทานสำหรับค้นทะเบียน`;
+  } else if (findings.length === 0) {
+    summary = 'ยังไม่พบข้อมูลที่ยืนยันและตรวจย้อนกลับถึงแหล่งได้ในขอบเขตการค้นครั้งนี้';
+  }
+
+  return {
+    generatedAt: new Date().toISOString(),
+    summary,
+    findings,
+    evidenceInventory: input.evidenceInventory,
+    verifiedFindingCount,
+    registryFindingCount,
+    publicWebFindingCount,
+    publicWebQueryCount: input.publicWebQueryCount || 0,
+    publicWebStatus: input.publicWebStatus || 'NO_TERMS',
+    searchedRegistryTermCount: input.searchedRegistryTermCount,
+    pendingReviewCount: input.pendingReviewCount,
+    registryStatus: input.registryStatus,
+    automationPlan: input.automationPlan || [],
+    blockedAutomation: input.blockedAutomation || [],
+    sourceRecommendations: input.sourceRecommendations || [],
+    notice: 'รายการจากทะเบียนหมายถึงพบข้อความที่เกี่ยวข้อง ไม่ใช่การยืนยันว่าเป็นบุคคล/กิจการเดียวกันหรือเป็นการชี้ความผิด ต้องเปิดต้นทางและให้เจ้าหน้าที่ตรวจทานก่อนใช้ในสำนวน',
+  };
+}
 
 export type DossierDocument = {
   id: string;

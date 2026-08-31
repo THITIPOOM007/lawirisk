@@ -1,6 +1,7 @@
 'use client';
 
-import React, { useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
+import { createPortal } from 'react-dom';
 import { ShieldCheck, Fingerprint, Lock, Loader2, Sparkles, AlertCircle } from 'lucide-react';
 import { verifyBiometricPasskey } from '@/lib/webauthn-client';
 
@@ -24,8 +25,25 @@ export function BiometricStepUpModal({
   const [isVerifying, setIsVerifying] = useState(false);
   const [statusText, setStatusText] = useState('');
   const [errorText, setErrorText] = useState('');
+  const verifyButtonRef = useRef<HTMLButtonElement>(null);
 
-  if (!isOpen) return null;
+  useEffect(() => {
+    if (!isOpen) return;
+    const previousOverflow = document.body.style.overflow;
+    document.body.style.overflow = 'hidden';
+    const focusTimer = window.setTimeout(() => verifyButtonRef.current?.focus(), 0);
+    const handleKeyDown = (event: KeyboardEvent) => {
+      if (event.key === 'Escape' && !isVerifying) onClose();
+    };
+    document.addEventListener('keydown', handleKeyDown);
+    return () => {
+      window.clearTimeout(focusTimer);
+      document.removeEventListener('keydown', handleKeyDown);
+      document.body.style.overflow = previousOverflow;
+    };
+  }, [isOpen, isVerifying, onClose]);
+
+  if (!isOpen || typeof document === 'undefined') return null;
 
   const handleVerify = async () => {
     setIsVerifying(true);
@@ -51,9 +69,9 @@ export function BiometricStepUpModal({
     }
   };
 
-  return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-md animate-[drawer-enter_250ms_var(--ease-out-expo)]">
-      <div className="hud-panel relative max-w-md w-full rounded-3xl p-6 sm:p-8 space-y-6 border border-teal-300/30 shadow-[0_0_50px_rgba(66,232,206,0.15)] text-center">
+  const modal = (
+    <div className="fixed inset-0 z-[150] flex items-start justify-center overflow-y-auto bg-black/80 p-4 pt-[max(1rem,4vh)] backdrop-blur-md animate-[drawer-enter_250ms_var(--ease-out-expo)]" role="presentation" onMouseDown={(event) => { if (event.target === event.currentTarget && !isVerifying) onClose(); }}>
+      <div className="hud-panel relative w-full max-w-md space-y-6 rounded-3xl border border-teal-300/30 p-6 text-center shadow-[0_0_50px_rgba(66,232,206,0.15)] sm:p-8" role="dialog" aria-modal="true" aria-labelledby="biometric-step-up-title" data-testid="biometric-step-up-dialog">
         
         {/* Top Icon with Pulse Rings */}
         <div className="relative mx-auto w-20 h-20 flex items-center justify-center">
@@ -70,7 +88,7 @@ export function BiometricStepUpModal({
             <Lock className="h-3 w-3 text-teal-300" />
             <span>NIST SP 800-63B · On-Device Biometric</span>
           </div>
-          <h2 className="text-xl font-black text-white tracking-tight">
+          <h2 id="biometric-step-up-title" className="text-xl font-black text-white tracking-tight">
             {title}
           </h2>
           <p className="text-xs leading-relaxed text-slate-400">
@@ -106,6 +124,7 @@ export function BiometricStepUpModal({
         {/* Action Buttons */}
         <div className="space-y-2 pt-2">
           <button
+            ref={verifyButtonRef}
             type="button"
             disabled={isVerifying}
             onClick={handleVerify}
@@ -135,4 +154,6 @@ export function BiometricStepUpModal({
       </div>
     </div>
   );
+
+  return createPortal(modal, document.body);
 }

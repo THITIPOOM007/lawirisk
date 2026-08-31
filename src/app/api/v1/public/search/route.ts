@@ -5,7 +5,7 @@ import { consumeRateLimit } from '@/lib/rate-limit';
 
 const searchQuerySchema = z.object({
   q: z.string().trim().min(2).max(200),
-  category: z.enum(['ALL', 'HEALTH_PRODUCTS', 'FRAUD_ALERTS', 'COMPANIES', 'LICENSES']).default('ALL'),
+  category: z.enum(['ALL', 'HEALTH_PRODUCTS', 'HEALTH_SERVICES', 'FRAUD_ALERTS', 'COMPANIES', 'LICENSES']).default('ALL'),
 });
 
 export async function GET(request: NextRequest) {
@@ -33,19 +33,20 @@ export async function GET(request: NextRequest) {
 
   const rawQuery = parsed.data.q.trim();
 
-  const allResults = await resolveMultiChannelSearch(rawQuery);
-  const results = parsed.data.category === 'ALL'
-    ? allResults
-    : allResults.filter((item) => item.category === parsed.data.category);
+  const results = await resolveMultiChannelSearch(rawQuery, { category: parsed.data.category });
 
   let aiSummary = '';
   if (results.length > 0) {
     const topItem = results[0];
-    aiSummary = topItem.status === 'UNREGISTERED'
-      ? `ยังไม่มีผลจากทะเบียนที่ยืนยันได้สำหรับ "${rawQuery}" ข้อมูลด้านล่างเป็นคำแนะนำให้ตรวจสอบกับต้นทาง ไม่ใช่การรับรองว่าปลอดภัยหรือถูกกฎหมาย`
-      : `พบรายการที่บันทึกในแหล่งข้อมูลที่อนุมัติ (${topItem.source}) สำหรับ "${rawQuery}": ${topItem.snippet}`;
+    if (topItem.status === 'UNAVAILABLE') {
+      aiSummary = `ยังสรุปผลสำหรับ "${rawQuery}" ไม่ได้ เนื่องจาก ${topItem.source} ไม่ตอบกลับ ระบบไม่ได้ตีความว่าไม่พบทะเบียน กรุณาลองค้นอีกครั้ง`;
+    } else if (topItem.status === 'UNREGISTERED') {
+      aiSummary = `ไม่พบรายการที่ตรงกับ "${rawQuery}" จาก ${topItem.source} ณ เวลาตรวจสอบ การไม่พบข้อมูลไม่ใช่การรับรองว่าไม่มีทะเบียนหรือไม่มีใบอนุญาต`;
+    } else {
+      aiSummary = `พบ ${results.length} รายการตรงจาก ${topItem.source} สำหรับ "${rawQuery}" โดยแสดงเลขทะเบียน ผู้รับอนุญาต และสถานะตามคำตอบล่าสุดของต้นทาง`;
+    }
   } else {
-    aiSummary = `ไม่พบข้อมูลที่ตรงกับ "${rawQuery}" ในฐานข้อมูลเปิดหรือทะเบียนที่บันทึกไว้ กรุณาตรวจสอบการสะกดหรือลองค้นหาด้วยชื่อสามัญ/ชื่อทางการค้า`;
+    aiSummary = `ไม่พบข้อมูลที่ตรงกับ "${rawQuery}" ในแหล่งข้อมูลทางการที่เลือก กรุณาตรวจสอบการสะกดหรือรูปแบบเลขแล้วลองใหม่`;
   }
 
   return NextResponse.json({
@@ -54,7 +55,7 @@ export async function GET(request: NextRequest) {
       query: parsed.data.q,
       category: parsed.data.category,
       aiSummary,
-      citationCount: results.length,
+      citationCount: results.filter((item) => !['UNREGISTERED', 'UNAVAILABLE'].includes(item.status)).length,
       results,
     },
   }, { headers: { 'Cache-Control': 'public, max-age=0, no-store' } });

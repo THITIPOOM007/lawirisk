@@ -5,9 +5,13 @@ import {
   aiExtractionProviderResultSchema,
   type AiExtractionCandidate,
 } from '@/lib/workflow-contracts';
+import {
+  discoverGeminiGenerationModels,
+  GeminiModelDiscoveryError,
+} from '@/lib/providers/gemini-model-discovery';
 
 const PROMPT_SCHEMA_VERSION = 'gemini-extraction-v1';
-const DEFAULT_MODEL = 'gemini-2.5-flash';
+const DEFAULT_MODEL = 'gemini-3.5-flash';
 
 const geminiEnvelopeSchema = z.object({
   candidates: z.array(z.object({
@@ -26,12 +30,36 @@ export type GeminiExtractionResult = {
 
 export class GeminiExtractionError extends Error {
   constructor(
-    public readonly code: 'NOT_CONFIGURED' | 'UNAVAILABLE' | 'INVALID_OUTPUT',
+    public readonly code: 'NOT_CONFIGURED' | 'AUTH_FAILED' | 'RATE_LIMITED' | 'UNAVAILABLE' | 'NO_COMPATIBLE_MODEL' | 'INVALID_OUTPUT',
     message: string,
   ) {
     super(message);
     this.name = 'GeminiExtractionError';
   }
+}
+
+const TRANSIENT_STATUSES = new Set([408, 429, 500, 502, 503, 504]);
+const MAX_PROVIDER_ELAPSED_MS = 45_000;
+const ATTEMPT_TIMEOUT_MS = 18_000;
+
+function wait(milliseconds: number) {
+  return new Promise((resolve) => setTimeout(resolve, milliseconds));
+}
+
+function retryDelay(response: Response, attempt: number) {
+  const retryAfter = Number(response.headers.get('retry-after'));
+  if (Number.isFinite(retryAfter) && retryAfter > 0) return Math.min(retryAfter * 1_000, 3_000);
+  return Math.min(600 * (2 ** attempt) + Math.floor(Math.random() * 250), 3_000);
+}
+
+function providerErrorForStatus(status: number, model: string) {
+  if (status === 401 || status === 403) {
+    return new GeminiExtractionError('AUTH_FAILED', `Gemini authentication failed for ${model}`);
+  }
+  if (status === 429) {
+    return new GeminiExtractionError('RATE_LIMITED', `Gemini rate limit reached for ${model}`);
+  }
+  return new GeminiExtractionError('UNAVAILABLE', `Gemini request failed for ${model} (${status})`);
 }
 
 function parseModelJson(text: string) {
@@ -51,7 +79,15 @@ export async function extractEntitiesWithGemini(sourceText: string, base64Image?
   const apiKey = process.env.GEMINI_API_KEY?.trim();
   if (!apiKey) throw new GeminiExtractionError('NOT_CONFIGURED', 'Gemini provider is not configured');
   const configuredModel = process.env.GEMINI_MODEL?.trim() || DEFAULT_MODEL;
-  const candidateModels = Array.from(new Set([configuredModel, 'gemini-2.0-flash', 'gemini-1.5-flash', 'gemini-1.5-pro']));
+  let candidateModels: string[];
+  try {
+    candidateModels = await discoverGeminiGenerationModels(apiKey, configuredModel);
+  } catch (error: unknown) {
+    if (error instanceof GeminiModelDiscoveryError) {
+      throw new GeminiExtractionError(error.code, error.message);
+    }
+    throw new GeminiExtractionError('UNAVAILABLE', 'Gemini model discovery failed');
+  }
 
   const parts = [];
   if (base64Image && mimeType) {
@@ -84,7 +120,6 @@ export async function extractEntitiesWithGemini(sourceText: string, base64Image?
       parts: parts,
     }],
     generationConfig: {
-      temperature: 0,
       responseMimeType: 'application/json',
       responseSchema: {
         type: 'OBJECT',
@@ -110,51 +145,67 @@ export async function extractEntitiesWithGemini(sourceText: string, base64Image?
   });
 
   let lastError: Error | null = null;
+  const startedAt = Date.now();
 
   for (const model of candidateModels) {
-    const controller = new AbortController();
-    const timeout = setTimeout(() => controller.abort(), 25_000);
+    for (let attempt = 0; attempt < 2; attempt += 1) {
+      const remainingMs = MAX_PROVIDER_ELAPSED_MS - (Date.now() - startedAt);
+      if (remainingMs <= 0) break;
+      const controller = new AbortController();
+      const timeout = setTimeout(() => controller.abort(), Math.min(ATTEMPT_TIMEOUT_MS, remainingMs));
 
-    try {
-      const response = await fetch(
-        `https://generativelanguage.googleapis.com/v1beta/models/${encodeURIComponent(model)}:generateContent`,
-        {
-          method: 'POST',
-          signal: controller.signal,
-          headers: {
-            'Content-Type': 'application/json',
-            'x-goog-api-key': apiKey,
+      try {
+        const response = await fetch(
+          `https://generativelanguage.googleapis.com/v1beta/models/${encodeURIComponent(model)}:generateContent`,
+          {
+            method: 'POST',
+            signal: controller.signal,
+            headers: {
+              'Content-Type': 'application/json',
+              'x-goog-api-key': apiKey,
+            },
+            body: requestBody,
           },
-          body: requestBody,
-        },
-      );
+        );
 
-      if (!response.ok) {
-        const errorText = await response.text().catch(() => '');
-        console.warn(`Gemini model ${model} failed with status ${response.status}: ${errorText.slice(0, 200)}`);
-        // If 404 (model not found) or 400, try next candidate model
-        if (response.status === 404 || response.status === 400) {
-          lastError = new GeminiExtractionError('UNAVAILABLE', `Gemini model ${model} not available (${response.status})`);
+        if (!response.ok) {
+          const providerError = providerErrorForStatus(response.status, model);
+          lastError = providerError;
+          console.warn(JSON.stringify({ event: 'GEMINI_EXTRACTION_ATTEMPT_FAILED', model, attempt: attempt + 1, status: response.status, retryable: TRANSIENT_STATUSES.has(response.status) }));
+          if (response.status === 401 || response.status === 403) throw providerError;
+          if (response.status === 400 || response.status === 404) break;
+          if (TRANSIENT_STATUSES.has(response.status) && attempt === 0) {
+            await wait(retryDelay(response, attempt));
+            continue;
+          }
+          break;
+        }
+
+        const envelope = geminiEnvelopeSchema.safeParse(await response.json().catch(() => null));
+        if (!envelope.success) {
+          lastError = new GeminiExtractionError('INVALID_OUTPUT', 'Gemini response envelope is invalid');
+          break;
+        }
+        const text = envelope.data.candidates[0]?.content.parts.map((part) => part.text).join('') || '';
+        const parsed = parseModelJson(text);
+        return {
+          provider: 'GEMINI',
+          model,
+          promptSchemaVersion: PROMPT_SCHEMA_VERSION,
+          candidates: parsed.candidates,
+        };
+      } catch (error: unknown) {
+        if (error instanceof GeminiExtractionError && error.code === 'AUTH_FAILED') throw error;
+        lastError = error instanceof Error ? error : new Error(String(error));
+        if (error instanceof GeminiExtractionError && error.code === 'INVALID_OUTPUT') break;
+        if (error instanceof Error && error.name === 'AbortError' && attempt === 0) {
+          await wait(600 + Math.floor(Math.random() * 250));
           continue;
         }
-        throw new GeminiExtractionError('UNAVAILABLE', `Gemini request failed with status ${response.status}`);
+        break;
+      } finally {
+        clearTimeout(timeout);
       }
-
-      const envelope = geminiEnvelopeSchema.safeParse(await response.json().catch(() => null));
-      if (!envelope.success) throw new GeminiExtractionError('INVALID_OUTPUT', 'Gemini response envelope is invalid');
-      const text = envelope.data.candidates[0]?.content.parts.map((part) => part.text).join('') || '';
-      const parsed = parseModelJson(text);
-      return {
-        provider: 'GEMINI',
-        model,
-        promptSchemaVersion: PROMPT_SCHEMA_VERSION,
-        candidates: parsed.candidates,
-      };
-    } catch (error: unknown) {
-      if (error instanceof GeminiExtractionError && error.code === 'INVALID_OUTPUT') throw error;
-      lastError = error instanceof Error ? error : new Error(String(error));
-    } finally {
-      clearTimeout(timeout);
     }
   }
 

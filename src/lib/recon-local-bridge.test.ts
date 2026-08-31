@@ -1,4 +1,8 @@
 import { describe, expect, it } from 'vitest';
+import { createHash } from 'node:crypto';
+import { mkdtemp, rm, writeFile } from 'node:fs/promises';
+import os from 'node:os';
+import path from 'node:path';
 import {
   LOCAL_BRIDGE_CLIENT_HEADER,
   LOCAL_BRIDGE_HOST,
@@ -10,7 +14,7 @@ import {
 
 async function withLocalBridge(
   run: (baseUrl: string, launched: string[]) => Promise<void>,
-  options: { jobTtlMs?: number } = {},
+  options: { jobTtlMs?: number; resultTtlMs?: number; resultRoot?: string } = {},
 ) {
   const launched: string[] = [];
   const server = createLocalBridgeServer({ ...options, launchHandler: (uri: string) => launched.push(uri) });
@@ -188,6 +192,75 @@ describe('local recon bridge boundary', () => {
     });
   });
 
+  it('returns a completed official PDF to the trusted app without exposing the raw query in status', async () => {
+    const resultRoot = await mkdtemp(path.join(os.tmpdir(), 'lawirisk-recon-result-'));
+    try {
+      await withLocalBridge(async (baseUrl) => {
+        const launch = await fetch(`${baseUrl}/v1/command`, {
+          method: 'POST',
+          headers: { ...trustedHeaders, 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            uri: 'lawirisk-recon://launch?source=FDA_SKYNET&case_id=case-1&service=DBD',
+            search: { field: 'JURISTIC_ID', value: '0100000000001', purpose: 'ตรวจสอบตามสำนวนที่ได้รับมอบหมาย', confirmed: true },
+          }),
+        });
+        const launched = await launch.json() as { job_id: string };
+        const jobId = launched.job_id;
+        const consumed = await fetch(`${baseUrl}/v1/jobs/${jobId}`, { headers: { 'X-LawiRisk-Recon-Job': jobId } });
+        expect(consumed.status).toBe(200);
+
+        const pdfFilename = `FDA_SKYNET-DBD-${jobId}.pdf`;
+        const metadataFilename = `FDA_SKYNET-DBD-${jobId}.json`;
+        const pdfBytes = Buffer.from('%PDF-1.4\n% trusted test result\n%%EOF', 'utf8');
+        const pdfSha256 = createHash('sha256').update(pdfBytes).digest('hex');
+        await Promise.all([
+          writeFile(path.join(resultRoot, pdfFilename), pdfBytes),
+          writeFile(path.join(resultRoot, metadataFilename), '{}', 'utf8'),
+        ]);
+        const completed = await fetch(`${baseUrl}/v1/jobs/${jobId}/complete`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json', 'X-LawiRisk-Recon-Job': jobId },
+          body: JSON.stringify({
+            pdfFilename,
+            metadataFilename,
+            pdfSha256,
+            resultRowCount: 1,
+            resultSummaries: ['0100000000001 บริษัท ตัวอย่าง จำกัด'],
+            capturedAt: '2026-08-29T03:00:00.000Z',
+            sourceUrl: 'https://help.fda.moph.go.th/FDA_DBD/HOME/FRM_DBD_DATA_SEARCH',
+            adapterVersion: 'test-v1',
+            searchStrategy: 'EXACT',
+            searchAttemptCount: 1,
+          }),
+        });
+        expect(completed.status).toBe(200);
+
+        const status = await fetch(`${baseUrl}/v1/jobs/${jobId}/status`, { headers: trustedHeaders });
+        expect(status.status).toBe(200);
+        const statusText = await status.text();
+        expect(statusText).not.toContain('value');
+        expect(statusText).not.toContain('purpose');
+        expect(JSON.parse(statusText)).toMatchObject({ data: { state: 'COMPLETE', result: { pdfSha256, resultRowCount: 1 } } });
+
+        const result = await fetch(`${baseUrl}/v1/jobs/${jobId}/result`, { headers: trustedHeaders });
+        expect(result.status).toBe(200);
+        expect(Buffer.from(await result.arrayBuffer())).toEqual(pdfBytes);
+
+        const imported = await fetch(`${baseUrl}/v1/jobs/${jobId}/imported`, {
+          method: 'POST',
+          headers: { ...trustedHeaders, 'Content-Type': 'application/json' },
+          body: JSON.stringify({ evidenceId: '00000000-0000-4000-8000-000000000123' }),
+        });
+        expect(imported.status).toBe(200);
+        const gone = await fetch(`${baseUrl}/v1/jobs/${jobId}/status`, { headers: trustedHeaders });
+        expect(gone.status).toBe(404);
+      }, { resultRoot });
+    }
+    finally {
+      await rm(resultRoot, { recursive: true, force: true });
+    }
+  });
+
   it('denies browser-origin access to local jobs and fails closed for unsafe search requests', async () => {
     await withLocalBridge(async (baseUrl, launched) => {
       const invalidRequests = [
@@ -250,6 +323,18 @@ describe('local recon bridge boundary', () => {
         field: 'JURISTIC_ID',
         service: 'DBD',
         value: '0100000000001',
+      });
+      const validFdaPublic = validateLocalSearch(
+        { field: 'FACILITY_TERM', value: 'ร้านยาทดสอบ', purpose: 'ตรวจสอบตามสำนวนทดสอบที่ได้รับมอบหมาย', confirmed: true },
+        {
+          action: 'launch',
+          source: { key: 'FDA_PUBLIC' },
+          caseId: 'case-1',
+          service: 'FDA_DRUG_REGISTRY',
+        },
+      );
+      expect(validFdaPublic).toMatchObject({
+        source: 'FDA_PUBLIC', field: 'FACILITY_TERM', service: 'FDA_DRUG_REGISTRY', value: 'ร้านยาทดสอบ',
       });
       expect(() => validateLocalSearch(
         { field: 'JURISTIC_ID', value: '123', purpose: 'ตรวจสอบตามสำนวนทดสอบที่ได้รับมอบหมาย', confirmed: true },

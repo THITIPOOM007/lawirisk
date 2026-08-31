@@ -1,4 +1,19 @@
 export const RECON_SOURCES = Object.freeze({
+  FDA_PUBLIC: Object.freeze({
+    key: 'FDA_PUBLIC',
+    name: 'ศูนย์ตรวจสอบการอนุญาต อย.',
+    startUrl: 'https://meshlog.fda.moph.go.th/SEARCH_CENTER_HERB/MAIN/SEARCH_CENTER_MAIN.aspx',
+    secureTransport: true,
+    adapterVersion: 'fda-public-central-search-2026-08-30.1',
+    services: Object.freeze([
+      'FDA_DRUG_REGISTRY',
+      'FDA_FOOD_REGISTRY',
+      'FDA_HAZARDOUS_REGISTRY',
+      'FDA_COSMETIC_REGISTRY',
+      'FDA_HERBAL_REGISTRY',
+      'FDA_MEDICAL_DEVICE_REGISTRY',
+    ]),
+  }),
   FDA_SKYNET: Object.freeze({
     key: 'FDA_SKYNET',
     name: 'SKYNET / Privus อย.',
@@ -24,6 +39,38 @@ export const RECON_SOURCES = Object.freeze({
     services: Object.freeze(['HSS_HEALTH_BUSINESS_APPROVED']),
   }),
 });
+
+export const FDA_PUBLIC_SEARCH_CONTRACTS = Object.freeze({
+  FDA_DRUG_REGISTRY: Object.freeze({
+    FACILITY_TERM: Object.freeze({ selector: '#ContentPlaceHolder1_R_LCN_DRUG', mode: 'LOCATION' }),
+    PRODUCT_TERM: Object.freeze({ selector: '#ContentPlaceHolder1_CheckBoxList1_1', mode: 'PRODUCT' }),
+  }),
+  FDA_FOOD_REGISTRY: Object.freeze({
+    FACILITY_TERM: Object.freeze({ selector: '#ContentPlaceHolder1_R_LCN_FOOD', mode: 'LOCATION' }),
+    PRODUCT_TERM: Object.freeze({ selector: '#ContentPlaceHolder1_CheckBoxList1_0', mode: 'PRODUCT' }),
+  }),
+  FDA_HAZARDOUS_REGISTRY: Object.freeze({
+    FACILITY_TERM: Object.freeze({ selector: '#ContentPlaceHolder1_R_LCN_TXC', mode: 'LOCATION' }),
+    PRODUCT_TERM: Object.freeze({ selector: '#ContentPlaceHolder1_CheckBoxList1_3', mode: 'PRODUCT' }),
+  }),
+  FDA_COSMETIC_REGISTRY: Object.freeze({
+    PRODUCT_TERM: Object.freeze({ selector: '#ContentPlaceHolder1_CheckBoxList1_4', mode: 'PRODUCT' }),
+  }),
+  FDA_HERBAL_REGISTRY: Object.freeze({
+    FACILITY_TERM: Object.freeze({ selector: '#ContentPlaceHolder1_R_LCN_DRUG_HERB', mode: 'LOCATION' }),
+    PRODUCT_TERM: Object.freeze({ selector: '#ContentPlaceHolder1_CheckBoxList1_2', mode: 'PRODUCT' }),
+  }),
+  FDA_MEDICAL_DEVICE_REGISTRY: Object.freeze({
+    FACILITY_TERM: Object.freeze({ selector: '#ContentPlaceHolder1_R_LCN_MDC', mode: 'LOCATION' }),
+    PRODUCT_TERM: Object.freeze({ selector: '#ContentPlaceHolder1_CheckBoxList1_6', mode: 'PRODUCT' }),
+  }),
+});
+
+export function resolveFdaPublicSearchContract(service, field) {
+  const contract = FDA_PUBLIC_SEARCH_CONTRACTS[service]?.[field];
+  if (!contract) throw new Error('SEARCH_FIELD_NOT_ALLOWED');
+  return contract;
+}
 
 export const FDA_SEARCH_MODELS = Object.freeze({
   DBD: Object.freeze({
@@ -88,6 +135,11 @@ export function resolveEsta2SearchOption(service, field) {
 }
 
 const BUSINESS_NAME_FALLBACK_FIELDS = new Set([
+  'FDA_PUBLIC:FDA_DRUG_REGISTRY:FACILITY_TERM',
+  'FDA_PUBLIC:FDA_FOOD_REGISTRY:FACILITY_TERM',
+  'FDA_PUBLIC:FDA_HAZARDOUS_REGISTRY:FACILITY_TERM',
+  'FDA_PUBLIC:FDA_HERBAL_REGISTRY:FACILITY_TERM',
+  'FDA_PUBLIC:FDA_MEDICAL_DEVICE_REGISTRY:FACILITY_TERM',
   'HSS_OSS:HSS_FACILITY:FACILITY_NAME',
   'HSS_ESTA2:HSS_HEALTH_BUSINESS_APPROVED:FACILITY_NAME',
   'HSS_ESTA2:HSS_HEALTH_BUSINESS_APPROVED:FACILITY_NAME_ENGLISH',
@@ -214,6 +266,7 @@ export function safeCompanionMessage(error) {
     SEARCH_FORM_CHANGED: 'ฟอร์มค้นของระบบต้นทางเปลี่ยนแปลง กรุณาให้ผู้ดูแลตรวจ adapter',
     SEARCH_REQUEST_NOT_RETAINED: 'ระบบต้นทางไม่ยืนยันคำค้นที่ส่งไป จึงไม่บันทึกผลเป็นหลักฐาน',
     SEARCH_RESULT_NOT_BOUND_TO_QUERY: 'ผลลัพธ์จากระบบต้นทางไม่สัมพันธ์กับคำค้น จึงไม่บันทึกผลเป็นหลักฐาน',
+    FDA_PUBLIC_SOURCE_REDIRECTED: 'ระบบสาธารณะของ อย. เปลี่ยนเส้นทางออกจากหน้าที่ตรวจยืนยัน ระบบจึงหยุดเพื่อป้องกันการค้นผิดแหล่ง',
     SEARCH_CAPTURE_FAILED: 'ค้นสำเร็จแต่บันทึกผลบนเครื่องไม่สำเร็จ กรุณาส่งออกผลด้วยตนเอง',
     HSS_SERVICE_SWITCH_UNAVAILABLE: 'บัญชี HSS นี้ไม่แสดงเมนูเปลี่ยนไปยังบริการย่อยที่เลือก',
     HSS_SERVICE_SWITCH_FAILED: 'เปิดบริการย่อย HSS ที่เลือกไม่สำเร็จ โปรดตรวจสิทธิ์ของบัญชีในหน้าต่างต้นทาง',

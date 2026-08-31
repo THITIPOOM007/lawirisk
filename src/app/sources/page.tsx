@@ -61,6 +61,12 @@ async function invokeLocalCompanion(uri: string, search?: LocalSearchRequest): P
 }
 
 const statusMeta = {
+  LOCAL_PUBLIC_SEARCH: {
+    label: 'ค้นสาธารณะอัตโนมัติ',
+    detail: 'Recon Companion เลือกหมวด กรอกคำค้น กดค้น และบันทึกผลจากหน้า อย. บนเครื่องโดยไม่ต้องใช้บัญชี',
+    icon: SearchCheck,
+    className: 'border-cyan-300/15 bg-cyan-300/[0.055] text-cyan-200',
+  },
   LOCAL_AUTO_LOGIN: {
     label: 'Auto-login บนเครื่อง',
     detail: 'Recon Companion กรอกบัญชีและกดเข้าสู่ระบบบนเครื่อง Windows ของเจ้าหน้าที่',
@@ -104,6 +110,7 @@ export default function SourcesPage() {
   }
 
   async function setupCompanion(source: ExternalSource) {
+    if (!source.companionSetupUrl) return;
     setSettingUpKey(source.key);
     setError('');
     setNotice('');
@@ -251,13 +258,17 @@ export default function SourcesPage() {
         </div>
       )}
 
+      <section className="rounded-[26px] border border-sky-300/15 bg-[linear-gradient(120deg,rgba(14,165,233,0.08),rgba(15,23,42,0.45))] p-5 sm:p-6" aria-label="คำอธิบายความพร้อมของแหล่งข้อมูล">
+        <div className="flex items-start gap-3"><span className="grid h-10 w-10 shrink-0 place-items-center rounded-2xl border border-sky-300/15 bg-sky-300/[0.07]"><ShieldAlert className="h-4 w-4 text-sky-200" /></span><div><h2 className="text-sm font-bold text-white">คำว่า “ไม่พร้อม” ไม่ได้แปลว่าลิงก์เสีย</h2><p className="mt-2 text-xs leading-6 text-slate-400">เว็บไซต์สาธารณะที่ไม่ต้องล็อกอินจะค้นผ่าน Public Web/Open Data จากหน้าคดี ส่วนรายการด้านล่างเป็นระบบทางการที่ต้องใช้บัญชีเจ้าหน้าที่หรือฟอร์มเฉพาะ หากขึ้น “เปิดฟอร์มเท่านั้น” หมายถึงลิงก์เปิดได้ แต่ยังไม่มี adapter ที่ตรวจชื่อช่อง กติกาค้น และรูปแบบผลลัพธ์ครบ จึงไม่กรอกหรือกดค้นแบบเดาสุ่ม</p><div className="mt-3 flex flex-wrap gap-2 text-[9px] font-semibold"><span className="rounded-full border border-emerald-300/15 bg-emerald-300/[0.06] px-2.5 py-1 text-emerald-200">HTTPS + field contract = ค้นอัตโนมัติ</span><span className="rounded-full border border-amber-300/15 bg-amber-300/[0.06] px-2.5 py-1 text-amber-200">ลิงก์มี แต่ยังไม่มี adapter = เปิดฟอร์ม</span><span className="rounded-full border border-rose-300/15 bg-rose-300/[0.06] px-2.5 py-1 text-rose-200">HTTP/OTP/CAPTCHA = ต้องให้เจ้าหน้าที่ดำเนินการ</span></div></div></div>
+      </section>
+
       <section aria-label="ทะเบียนแหล่งสืบค้น" className="grid gap-5 xl:grid-cols-2">
         {isLoading ? [0, 1, 2].map((item) => (
           <div key={item} className="soft-panel min-h-[390px] rounded-[26px] p-6"><div className="skeleton-shimmer h-12 w-12 rounded-2xl" /><div className="mt-6 h-7 w-52 rounded-lg skeleton-shimmer" /><div className="mt-4 h-4 w-full rounded skeleton-shimmer" /><div className="mt-2 h-4 w-3/4 rounded skeleton-shimmer" /></div>
         )) : sources.map((source) => {
           const status = statusMeta[source.accessMode];
           const StatusIcon = status.icon;
-          const SourceIcon = source.key === 'FDA_SKYNET' ? DatabaseZap : Building2;
+          const SourceIcon = source.key.startsWith('FDA_') ? DatabaseZap : Building2;
           const launchable = source.transport === 'HTTPS';
           const insecure = source.transport === 'HTTP_ONLY';
           const selectedService = source.services.find((service) => service.key === (selectedServices[source.key] || source.services[0]?.key));
@@ -279,7 +290,7 @@ export default function SourcesPage() {
               <p className="mt-4 text-sm leading-6 text-slate-300">{source.coverage}</p>
 
               <dl className="mt-5 grid gap-3 sm:grid-cols-2">
-                <div className="rounded-xl border border-white/[0.055] bg-white/[0.02] p-3"><dt className="flex items-center gap-2 text-[10px] uppercase tracking-[0.14em] text-slate-600"><KeyRound className="h-3.5 w-3.5" />การยืนยันตัวตน</dt><dd className="mt-1.5 text-xs font-medium text-slate-300">{source.authMode === 'EGOV_OIDC' ? 'eGov Connect / OIDC' : 'บัญชีระบบเดิม'}</dd></div>
+                <div className="rounded-xl border border-white/[0.055] bg-white/[0.02] p-3"><dt className="flex items-center gap-2 text-[10px] uppercase tracking-[0.14em] text-slate-600"><KeyRound className="h-3.5 w-3.5" />การยืนยันตัวตน</dt><dd className="mt-1.5 text-xs font-medium text-slate-300">{source.authMode === 'NONE' ? 'ไม่ต้องเข้าสู่ระบบ' : source.authMode === 'EGOV_OIDC' ? 'eGov Connect / OIDC' : 'บัญชีระบบเดิม'}</dd></div>
                 <div className="rounded-xl border border-white/[0.055] bg-white/[0.02] p-3"><dt className="flex items-center gap-2 text-[10px] uppercase tracking-[0.14em] text-slate-600"><LockKeyhole className="h-3.5 w-3.5" />Transport</dt><dd className={`mt-1.5 text-xs font-medium ${source.transport === 'HTTPS' ? 'text-emerald-200' : 'text-rose-200'}`}>{source.transport === 'HTTPS' ? 'HTTPS ตรวจแล้ว' : 'HTTP ไม่มี TLS'}</dd></div>
               </dl>
 
@@ -289,7 +300,7 @@ export default function SourcesPage() {
               </div>
 
               <fieldset className="mt-5">
-                <legend className="text-[10px] font-semibold uppercase tracking-[0.14em] text-slate-500">เลือกหน้าสืบค้นหลังล็อกอิน</legend>
+                <legend className="text-[10px] font-semibold uppercase tracking-[0.14em] text-slate-500">{source.authMode === 'NONE' ? 'เลือกหมวดข้อมูลที่จะค้น' : 'เลือกหน้าสืบค้นหลังล็อกอิน'}</legend>
                 <div className="mt-2 grid gap-2">
                   {source.services.map((service) => {
                     const selected = (selectedServices[source.key] || source.services[0]?.key) === service.key;
@@ -321,7 +332,7 @@ export default function SourcesPage() {
               {selectedService?.automationMode === 'LOCAL_SEARCH' ? (
                 <fieldset className="mt-5 space-y-3 rounded-2xl border border-teal-300/15 bg-teal-300/[0.035] p-4">
                   <legend className="px-2 text-[10px] font-semibold uppercase tracking-[0.14em] text-teal-200">
-                    {source.key === 'FDA_SKYNET' ? 'ค้นอัตโนมัติแบบระบุตรง local-only' : 'ค้นอัตโนมัติหลายระดับแบบ local-only'}
+                    {source.key === 'FDA_PUBLIC' ? 'ค้นอัตโนมัติในทะเบียนสาธารณะ อย.' : source.key === 'FDA_SKYNET' ? 'ค้นอัตโนมัติแบบระบุตรง local-only' : 'ค้นอัตโนมัติหลายระดับแบบ local-only'}
                   </legend>
                   <label className="block text-[11px] font-medium text-slate-300">
                     สำนวนคดี
@@ -387,7 +398,7 @@ export default function SourcesPage() {
                     className="primary-action inline-flex min-h-11 w-full items-center justify-center gap-2 rounded-xl px-5 text-sm font-bold disabled:cursor-not-allowed disabled:opacity-45"
                   >
                     {launchingKey === `${source.key}:search` ? <Loader2 className="h-4 w-4 animate-spin" /> : <SearchCheck className="h-4 w-4" />}
-                    ล็อกอิน ค้น และบันทึกผล PDF อัตโนมัติ
+                    {source.authMode === 'NONE' ? 'ค้นและบันทึกผล PDF อัตโนมัติ' : 'ล็อกอิน ค้น และบันทึกผล PDF อัตโนมัติ'}
                   </button>
                 </fieldset>
               ) : (
@@ -397,15 +408,17 @@ export default function SourcesPage() {
               )}
 
               <div className="mt-auto space-y-3 pt-6">
-                <button
-                  type="button"
-                  onClick={() => void setupCompanion(source)}
-                  disabled={settingUpKey === source.key}
-                  className="secondary-action inline-flex min-h-11 w-full items-center justify-center gap-2 rounded-xl border border-white/[0.08] px-5 text-sm font-semibold text-slate-200 disabled:cursor-not-allowed disabled:opacity-45"
-                >
-                  {settingUpKey === source.key ? <Loader2 className="h-4 w-4 animate-spin" /> : <KeyRound className="h-4 w-4 text-teal-300" />}
-                  ตั้ง/เปลี่ยนบัญชีบนเครื่องนี้
-                </button>
+                {source.companionSetupUrl && (
+                  <button
+                    type="button"
+                    onClick={() => void setupCompanion(source)}
+                    disabled={settingUpKey === source.key}
+                    className="secondary-action inline-flex min-h-11 w-full items-center justify-center gap-2 rounded-xl border border-white/[0.08] px-5 text-sm font-semibold text-slate-200 disabled:cursor-not-allowed disabled:opacity-45"
+                  >
+                    {settingUpKey === source.key ? <Loader2 className="h-4 w-4 animate-spin" /> : <KeyRound className="h-4 w-4 text-teal-300" />}
+                    ตั้ง/เปลี่ยนบัญชีบนเครื่องนี้
+                  </button>
+                )}
                 {insecure && (
                   <label className="flex cursor-pointer items-start gap-3 rounded-xl border border-rose-300/15 bg-rose-300/[0.04] p-3 text-[11px] leading-5 text-rose-100">
                     <input type="checkbox" checked={insecureAcknowledged} onChange={(event) => setInsecureAcknowledged(event.target.checked)} className="mt-1 h-4 w-4 accent-rose-500" />
@@ -419,7 +432,7 @@ export default function SourcesPage() {
                   className={`inline-flex min-h-11 w-full items-center justify-center gap-2 rounded-xl px-5 text-sm font-bold disabled:cursor-not-allowed disabled:opacity-45 ${insecure ? 'border border-rose-300/20 bg-rose-500/15 text-rose-100' : 'primary-action'}`}
                 >
                   {launchingKey === source.key ? <Loader2 className="h-4 w-4 animate-spin" /> : <ArrowUpRight className="h-4 w-4" />}
-                  ล็อกอินและเปิดหน้าสืบค้นที่เลือก
+                  {source.authMode === 'NONE' ? 'เปิดหน้าสืบค้นทางการที่เลือก' : 'ล็อกอินและเปิดหน้าสืบค้นที่เลือก'}
                 </button>
                 {launchable && (
                   <form method="post" action={`/api/v1/sources/${source.key}/launch`} target="_blank">

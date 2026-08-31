@@ -22,6 +22,74 @@ test('loads authenticated dashboard data and case registry', async ({ page }) =>
   await expect(page.getByText(/ค\.123\/2569/).first()).toBeVisible();
 });
 
+test('opens the futuristic command deck and reports real runtime readiness', async ({ page }) => {
+  await loginAsInvestigator(page);
+  await page.goto('/');
+  await page.keyboard.press('Control+K');
+  const commandDeck = page.getByRole('dialog', { name: 'ศูนย์คำสั่งลัด' });
+  await expect(commandDeck).toBeVisible();
+  await commandDeck.getByLabel('ค้นหาระบบหรือคำสั่ง').fill('คลังหลักฐาน');
+  await expect(commandDeck.getByRole('option', { name: /คลังหลักฐานดิจิทัล/ })).toBeVisible();
+  await page.keyboard.press('Enter');
+  await expect(page).toHaveURL(/\/evidence$/);
+
+  await page.goto('/');
+  const pulse = page.getByRole('button', { name: /DEMO SYSTEM|RUNTIME CONFIGURED|ATTENTION REQUIRED|STATUS UNKNOWN/ });
+  await expect(pulse).toBeVisible();
+  await pulse.click();
+  const readiness = page.getByRole('dialog', { name: 'สถานะความพร้อมของระบบ' });
+  await expect(readiness).toContainText('Evidence Vault');
+  await expect(readiness).toContainText('Automation Engine');
+  const readinessBox = await readiness.boundingBox();
+  expect(readinessBox).not.toBeNull();
+  expect(readinessBox!.x + readinessBox!.width).toBeLessThanOrEqual(1280);
+  expect(readinessBox!.x).toBeGreaterThan(850);
+});
+
+test('opens a real notification center, deep-links to source work, and persists read state', async ({ page }) => {
+  await page.setViewportSize({ width: 1280, height: 800 });
+  await loginAsInvestigator(page);
+  await page.goto('/intake');
+
+  const trigger = page.getByRole('button', { name: /เปิดศูนย์แจ้งเตือน/ });
+  await expect(trigger).toHaveAccessibleName(/มี \d+ รายการที่ยังไม่ได้อ่าน/);
+  const badge = page.getByTestId('notification-unread-badge');
+  await expect(badge).toBeVisible();
+  const triggerBox = await trigger.boundingBox();
+  const badgeBox = await badge.boundingBox();
+  expect(triggerBox).not.toBeNull();
+  expect(badgeBox).not.toBeNull();
+  expect(badgeBox!.x).toBeGreaterThanOrEqual(triggerBox!.x);
+  expect(badgeBox!.y).toBeGreaterThanOrEqual(triggerBox!.y);
+  expect(badgeBox!.x + badgeBox!.width).toBeLessThanOrEqual(triggerBox!.x + triggerBox!.width);
+  expect(badgeBox!.y + badgeBox!.height).toBeLessThanOrEqual(triggerBox!.y + triggerBox!.height);
+  await trigger.click();
+  const center = page.getByRole('dialog', { name: 'ศูนย์แจ้งเตือน' });
+  await expect(center).toBeVisible();
+  await expect(center.getByText('ศูนย์แจ้งเตือนและงานที่ต้องดำเนินการ')).toBeVisible();
+  await expect(center.getByText(/เบาะแสเร่งด่วนรอคัดกรอง/).first()).toBeVisible();
+  const centerBox = await center.boundingBox();
+  expect(centerBox).not.toBeNull();
+  expect(centerBox!.x).toBeGreaterThan(820);
+  expect(centerBox!.x + centerBox!.width).toBeLessThanOrEqual(1280);
+
+  await center.getByText(/เบาะแสเร่งด่วนรอคัดกรอง/).first().click();
+  await expect(page).toHaveURL(/\/intake\/env-/);
+  await expect(center).toBeHidden();
+
+  await page.goto('/intake');
+  await trigger.click();
+  await center.getByRole('button', { name: /อ่านแล้วทั้งหมด/ }).click();
+  await expect(center.getByText('อ่านรายการสำคัญครบแล้ว')).toBeVisible();
+  await page.reload();
+  await page.getByRole('button', { name: 'เปิดศูนย์แจ้งเตือน' }).click();
+  await expect(page.getByRole('dialog', { name: 'ศูนย์แจ้งเตือน' }).getByText('อ่านรายการสำคัญครบแล้ว')).toBeVisible();
+
+  const blocked = await page.request.patch('/api/v1/notifications', { data: { ids: ['intake:env-1:triage'] } });
+  expect(blocked.status()).toBe(403);
+  await expect(blocked.json()).resolves.toMatchObject({ error: { code: 'UNTRUSTED_ORIGIN' } });
+});
+
 test('creates a case without the onboarding nudge covering the primary action', async ({ page }) => {
   const caseNumber = `E2E-NUDGE-${Date.now()}/2569`;
   await page.setViewportSize({ width: 1280, height: 800 });
@@ -48,11 +116,24 @@ test('imports a validated UTF-8 CSV batch through the real API route', async ({ 
   await expect(page.getByText(/นำเข้าแล้ว 1 แถว; ไม่ผ่าน 0 แถว/)).toBeVisible();
 });
 
-test('opens the source-bound intelligence workspace and generates safe dossier drafts', async ({ page }) => {
+test('searches source-bound intelligence findings and generates safe dossier drafts', async ({ page }) => {
   await loginAsInvestigator(page);
   await page.goto('/cases/case-1');
   await expect(page.getByRole('heading', { name: 'Case Intelligence Workspace' })).toBeVisible();
-  await page.getByRole('button', { name: 'ตรวจสถานะข้อมูลคดี' }).click();
+  await expect(page.getByRole('heading', { name: 'คำตอบและคำแนะนำอัตโนมัติพร้อมใช้งาน' })).toBeVisible();
+  await expect(page.getByText('AUTO_ADVICE_READY', { exact: true })).toBeVisible();
+  await expect(page.getByText(/ใช้จัดลำดับงานได้ทันที/).first()).toBeVisible();
+  await page.getByRole('button', { name: 'ค้นอัตโนมัติและเก็บหลักฐาน' }).click();
+  await expect(page.getByRole('status').filter({ hasText: 'คำตอบจากการค้น' })).toContainText('พบข้อมูลที่ตรวจย้อนกลับได้');
+  await expect(page.getByRole('heading', { name: 'หลักฐานต้นฉบับที่ระบบพบ' })).toBeVisible();
+  await expect(page.getByText('fb_ad_screenshot.png').last()).toBeVisible();
+  await expect(page.getByRole('heading', { name: 'ข้อมูลที่ระบบพบ' })).toBeVisible();
+  await expect(page.getByRole('heading', { name: 'งานที่ระบบพักไว้เพื่อความปลอดภัย' })).toBeHidden();
+  await expect(page.getByText('ข้อเท็จจริงที่ตรวจทานแล้ว').first()).toBeVisible();
+  await expect(page.getByText(/SHA-256 89504E47d32b/).first()).toBeVisible();
+  const scopeDetails = page.getByText(/ดูขอบเขตและช่องทางที่ระบบตรวจสอบทั้งหมด/);
+  await expect(scopeDetails).toBeVisible();
+  await scopeDetails.click();
   await expect(page.getByText('ทะเบียนบุคคลและนิติบุคคล')).toBeVisible();
   await expect(page.getByText('ต้องตรวจ/ยืนยัน').first()).toBeVisible();
   await expect(page.getByText('ชื่อ เบอร์โทร และช่องทางติดต่อ')).toBeVisible();
@@ -337,7 +418,7 @@ test('runs demo OCR, keeps source trace, and reaches biometric review', async ({
   ]);
   await page.goto('/review');
   await page.getByLabel('เลือกสำนวนคดี').selectOption('case-1');
-  await page.getByLabel('หลักฐานที่ปลอดภัย (CLEAN)').selectOption('ev-1');
+  await page.getByLabel('หลักฐานที่จัดเก็บและตรวจโครงสร้างแล้ว').selectOption('ev-1');
   await page.getByRole('button', { name: 'ทดลอง OCR และสกัดข้อมูล' }).click();
   await expect(page.getByText(/ประมวลผลข้อเสนอแนะสำเร็จ 1 รายการ/)).toBeVisible();
   await expect(page.getByText('DEMO_OCR_RULE_ENGINE').first()).toBeVisible();
@@ -346,8 +427,37 @@ test('runs demo OCR, keeps source trace, and reaches biometric review', async ({
   await firstCard.getByPlaceholder(/ระบุเหตุผลการรับรอง/).fill('ตรวจข้อความและตำแหน่งอ้างอิงแล้ว');
   await firstCard.getByRole('button', { name: 'ลงนามรับรอง' }).click();
   await expect(page.getByRole('heading', { name: 'ยืนยันการรับรองพยานหลักฐานด้วยชีวมิติ' })).toBeVisible();
+  const biometricDialog = page.getByTestId('biometric-step-up-dialog');
+  const dialogPosition = await biometricDialog.evaluate((element) => {
+    const bounds = element.getBoundingClientRect();
+    return { top: bounds.top, bottom: bounds.bottom, viewportHeight: window.innerHeight, bodyOverflow: document.body.style.overflow };
+  });
+  expect(dialogPosition.top).toBeGreaterThanOrEqual(0);
+  expect(dialogPosition.top).toBeLessThan(dialogPosition.viewportHeight * 0.2);
+  expect(dialogPosition.bottom).toBeLessThanOrEqual(dialogPosition.viewportHeight);
+  expect(dialogPosition.bodyOverflow).toBe('hidden');
   await page.getByRole('button', { name: 'สแกนใบหน้า / ลายนิ้วมือเพื่อยืนยัน' }).click();
   await expect(page.getByText(/บันทึกผลการตรวจทานและบันทึกประวัติ/)).toBeVisible({ timeout: 15_000 });
+});
+
+test('selects several review items and confirms them with one biometric signature', async ({ page }) => {
+  await page.context().addCookies([
+    { name: 'mock-auth-logged-in', value: 'true', url: testBaseUrl },
+    { name: 'mock-auth-role', value: 'REVIEWER', url: testBaseUrl },
+    { name: 'mock-auth-name', value: encodeURIComponent('ผู้ตรวจทานสาธิต'), url: testBaseUrl },
+  ]);
+  await page.goto('/review');
+  await page.getByLabel('เลือกสำนวนคดี').selectOption('case-1');
+  await page.getByLabel('หลักฐานที่จัดเก็บและตรวจโครงสร้างแล้ว').selectOption('ev-1');
+  await page.getByRole('button', { name: 'ทดลอง OCR และสกัดข้อมูล' }).click();
+  await expect(page.getByText(/ประมวลผลข้อเสนอแนะสำเร็จ 1 รายการ/)).toBeVisible();
+  await page.getByRole('button', { name: 'เลือกที่พร้อมรับรองทั้งหมด' }).click();
+  await expect(page.getByText(/เลือกแล้ว 2\/2/)).toBeVisible();
+  await page.getByLabel('เหตุผลร่วมสำหรับทุกรายการที่เลือก').fill('ตรวจไฟล์ต้นฉบับ หน้าเอกสาร และข้อความอ้างอิงครบทั้งสองรายการแล้ว');
+  await page.getByRole('button', { name: 'ลงนามและรับรอง 2 รายการ' }).click();
+  await expect(page.getByRole('heading', { name: 'ลงนามรับรองพยานหลักฐานหลายรายการ' })).toBeVisible();
+  await page.getByRole('button', { name: 'สแกนครั้งเดียวเพื่อรับรอง 2 รายการ' }).click();
+  await expect(page.getByText(/ลงนามครั้งเดียวและรับรอง 2 รายการเรียบร้อยแล้ว/)).toBeVisible({ timeout: 15_000 });
 });
 
 test('exports an authenticated immutable PDF snapshot', async ({ page }) => {

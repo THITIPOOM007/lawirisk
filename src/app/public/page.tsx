@@ -24,12 +24,14 @@ interface SearchResultItem {
   id: string;
   title: string;
   category: string;
+  productCategoryLabel: string;
   snippet: string;
   source: string;
   sourceUrl: string;
   publishedDate: string;
   confidenceScore: number;
-  status: 'SAFE' | 'WARNING' | 'REVOKED' | 'UNREGISTERED';
+  status: 'SAFE' | 'WARNING' | 'REVOKED' | 'UNREGISTERED' | 'UNAVAILABLE';
+  metadata?: Record<string, string>;
 }
 
 interface TrackingResult {
@@ -42,7 +44,7 @@ interface TrackingResult {
   jurisdiction: string;
 }
 
-type SearchCategory = 'ALL' | 'HEALTH_PRODUCTS' | 'FRAUD_ALERTS' | 'COMPANIES' | 'LICENSES';
+type SearchCategory = 'ALL' | 'HEALTH_PRODUCTS' | 'HEALTH_SERVICES' | 'FRAUD_ALERTS' | 'COMPANIES' | 'LICENSES';
 
 export default function PublicPortalPage() {
   const [activeTab, setActiveTab] = useState<'SEARCH' | 'COMPLAINT' | 'TRACK'>('SEARCH');
@@ -241,7 +243,7 @@ export default function PublicPortalPage() {
             ตรวจสอบข้อมูลความปลอดภัยและแจ้งเบาะแสดิจิทัล
           </h1>
           <p className="text-sm text-slate-400 max-w-2xl mx-auto leading-relaxed">
-            สืบค้นข้อมูลผลิตภัณฑ์สุขภาพที่ถูกเพิกถอน บัญชีเฝ้าระวัง และยื่นเรื่องแจ้งเบาะแสต่อเจ้าหน้าที่ พร้อมระบบติดตามความคืบหน้า
+            ค้นทะเบียนผลิตภัณฑ์จาก อย. และตรวจสถานประกอบการเพื่อสุขภาพจาก สบส. พร้อมรายละเอียดสถานะจากต้นทาง
           </p>
 
           {/* Navigation Tabs */}
@@ -256,7 +258,7 @@ export default function PublicPortalPage() {
               }`}
             >
               <Search className="w-4 h-4" />
-              สืบค้นข้อมูลเตือนภัย
+              ตรวจสอบทะเบียนทางการ
             </button>
             <button
               type="button"
@@ -300,7 +302,7 @@ export default function PublicPortalPage() {
                     aria-label="คำค้นหาข้อมูลสาธารณะ"
                     value={searchQuery}
                     onChange={(e) => setSearchQuery(e.target.value)}
-                    placeholder="พิมพ์ชื่อผลิตภัณฑ์, ยี่ห้อ, เลข อย., หรือชื่อบุคคล/เพจที่สงสัย..."
+                    placeholder="เลข อย./ชื่อผลิตภัณฑ์ หรือชื่อคลินิก/ร้านนวด/สปา..."
                     className="w-full pl-10 pr-4 py-3 bg-slate-950 border border-white/[0.1] rounded-2xl text-sm text-white placeholder:text-slate-600 focus:outline-none focus:border-teal-400"
                   />
                 </div>
@@ -309,11 +311,12 @@ export default function PublicPortalPage() {
                   onChange={(e) => setCategory(e.target.value as SearchCategory)}
                   className="bg-slate-950 border border-white/[0.1] rounded-2xl px-4 py-3 text-xs text-white"
                 >
-                  <option value="ALL">ทุกหมวดหมู่</option>
-                  <option value="HEALTH_PRODUCTS">ผลิตภัณฑ์สุขภาพ / ยา</option>
+                  <option value="ALL">เลือกแหล่งให้อัตโนมัติ</option>
+                  <option value="HEALTH_PRODUCTS">ผลิตภัณฑ์สุขภาพ — อย.</option>
+                  <option value="HEALTH_SERVICES">คลินิก / ร้านนวด / สปา — สบส.</option>
                   <option value="FRAUD_ALERTS">เตือนภัยออนไลน์ / บัญชีม้า</option>
-                  <option value="COMPANIES">สถานพยาบาล / คลินิก</option>
-                  <option value="LICENSES">ใบอนุญาต / อย.</option>
+                  <option value="COMPANIES">นิติบุคคล / บริษัท</option>
+                  <option value="LICENSES">เลขทะเบียน / ใบอนุญาต — อย.</option>
                 </select>
                 <button
                   type="submit"
@@ -332,12 +335,12 @@ export default function PublicPortalPage() {
               )}
             </form>
 
-            {/* AI Citation Summary Box */}
+            {/* Official source summary */}
             {aiSummary && (
               <div className="hud-panel rounded-3xl p-6 border border-teal-300/30 bg-teal-950/20 space-y-3">
                 <div className="flex items-center gap-2 text-xs font-bold text-teal-300">
-                  <Sparkles className="w-4 h-4 text-teal-300 animate-pulse" />
-                  <span>AI SYNTHESIS & CITATION SUMMARY</span>
+                  <Sparkles className="w-4 h-4 text-teal-300" />
+                  <span>สรุปผลจากทะเบียนทางการ</span>
                 </div>
                 <p className="text-sm text-slate-200 leading-relaxed">
                   {aiSummary}
@@ -360,16 +363,26 @@ export default function PublicPortalPage() {
                     <div className="flex flex-wrap items-center justify-between gap-2 pb-2 border-b border-white/[0.06]">
                       <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-lg bg-teal-400/10 border border-teal-300/30 text-xs font-bold text-teal-200">
                         <span>🏷️ หมวดหมู่:</span>
-                        <span className="text-white font-extrabold">{item.title.split(']')[0]?.replace('[', '') || 'ผลิตภัณฑ์สุขภาพ'}</span>
+                        <span className="text-white font-extrabold">{item.category === 'HEALTH_SERVICES' ? 'บริการสุขภาพ — สบส.' : item.productCategoryLabel || 'ผลิตภัณฑ์สุขภาพ — อย.'}</span>
                       </div>
                       <span
                         className={`text-[11px] font-black px-3 py-1 rounded-full uppercase tracking-wider ${
-                          item.status === 'WARNING' || item.status === 'REVOKED'
-                            ? 'bg-rose-500/20 text-rose-300 border border-rose-500/40'
-                            : 'bg-emerald-500/20 text-emerald-300 border border-emerald-500/40 shadow-[0_0_10px_rgba(16,185,129,0.2)]'
+                            item.status === 'WARNING' || item.status === 'REVOKED' || item.status === 'UNAVAILABLE'
+                              ? 'bg-rose-500/20 text-rose-300 border border-rose-500/40'
+                              : item.status === 'UNREGISTERED'
+                                ? 'bg-amber-500/20 text-amber-200 border border-amber-500/40'
+                                : 'bg-emerald-500/20 text-emerald-300 border border-emerald-500/40 shadow-[0_0_10px_rgba(16,185,129,0.2)]'
                         }`}
                       >
-                        ● {item.status === 'SAFE' ? 'พบสถานะใช้งานในทะเบียนที่อนุมัติ' : item.status === 'UNREGISTERED' ? 'ยังไม่ยืนยันกับทะเบียนทางการ' : item.status}
+                        ● {item.status === 'SAFE'
+                          ? 'พบในทะเบียนและสถานะใช้งาน'
+                          : item.status === 'UNREGISTERED'
+                            ? 'ไม่พบรายการที่ตรงกัน'
+                            : item.status === 'UNAVAILABLE'
+                              ? 'ต้นทางไม่พร้อมใช้งาน'
+                              : item.status === 'REVOKED'
+                                ? 'ยกเลิก/เพิกถอน/สิ้นอายุ'
+                                : 'พบรายการที่ต้องตรวจสอบสถานะ'}
                       </span>
                     </div>
 
@@ -384,6 +397,17 @@ export default function PublicPortalPage() {
                     <div className="p-3.5 bg-slate-950/70 border border-white/[0.05] rounded-2xl text-xs text-slate-200 leading-relaxed font-mono">
                       {item.snippet}
                     </div>
+
+                    {item.metadata && Object.keys(item.metadata).length > 0 && (
+                      <dl className="grid grid-cols-1 sm:grid-cols-2 gap-px overflow-hidden rounded-2xl border border-white/[0.08] bg-white/[0.08]">
+                        {Object.entries(item.metadata).map(([label, value]) => (
+                          <div key={label} className="bg-slate-950/90 p-3.5">
+                            <dt className="text-[10px] font-bold uppercase tracking-wider text-slate-500">{label}</dt>
+                            <dd className="mt-1 text-xs leading-relaxed text-slate-100 break-words">{value}</dd>
+                          </div>
+                        ))}
+                      </dl>
+                    )}
 
                     {/* Source & Citation Footer */}
                     <div className="pt-2 flex items-center justify-between text-xs text-slate-400">

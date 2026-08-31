@@ -12,6 +12,9 @@ const cleanEvidenceGateMigration = fs.readFileSync(path.join(process.cwd(), 'sup
 const finalScannerRemovalMigration = fs.readFileSync(path.join(process.cwd(), 'supabase/migrations/202608260003_remove_malware_scanner_again.sql'), 'utf8');
 const falseQuarantineMigration = fs.readFileSync(path.join(process.cwd(), 'supabase/migrations/202608240004_release_false_quarantine.sql'), 'utf8');
 const promotedAttachmentsMigration = fs.readFileSync(path.join(process.cwd(), 'supabase/migrations/202608250001_allow_promoted_attachments.sql'), 'utf8');
+const notificationReadMigration = fs.readFileSync(path.join(process.cwd(), 'supabase/migrations/202608290001_notification_read_state.sql'), 'utf8');
+const evidenceScreeningMigration = fs.readFileSync(path.join(process.cwd(), 'supabase/migrations/202608300001_evidence_screening_and_prediction_reports.sql'), 'utf8');
+const syntheticDemoMigration = fs.readFileSync(path.join(process.cwd(), 'supabase/migrations/202608300002_synthetic_demo_cases.sql'), 'utf8');
 
 describe('production migration invariants', () => {
   it('makes evidence originals and audit history immutable', () => {
@@ -102,5 +105,35 @@ describe('production migration invariants', () => {
     expect(promotedAttachmentsMigration).toContain("SECURITY DEFINER");
     expect(promotedAttachmentsMigration).toContain("INTAKE_ATTACHMENT_RESERVED");
     expect(promotedAttachmentsMigration).toContain("REVOKE ALL ON FUNCTION public.reserve_intake_attachment_upload");
+  });
+
+  it('keeps notification read state private to the authenticated profile', () => {
+    expect(notificationReadMigration).toContain('ALTER TABLE public.notification_reads ENABLE ROW LEVEL SECURITY');
+    expect(notificationReadMigration).toContain('profile_id = auth.uid()');
+    expect(notificationReadMigration).toContain('PRIMARY KEY (profile_id, notification_key)');
+    expect(notificationReadMigration).toContain('GRANT SELECT, INSERT, UPDATE ON public.notification_reads TO authenticated');
+    expect(notificationReadMigration).toContain('REVOKE DELETE ON public.notification_reads FROM anon, authenticated');
+  });
+
+  it('keeps relevance screening advisory, source-bound, reviewed, and auditable', () => {
+    expect(evidenceScreeningMigration).toContain('CREATE TABLE IF NOT EXISTS public.evidence_screenings');
+    expect(evidenceScreeningMigration).toContain('LAWIRISK_RULE_ENGINE');
+    expect(evidenceScreeningMigration).toContain("status TEXT NOT NULL DEFAULT 'SUGGESTED'");
+    expect(evidenceScreeningMigration).toContain('CREATE OR REPLACE FUNCTION public.review_evidence_screening');
+    expect(evidenceScreeningMigration).toContain('SCREENING_SOURCE_NOT_CLEAN');
+    expect(evidenceScreeningMigration).toContain("'EVIDENCE_SCREENING_REVIEW'");
+    expect(evidenceScreeningMigration).toContain("p_report_type NOT IN ('SUMMARY', 'OVERLAP', 'PREDICTION_FORM')");
+  });
+
+  it('seeds exactly three clearly labelled synthetic cases with complete source traces', () => {
+    expect(syntheticDemoMigration).toContain('DEMO-2569-001');
+    expect(syntheticDemoMigration).toContain('DEMO-2569-002');
+    expect(syntheticDemoMigration).toContain('DEMO-2569-003');
+    expect(syntheticDemoMigration.match(/\[SYNTHETIC TEST DATA\]/g)?.length).toBeGreaterThanOrEqual(9);
+    expect(syntheticDemoMigration).toContain('INSERT INTO public.entity_mentions');
+    expect(syntheticDemoMigration).toContain('INSERT INTO public.relationship_references');
+    expect(syntheticDemoMigration).toContain('LAWIRISK_SYNTHETIC_FIXTURE');
+    expect(syntheticDemoMigration).toContain("'PREDICTION_FORM'");
+    expect(syntheticDemoMigration).toContain("'synthetic_test_data', true");
   });
 });

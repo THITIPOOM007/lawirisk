@@ -44,7 +44,21 @@ export async function POST(request: NextRequest) {
   }
 
   const parsed = aiExtractionRequestSchema.safeParse(await request.json().catch(() => null));
-  if (!parsed.success) return apiError('INVALID_REQUEST', 'ข้อมูลสำหรับ AI ไม่ครบหรือรูปแบบไม่ถูกต้อง', 400, undefined, parsed.error.flatten().fieldErrors);
+  if (!parsed.success) {
+    const fields = parsed.error.flatten().fieldErrors;
+    const labels: Record<string, string> = {
+      case_id: 'สำนวนคดี', evidence_id: 'ไฟล์หลักฐาน', page_number: 'หน้าเอกสาร',
+      source_text: 'ข้อความต้นทาง', source_location: 'ตำแหน่งในเอกสาร',
+    };
+    const invalidFields = Object.keys(fields).map((field) => labels[field] || field).join(', ');
+    return apiError(
+      'INVALID_REQUEST',
+      `ข้อมูลสำหรับ AI ยังไม่พร้อม กรุณาตรวจสอบ: ${invalidFields || 'ข้อมูลที่ส่งมา'}`,
+      400,
+      undefined,
+      fields,
+    );
+  }
 
   const supabase = await createServer();
   const limit = await consumeRateLimit({
@@ -116,9 +130,15 @@ export async function POST(request: NextRequest) {
       const status = error.code === 'INVALID_OUTPUT' ? 502 : 503;
       const message = error.code === 'NOT_CONFIGURED'
         ? 'ยังไม่ได้ตั้งค่า Gemini สำหรับระบบ'
+        : error.code === 'AUTH_FAILED'
+          ? 'Gemini ปฏิเสธ API key กรุณาให้ผู้ดูแลระบบตรวจสอบหรือเปลี่ยน key'
+          : error.code === 'RATE_LIMITED'
+            ? 'Gemini ติดข้อจำกัดการใช้งานชั่วคราว ระบบลองใหม่แล้ว กรุณากดค้นอีกครั้งในอีกสักครู่'
+          : error.code === 'NO_COMPATIBLE_MODEL'
+            ? 'บัญชี Gemini นี้ยังไม่มีโมเดลที่รองรับการวิเคราะห์หลักฐาน กรุณาให้ผู้ดูแลตรวจสิทธิ์ของ API key'
         : error.code === 'INVALID_OUTPUT'
           ? 'ผลลัพธ์ AI ไม่ผ่าน schema จึงไม่ถูกบันทึก'
-          : 'Gemini ไม่พร้อมใช้งาน กรุณาใช้ Manual fallback';
+          : 'Gemini ไม่พร้อมใช้งานชั่วคราว ระบบลองทั้งโมเดลหลักและสำรองแล้ว กรุณากดค้นอีกครั้ง';
       return apiError(`GEMINI_${error.code}`, message, status);
     }
     return apiError('AI_EXTRACTION_FAILED', 'วิเคราะห์ด้วย AI ไม่สำเร็จ กรุณาใช้ Manual fallback', 503);

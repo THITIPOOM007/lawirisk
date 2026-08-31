@@ -40,6 +40,10 @@ test-results/
 
 # Local QA captures and generated test evidence (never commit source results).
 artifacts/
+output/pdf/
+temp_pdf_2/
+tmp/pdfs/
+lawirisk_user_manual*.pdf
 
 # turbopack
 .turbo/

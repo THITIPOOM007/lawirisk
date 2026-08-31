@@ -1,7 +1,7 @@
 'use client';
 
 import { useCallback, useEffect, useMemo, useState } from 'react';
-import { ExternalLink, Eye, Fingerprint, Loader2, RefreshCw, Save, ShieldAlert, Sparkles, X } from 'lucide-react';
+import { CheckSquare2, ExternalLink, Eye, Fingerprint, Loader2, RefreshCw, Save, ShieldAlert, Sparkles, X } from 'lucide-react';
 import type { Case, EvidenceFile } from '@/lib/demo-data';
 import { BiometricStepUpModal } from '@/components/BiometricStepUpModal';
 import { evidenceSafetyLabel, isEvidenceUsable } from '@/lib/evidence-file-status';
@@ -41,6 +41,9 @@ export default function ReviewPage() {
   const [submitting, setSubmitting] = useState('');
   const [reviewReasons, setReviewReasons] = useState<Record<string, string>>({});
   const [stepUpTarget, setStepUpTarget] = useState<{ item: Suggestion; decision: 'CONFIRMED' } | null>(null);
+  const [batchStepUpOpen, setBatchStepUpOpen] = useState(false);
+  const [selectedSuggestionIds, setSelectedSuggestionIds] = useState<string[]>([]);
+  const [batchReason, setBatchReason] = useState('');
   const [editedValues, setEditedValues] = useState<Record<string, string>>({});
   const [aiInput, setAiInput] = useState({ evidence_id: '', page_number: '1', source_text: '' });
   const [manual, setManual] = useState({ evidence_id: '', page_number: '1', source_text: '', entity_type: 'PERSON', candidate_value: '', reason: '' });
@@ -87,6 +90,10 @@ export default function ReviewPage() {
   const caseEvidence = useMemo(() => evidence.filter((item) => !selectedCaseId || item.case_id === selectedCaseId), [evidence, selectedCaseId]);
   const cleanCaseEvidence = useMemo(() => caseEvidence.filter((item) => isEvidenceUsable(item.upload_state, item.malware_scan_status)), [caseEvidence]);
   const visibleSuggestions = useMemo(() => suggestions.filter((item) => !selectedCaseId || item.case_id === selectedCaseId), [suggestions, selectedCaseId]);
+  const selectableSuggestions = useMemo(() => visibleSuggestions.filter((item) => {
+    const source = evidence.find((record) => record.id === item.evidence_id);
+    return item.status === 'SUGGESTED' && isEvidenceUsable(source?.upload_state, source?.malware_scan_status);
+  }), [evidence, visibleSuggestions]);
 
   const createAiSuggestions = async (event: React.FormEvent) => {
     event.preventDefault();
@@ -98,18 +105,27 @@ export default function ReviewPage() {
     setActionError('');
     setSuccess('');
     try {
+      const sourceText = aiInput.source_text.trim();
       const response = await fetch('/api/v1/ai/extract', {
         method: 'POST', credentials: 'same-origin', headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           case_id: selectedCaseId,
           evidence_id: aiInput.evidence_id,
           page_number: Number(aiInput.page_number),
-          source_text: aiInput.source_text,
+          ...(sourceText ? { source_text: sourceText } : {}),
           source_location: {},
         }),
       });
       const body = await response.json();
-      if (!response.ok) throw new Error(body.error?.message || 'การวิเคราะห์สกัดข้อมูลไม่สำเร็จ');
+      if (!response.ok) {
+        const fieldDetails = body.error?.fields && typeof body.error.fields === 'object'
+          ? Object.keys(body.error.fields).map((field) => ({
+              case_id: 'สำนวนคดี', evidence_id: 'ไฟล์หลักฐาน', page_number: 'หน้าเอกสาร',
+              source_text: 'ข้อความต้นทาง', source_location: 'ตำแหน่งในเอกสาร',
+            })[field as 'case_id' | 'evidence_id' | 'page_number' | 'source_text' | 'source_location'] || field).join(', ')
+          : '';
+        throw new Error(`${body.error?.message || 'การวิเคราะห์สกัดข้อมูลไม่สำเร็จ'}${fieldDetails ? ` กรุณาตรวจสอบ: ${fieldDetails}` : ''}`);
+      }
       const count = Number(body.data?.count || 0);
       if (mode === 'demo' && Array.isArray(body.data?.suggestions)) {
         setSuggestions((current) => [...body.data.suggestions, ...current]);
@@ -187,6 +203,41 @@ export default function ReviewPage() {
     }
   };
 
+  const reviewBatch = async () => {
+    const selected = selectableSuggestions.filter((item) => selectedSuggestionIds.includes(item.id));
+    if (selected.length < 2 || !batchReason.trim()) {
+      setActionError('กรุณาเลือกอย่างน้อย 2 รายการและระบุเหตุผลการรับรองแบบกลุ่ม');
+      return;
+    }
+    setSubmitting('batch');
+    setActionError('');
+    setSuccess('');
+    try {
+      const response = await fetch('/api/v1/review/batch', {
+        method: 'POST', credentials: 'same-origin', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ items: selected.map((item) => ({
+          id: item.id,
+          reason: batchReason.trim(),
+          edited_value: editedValues[item.id]?.trim() || undefined,
+        })) }),
+      });
+      const body = await response.json().catch(() => null);
+      if (!response.ok) throw new Error(body?.error?.message || 'รับรองรายการแบบกลุ่มไม่สำเร็จ');
+      const approved = new Set(selected.map((item) => item.id));
+      setSuggestions((current) => current.map((item) => approved.has(item.id) ? {
+        ...item, status: 'CONFIRMED', review_reason: batchReason.trim(),
+        candidate_value: editedValues[item.id]?.trim() || item.candidate_value,
+      } : item));
+      setSelectedSuggestionIds([]);
+      setBatchReason('');
+      setSuccess(`ลงนามครั้งเดียวและรับรอง ${selected.length} รายการเรียบร้อยแล้ว พร้อมบันทึก Audit Log แยกรายการ`);
+    } catch (error: unknown) {
+      setActionError(error instanceof Error ? error.message : 'รับรองรายการแบบกลุ่มไม่สำเร็จ');
+    } finally {
+      setSubmitting('');
+    }
+  };
+
   const openEvidence = async (item: Suggestion) => {
     setActionError('');
     try {
@@ -232,9 +283,9 @@ export default function ReviewPage() {
           ระบบรองรับทั้ง OCR จากภาพ/PDF และการวิเคราะห์ข้อความที่เจ้าหน้าที่ระบุ โดยรับเฉพาะหลักฐานที่จัดเก็บและตรวจโครงสร้างแล้ว และบันทึกผลเป็นข้อเสนอแนะ (SUGGESTED) เพื่อรอการอนุมัติ
         </p>
         <div className="mt-5 grid gap-4 md:grid-cols-[minmax(0,1fr)_150px]">
-          <label className="text-xs text-slate-300">หลักฐานที่ปลอดภัย (CLEAN)<select required disabled={!selectedCaseId} value={aiInput.evidence_id} onChange={(event) => setAiInput((current) => ({ ...current, evidence_id: event.target.value }))} className="mt-2 w-full rounded-xl border border-slate-800 bg-slate-950 p-3 text-sm text-white"><option value="">เลือกไฟล์หลักฐาน</option>{cleanCaseEvidence.map((item) => <option key={item.id} value={item.id}>{item.filename}</option>)}</select></label>
+          <label className="text-xs text-slate-300">หลักฐานที่จัดเก็บและตรวจโครงสร้างแล้ว<select required disabled={!selectedCaseId} value={aiInput.evidence_id} onChange={(event) => setAiInput((current) => ({ ...current, evidence_id: event.target.value }))} className="mt-2 w-full rounded-xl border border-slate-800 bg-slate-950 p-3 text-sm text-white"><option value="">เลือกไฟล์หลักฐาน</option>{cleanCaseEvidence.map((item) => <option key={item.id} value={item.id}>{item.filename}</option>)}</select></label>
           <label className="text-xs text-slate-300">หน้าเอกสาร<input required type="number" min="1" max="100000" value={aiInput.page_number} onChange={(event) => setAiInput((current) => ({ ...current, page_number: event.target.value }))} className="mt-2 w-full rounded-xl border border-slate-800 bg-slate-950 p-3 text-sm text-white" /></label>
-          <label className="text-xs text-slate-300 md:col-span-2">ข้อความต้นทางในเอกสาร (ไม่บังคับ)<textarea maxLength={4000} rows={5} value={aiInput.source_text} onChange={(event) => setAiInput((current) => ({ ...current, source_text: event.target.value }))} placeholder="เว้นว่างเพื่อให้ระบบ OCR อ่านจากภาพหรือ PDF ที่เลือก" aria-describedby="ai-source-help" className="mt-2 w-full rounded-xl border border-slate-800 bg-slate-950 p-3 text-sm text-white" /><span id="ai-source-help" className="mt-1 block text-[10px] text-slate-600">เมื่อระบุข้อความ ระบบจะวิเคราะห์เฉพาะข้อความนั้น; เมื่อเว้นว่าง ระบบจะใช้ Vision OCR กับต้นฉบับ CLEAN</span></label>
+          <label className="text-xs text-slate-300 md:col-span-2">ข้อความต้นทางในเอกสาร (ไม่บังคับ)<textarea maxLength={4000} rows={5} value={aiInput.source_text} onChange={(event) => setAiInput((current) => ({ ...current, source_text: event.target.value }))} placeholder="เว้นว่างเพื่อให้ระบบ OCR อ่านจากภาพหรือ PDF ที่เลือก" aria-describedby="ai-source-help" className="mt-2 w-full rounded-xl border border-slate-800 bg-slate-950 p-3 text-sm text-white" /><span id="ai-source-help" className="mt-1 block text-[10px] text-slate-600">เมื่อระบุข้อความ ระบบจะวิเคราะห์เฉพาะข้อความนั้น; เมื่อเว้นว่าง ระบบจะใช้ Vision OCR กับต้นฉบับที่จัดเก็บและตรวจโครงสร้างแล้ว พร้อมแสดงสถานะการสแกนตามจริง</span></label>
         </div>
         {selectedCaseId && cleanCaseEvidence.length === 0 && <p role="status" className="mt-4 rounded-xl border border-amber-400/15 bg-amber-400/[0.04] p-3 text-xs text-amber-200">คดีนี้ยังไม่มีหลักฐานที่จัดเก็บและตรวจโครงสร้างแล้ว</p>}
         <button type="submit" disabled={submitting === 'ai' || !selectedCaseId || cleanCaseEvidence.length === 0} className="mt-5 inline-flex min-h-11 items-center rounded-xl bg-indigo-400 px-4 py-2.5 text-sm font-bold text-slate-950 disabled:opacity-50 cursor-pointer">{submitting === 'ai' ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Sparkles className="mr-2 h-4 w-4" />}{mode === 'demo' ? 'ทดลอง OCR และสกัดข้อมูล' : 'สั่งการให้ AI วิเคราะห์สกัดข้อมูล'}</button>
@@ -274,11 +325,22 @@ export default function ReviewPage() {
         </div>
       ) : (
         <div className="space-y-5">
+          {selectableSuggestions.length >= 2 && (
+            <section className="sticky top-3 z-20 rounded-3xl border border-teal-300/25 bg-slate-950/95 p-4 shadow-[0_18px_50px_rgba(0,0,0,0.38)] backdrop-blur-xl" aria-label="รับรองหลายรายการ">
+              <div className="flex flex-col gap-4 xl:flex-row xl:items-end">
+                <div className="flex-1"><div className="flex flex-wrap items-center gap-3"><CheckSquare2 className="h-5 w-5 text-teal-300" /><h2 className="text-sm font-black text-white">รวบรายการและลงนามครั้งเดียว</h2><span className="rounded-full bg-teal-300/10 px-2.5 py-1 text-[10px] font-bold text-teal-200">เลือกแล้ว {selectedSuggestionIds.length}/{selectableSuggestions.length}</span><button type="button" onClick={() => setSelectedSuggestionIds(selectedSuggestionIds.length === selectableSuggestions.length ? [] : selectableSuggestions.map((item) => item.id))} className="text-[10px] font-bold text-indigo-300">{selectedSuggestionIds.length === selectableSuggestions.length ? 'ยกเลิกทั้งหมด' : 'เลือกที่พร้อมรับรองทั้งหมด'}</button></div><label className="mt-3 block text-[10px] font-bold text-slate-400">เหตุผลร่วมสำหรับทุกรายการที่เลือก<textarea value={batchReason} onChange={(event) => setBatchReason(event.target.value)} maxLength={2000} rows={2} placeholder="เช่น ตรวจเทียบข้อความ หน้าเอกสาร และไฟล์ต้นฉบับแล้ว" className="mt-1.5 w-full rounded-xl border border-slate-700 bg-slate-950 p-3 text-xs text-white" /></label></div>
+                <button type="button" disabled={selectedSuggestionIds.length < 2 || !batchReason.trim() || submitting === 'batch'} onClick={() => setBatchStepUpOpen(true)} className="primary-action inline-flex min-h-12 items-center justify-center rounded-2xl px-5 text-xs font-black disabled:opacity-50">{submitting === 'batch' ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Fingerprint className="mr-2 h-4 w-4" />}ลงนามและรับรอง {selectedSuggestionIds.length} รายการ</button>
+              </div>
+            </section>
+          )}
           {visibleSuggestions.map((item) => {
             const source = evidence.find((record) => record.id === item.evidence_id);
+            const selectable = item.status === 'SUGGESTED' && isEvidenceUsable(source?.upload_state, source?.malware_scan_status);
+            const selected = selectedSuggestionIds.includes(item.id);
             return (
-              <article key={item.id} className="rounded-3xl border border-slate-900 bg-slate-900/30 p-6">
+              <article key={item.id} className={`rounded-3xl border bg-slate-900/30 p-6 ${selected ? 'border-teal-300/35 shadow-[0_0_30px_rgba(45,212,191,0.08)]' : 'border-slate-900'}`}>
                 <div className="flex flex-wrap items-center gap-2 text-xs">
+                  {selectable && <label className="mr-1 inline-flex cursor-pointer items-center gap-2 rounded-lg border border-teal-300/20 bg-teal-300/[0.06] px-2.5 py-1 font-bold text-teal-200"><input type="checkbox" checked={selected} onChange={(event) => setSelectedSuggestionIds((current) => event.target.checked ? [...new Set([...current, item.id])] : current.filter((id) => id !== item.id))} className="h-4 w-4 accent-teal-400" />รวมอนุมัติ</label>}
                   <span className="rounded-lg border border-indigo-500/20 bg-indigo-500/10 px-2.5 py-1 text-indigo-300 font-semibold">{item.entity_type}</span>
                   <span className="rounded-lg border border-slate-700 px-2.5 py-1 text-slate-300">{item.status}</span>
                   <span className="text-slate-500">{item.provider}{item.model ? ` / ${item.model}` : ''} · Schema {item.prompt_schema_version}</span>
@@ -349,6 +411,14 @@ export default function ReviewPage() {
           }}
         />
       )}
+      <BiometricStepUpModal
+        isOpen={batchStepUpOpen}
+        onClose={() => setBatchStepUpOpen(false)}
+        title="ลงนามรับรองพยานหลักฐานหลายรายการ"
+        reason={`ยืนยันการรับรอง ${selectedSuggestionIds.length} รายการด้วยเหตุผลเดียวกัน ระบบจะบันทึก Audit Log และ source trace แยกทุกรายการ`}
+        actionLabel={`สแกนครั้งเดียวเพื่อรับรอง ${selectedSuggestionIds.length} รายการ`}
+        onSuccess={() => { setBatchStepUpOpen(false); void reviewBatch(); }}
+      />
     </div>
   );
 }

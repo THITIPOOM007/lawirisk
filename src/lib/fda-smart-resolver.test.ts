@@ -1,5 +1,11 @@
 import { describe, expect, it, vi } from 'vitest';
-import { resolveMultiChannelSearch } from './fda-smart-resolver';
+import {
+  mapTrustedSourceRows,
+  resolveMultiChannelSearch,
+  searchOfficialFdaProducts,
+  searchOfficialHssClinics,
+  searchOfficialHssSpaBusinesses,
+} from './fda-smart-resolver';
 
 vi.mock('server-only', () => ({}));
 
@@ -35,5 +41,139 @@ describe('FDA public search fallback', () => {
     const [result] = await resolveMultiChannelSearch('พาราเซตามอล', false);
     expect(result.id).toContain('unverified-');
     expect(result.sourceUrl).toMatch(/^https:\/\//);
+  });
+
+  it('accepts only complete HTTPS registry rows', () => {
+    const rows = mapTrustedSourceRows([
+      {
+        id: 'official-1', title: 'ประกาศทางการ', category: 'FRAUD_ALERTS',
+        product_category_label: 'ประกาศเตือนภัย', snippet: 'รายละเอียดที่ตรวจสอบได้',
+        source: 'หน่วยงานรัฐ', source_url: 'https://example.go.th/notices/1',
+        published_date: '2569-08-01', status: 'WARNING',
+      },
+      {
+        id: 'unsafe-1', title: 'ไม่ควรผ่าน', category: 'FRAUD_ALERTS',
+        snippet: 'ไม่มี HTTPS', source: 'unknown', source_url: 'http://example.test',
+        published_date: '2569-08-01', status: 'WARNING',
+      },
+    ]);
+
+    expect(rows).toHaveLength(1);
+    expect(rows[0]).toMatchObject({ id: 'official-1', confidenceScore: 1 });
+  });
+
+  it('maps a live FDA product response to explicit registry fields', async () => {
+    const fetchImpl = vi.fn(async () => new Response(JSON.stringify([{
+      IDA: '2359067',
+      typepro: 'อาหาร (สบ.5/สบ.7)',
+      lcnno: '74-2-01859-6-0457',
+      productha: 'มิกซ์นัทอบไม่ใส่เกลือ (ตรา นัท วอล์คเกอร์)',
+      produceng: 'NATURAL TOASTED & UNSALTED MIXED NUTS',
+      licen: 'บริษัท เฮอริเทจ สแน็ค แอนด์ ฟู้ด จำกัด',
+      Newcode: 'U1FE00074117420185960457C',
+      cncnm: 'สถานะผลิตภัณฑ์(คงอยู่)\\ สถานะสถานที่ (คงอยู่)',
+      Addr: 'จังหวัดสมุทรสาคร',
+      URLs_NEW: 'https://porta.fda.moph.go.th/FDA_SEARCH_ALL/PRODUCT/FRM_PRODUCT_FOOD.aspx?fdpdtno=7420185960457',
+    }]), { status: 200, headers: { 'Content-Type': 'application/json' } }));
+
+    const [result] = await searchOfficialFdaProducts(
+      '7420185960457',
+      fetchImpl,
+      () => new Date('2026-08-31T02:09:00.000Z'),
+    );
+
+    expect(fetchImpl).toHaveBeenCalledOnce();
+    expect(result).toMatchObject({
+      category: 'HEALTH_PRODUCTS',
+      status: 'SAFE',
+      source: 'ศูนย์ตรวจสอบการอนุญาต อย.',
+      metadata: {
+        'เลขใบสำคัญ/ใบอนุญาต': '74-2-01859-6-0457',
+        'ผู้รับอนุญาต': 'บริษัท เฮอริเทจ สแน็ค แอนด์ ฟู้ด จำกัด',
+      },
+    });
+    expect(result.title).toContain('นัท วอล์คเกอร์');
+    expect(result.sourceUrl).toContain('fdpdtno=7420185960457');
+  });
+
+  it('routes massage businesses to the public HSS registry and maps status', async () => {
+    const rsc = [
+      '0:{"a":"$@1"}',
+      '1:{"found":true,"query":{"mode":"name","text":"สวัสดี"},"results":[{"doName":"กรมสนับสนุนบริการสุขภาพ","shop":{"memberID":"100200110-61","shopType":"นวดเพื่อสุขภาพ","nameThai":"บ้านสวัสดี นวดเพื่อสุขภาพ","nameEng":"-","status":7,"statusText":"ได้รับอนุญาต","addressText":"กรุงเทพมหานคร","provName":"กรุงเทพมหานคร","shopArea":"80"}}]}',
+    ].join('\n');
+    const fetchImpl = vi.fn(async () => new Response(rsc, {
+      status: 200,
+      headers: { 'Content-Type': 'text/x-component' },
+    }));
+
+    const [result] = await searchOfficialHssSpaBusinesses(
+      'สวัสดี นวดเพื่อสุขภาพ',
+      fetchImpl,
+      () => new Date('2026-08-31T02:09:00.000Z'),
+    );
+
+    expect(result).toMatchObject({
+      category: 'HEALTH_SERVICES',
+      status: 'SAFE',
+      source: 'กรมสนับสนุนบริการสุขภาพ (สบส.)',
+      metadata: { 'เลขที่ใบอนุญาต': '100200110-61' },
+    });
+  });
+
+  it('maps clinic names only from the HSS private-hospital public registry', async () => {
+    const html = `
+      <section><h4>ค้นพบทั้งหมด : 1 รายการ</h4>
+      <article><h5>แวคทูโฮมคลินิกเวชกรรม</h5>
+      <p>เลขที่ใบอนุญาต : 10101012369</p>
+      <p>ที่ตั้ง : 42 ชั้น 1 เพชรเกษม 80 แยก 2 บางแค กรุงเทพมหานคร 10160</p>
+      <p>เบอร์โทรศัพท์ : 02-000-0000</p></article></section>`;
+    const fetchImpl = vi.fn(async (input: string | URL | Request) => {
+      expect(String(input)).toContain('privatehospital.hss.moph.go.th/Search_View.php');
+      expect(String(input)).toContain('s_data=MedicalName');
+      return new Response(html, { status: 200, headers: { 'Content-Type': 'text/html;charset=UTF-8' } });
+    });
+
+    const [result] = await searchOfficialHssClinics(
+      'แวคทูโฮมคลินิกเวชกรรม',
+      fetchImpl,
+      () => new Date('2026-08-31T02:09:00.000Z'),
+    );
+
+    expect(result).toMatchObject({
+      title: 'แวคทูโฮมคลินิกเวชกรรม',
+      category: 'HEALTH_SERVICES',
+      status: 'WARNING',
+      metadata: {
+        'เลขที่ใบอนุญาต': '10101012369',
+        'จำนวนผลจากต้นทาง': '1',
+      },
+    });
+  });
+
+  it('selects FDA for products and HSS for massage queries without cross-searching', async () => {
+    const fdaFetch = vi.fn(async (input: string | URL | Request, init?: RequestInit) => {
+      expect(String(input)).toContain('FDA_SEARCH_CENTER_BACKEND');
+      expect(init?.method).toBe('POST');
+      return new Response(JSON.stringify([{
+        IDA: '1', typepro: 'อาหาร', lcnno: '74-2-01859-6-0457', productha: 'ผลิตภัณฑ์ทดสอบ',
+        licen: 'ผู้รับอนุญาต', Newcode: 'FDA-1', cncnm: 'คงอยู่', URLs_NEW: 'https://porta.fda.moph.go.th/fda_search_center_new/',
+      }]), { status: 200 });
+    });
+    const [product] = await resolveMultiChannelSearch('7420185960457', {
+      category: 'ALL', searchDb: false, searchOfficial: true, fetchImpl: fdaFetch,
+    });
+    expect(product.source).toContain('อย.');
+    expect(String(fdaFetch.mock.calls[0]?.[0])).toContain('FDA_SEARCH_CENTER_BACKEND');
+
+    const hssFetch = vi.fn(async (input: string | URL | Request, init?: RequestInit) => {
+      expect(String(input)).toContain('spa-services.hss.moph.go.th');
+      expect(init?.headers).toMatchObject({ 'Next-Action': expect.any(String) });
+      return new Response('1:{"found":false,"results":[]}', { status: 200 });
+    });
+    const [business] = await resolveMultiChannelSearch('ร้านนวดตัวอย่าง', {
+      category: 'ALL', searchDb: false, searchOfficial: true, fetchImpl: hssFetch,
+    });
+    expect(business.source).toContain('สบส.');
+    expect(String(hssFetch.mock.calls[0]?.[0])).toContain('spa-services.hss.moph.go.th');
   });
 });

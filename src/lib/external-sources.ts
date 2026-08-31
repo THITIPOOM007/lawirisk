@@ -1,12 +1,18 @@
 import { z } from 'zod';
 
-export const externalSourceKeySchema = z.enum(['FDA_SKYNET', 'HSS_OSS', 'HSS_ESTA2']);
+export const externalSourceKeySchema = z.enum(['FDA_PUBLIC', 'FDA_SKYNET', 'HSS_OSS', 'HSS_ESTA2']);
 export type ExternalSourceKey = z.infer<typeof externalSourceKeySchema>;
 
 export const reconServiceKeySchema = z.enum([
   'DBD',
   'DOPA',
   'FDA_PLACE_DRUG',
+  'FDA_DRUG_REGISTRY',
+  'FDA_FOOD_REGISTRY',
+  'FDA_HAZARDOUS_REGISTRY',
+  'FDA_COSMETIC_REGISTRY',
+  'FDA_HERBAL_REGISTRY',
+  'FDA_MEDICAL_DEVICE_REGISTRY',
   'HSS_FACILITY',
   'HSS_PROFESSIONAL',
   'HSS_HEALTH_BUSINESS_APPROVED',
@@ -30,11 +36,11 @@ export const externalSourceSchema = z.object({
   name: z.string().min(1),
   authority: z.string().min(1),
   coverage: z.string().min(1),
-  authMode: z.enum(['EGOV_OIDC', 'LEGACY_CREDENTIAL']),
-  accessMode: z.enum(['LOCAL_AUTO_LOGIN', 'LOCAL_AUTO_LOGIN_RISK_ACK_REQUIRED']),
+  authMode: z.enum(['NONE', 'EGOV_OIDC', 'LEGACY_CREDENTIAL']),
+  accessMode: z.enum(['LOCAL_PUBLIC_SEARCH', 'LOCAL_AUTO_LOGIN', 'LOCAL_AUTO_LOGIN_RISK_ACK_REQUIRED']),
   transport: z.enum(['HTTPS', 'HTTP_ONLY']),
   launchUrl: z.string().url().nullable(),
-  companionSetupUrl: z.string().url(),
+  companionSetupUrl: z.string().url().nullable(),
   verifiedAt: z.string().date(),
   guidance: z.array(z.string().min(1)).min(1),
   limitation: z.string().min(1),
@@ -44,6 +50,33 @@ export const externalSourceSchema = z.object({
 export type ExternalSource = z.infer<typeof externalSourceSchema>;
 
 export const EXTERNAL_SOURCES: readonly ExternalSource[] = [
+  {
+    key: 'FDA_PUBLIC',
+    name: 'ศูนย์ตรวจสอบการอนุญาต อย.',
+    authority: 'สำนักงานคณะกรรมการอาหารและยา กระทรวงสาธารณสุข',
+    coverage: 'ผลิตภัณฑ์และสถานที่ด้านยา อาหาร วัตถุอันตราย เครื่องสำอาง สมุนไพร และเครื่องมือแพทย์',
+    authMode: 'NONE',
+    accessMode: 'LOCAL_PUBLIC_SEARCH',
+    transport: 'HTTPS',
+    launchUrl: 'https://meshlog.fda.moph.go.th/SEARCH_CENTER_HERB/MAIN/SEARCH_CENTER_MAIN.aspx',
+    companionSetupUrl: null,
+    verifiedAt: '2026-08-30',
+    guidance: [
+      'ระบบเลือกหมวดจากประเภทคดีก่อนกรอกคำค้น จึงไม่ส่งคดีร้านยาไปค้นทะเบียนร้านนวด',
+      'คำค้นส่งตรงจากเบราว์เซอร์ไป Recon Companion บนเครื่องเจ้าหน้าที่ ไม่ผ่าน Cloudflare หรือ Supabase',
+      'Companion เลือกชนิดผลิตภัณฑ์หรือสถานที่ กดค้น อ่านแถวผลลัพธ์ และบันทึกหน้าอย่างเป็นทางการเป็น PDF พร้อม SHA-256',
+      'ผลที่นำเข้าคลังหลักฐานมีสถานะข้อเสนอและต้องตรวจบริบทก่อนใช้อ้างอิงในสำนวน',
+    ],
+    limitation: 'การค้นอาศัยฟอร์มสาธารณะของ อย. ที่ตรวจ field contract แล้ว หากต้นทางเปลี่ยน selector, redirect ไปหน้าล็อกอิน หรือคืนผลไม่สัมพันธ์กับคำค้น ระบบจะหยุดและไม่บันทึกผลผิดหมวด',
+    services: [
+      { key: 'FDA_DRUG_REGISTRY', name: 'ยาและสถานที่ด้านยา', description: 'ค้นชื่อ/เลขผลิตภัณฑ์ยา หรือชื่อ/เลขใบอนุญาตสถานที่ด้านยา', automationMode: 'LOCAL_SEARCH', searchFields: [{ key: 'FACILITY_TERM', label: 'ชื่อหรือเลขใบอนุญาตสถานที่', inputMode: 'text' }, { key: 'PRODUCT_TERM', label: 'ชื่อหรือเลขทะเบียนผลิตภัณฑ์', inputMode: 'text' }] },
+      { key: 'FDA_FOOD_REGISTRY', name: 'อาหารและสถานที่อาหาร', description: 'ค้นชื่อ/เลขสารบบอาหาร หรือชื่อ/เลขใบอนุญาตสถานที่อาหาร', automationMode: 'LOCAL_SEARCH', searchFields: [{ key: 'FACILITY_TERM', label: 'ชื่อหรือเลขใบอนุญาตสถานที่', inputMode: 'text' }, { key: 'PRODUCT_TERM', label: 'ชื่อหรือเลขสารบบผลิตภัณฑ์', inputMode: 'text' }] },
+      { key: 'FDA_HAZARDOUS_REGISTRY', name: 'วัตถุอันตราย', description: 'ค้นชื่อ/เลขทะเบียนผลิตภัณฑ์ หรือชื่อสถานที่วัตถุอันตราย', automationMode: 'LOCAL_SEARCH', searchFields: [{ key: 'FACILITY_TERM', label: 'ชื่อหรือเลขใบอนุญาตสถานที่', inputMode: 'text' }, { key: 'PRODUCT_TERM', label: 'ชื่อหรือเลขทะเบียนผลิตภัณฑ์', inputMode: 'text' }] },
+      { key: 'FDA_COSMETIC_REGISTRY', name: 'เครื่องสำอาง', description: 'ค้นชื่อผู้ประกอบการ ชื่อการค้า ชื่อผลิตภัณฑ์ หรือเลขจดแจ้ง', automationMode: 'LOCAL_SEARCH', searchFields: [{ key: 'PRODUCT_TERM', label: 'ชื่อผู้ประกอบการ/ผลิตภัณฑ์/เลขจดแจ้ง', inputMode: 'text' }] },
+      { key: 'FDA_HERBAL_REGISTRY', name: 'สมุนไพรและสถานที่สมุนไพร', description: 'ค้นชื่อ/เลขผลิตภัณฑ์สมุนไพร หรือชื่อ/เลขใบอนุญาตสถานที่', automationMode: 'LOCAL_SEARCH', searchFields: [{ key: 'FACILITY_TERM', label: 'ชื่อหรือเลขใบอนุญาตสถานที่', inputMode: 'text' }, { key: 'PRODUCT_TERM', label: 'ชื่อหรือเลขทะเบียนผลิตภัณฑ์', inputMode: 'text' }] },
+      { key: 'FDA_MEDICAL_DEVICE_REGISTRY', name: 'เครื่องมือแพทย์และสถานที่', description: 'ค้นชื่อ/เลขเครื่องมือแพทย์ หรือชื่อ/เลขใบอนุญาตสถานที่', automationMode: 'LOCAL_SEARCH', searchFields: [{ key: 'FACILITY_TERM', label: 'ชื่อหรือเลขใบอนุญาตสถานที่', inputMode: 'text' }, { key: 'PRODUCT_TERM', label: 'ชื่อหรือเลขทะเบียนผลิตภัณฑ์', inputMode: 'text' }] },
+    ],
+  },
   {
     key: 'FDA_SKYNET',
     name: 'SKYNET / Privus อย.',

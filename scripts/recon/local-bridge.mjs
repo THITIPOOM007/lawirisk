@@ -1,9 +1,9 @@
 #!/usr/bin/env node
 
 import { spawn } from 'node:child_process';
-import { randomUUID } from 'node:crypto';
+import { createHash, randomUUID } from 'node:crypto';
 import { createServer } from 'node:http';
-import { mkdir, rm, writeFile } from 'node:fs/promises';
+import { mkdir, readFile, rm, stat, writeFile } from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
 import process from 'node:process';
@@ -11,6 +11,7 @@ import { fileURLToPath } from 'node:url';
 import {
   assertSourceLaunchAllowed,
   parseReconUri,
+  resolveFdaPublicSearchContract,
   resolveFdaSearchModel,
   resolveEsta2SearchOption,
   resolveHssSearchFilter,
@@ -20,6 +21,7 @@ export const LOCAL_BRIDGE_HOST = '127.0.0.1';
 export const LOCAL_BRIDGE_PORT = 32147;
 export const LOCAL_BRIDGE_CLIENT_HEADER = 'lawirisk-web-1';
 export const LOCAL_SEARCH_JOB_TTL_MS = 2 * 60 * 1000;
+export const LOCAL_SEARCH_RESULT_TTL_MS = 15 * 60 * 1000;
 
 const allowedOrigins = new Set([
   'https://lawirisk-ssk.evidenceverse-th.workers.dev',
@@ -33,6 +35,7 @@ const scriptDir = path.dirname(fileURLToPath(import.meta.url));
 const visibleLauncherPath = path.join(scriptDir, 'launch-visible.ps1');
 const localRoot = path.join(process.env.LOCALAPPDATA || path.join(os.homedir(), 'AppData', 'Local'), 'LawiRisk-SSK');
 const pidPath = path.join(localRoot, 'recon-bridge.pid');
+const resultRoot = path.join(localRoot, 'recon-results');
 
 export function isAllowedReconOrigin(origin) {
   return typeof origin === 'string' && allowedOrigins.has(origin);
@@ -55,6 +58,74 @@ function sendJson(response, status, body) {
     'X-Content-Type-Options': 'nosniff',
   });
   response.end(JSON.stringify(body));
+}
+
+function safeResultFilename(value, jobId, extension) {
+  if (typeof value !== 'string' || path.basename(value) !== value
+    || !value.endsWith(extension) || !value.includes(jobId)) {
+    throw new Error('INVALID_SEARCH_RESULT');
+  }
+  return value;
+}
+
+function cleanResultSummaries(value) {
+  if (!Array.isArray(value)) throw new Error('INVALID_SEARCH_RESULT');
+  return value.slice(0, 10).map((item) => cleanSearchText(item, 1, 500, 'INVALID_SEARCH_RESULT'));
+}
+
+async function validateCompletedResult(body, jobId, job, searchResultRoot = resultRoot) {
+  if (!body || typeof body !== 'object' || Array.isArray(body)) throw new Error('INVALID_SEARCH_RESULT');
+  const allowedKeys = new Set([
+    'pdfFilename', 'metadataFilename', 'pdfSha256', 'resultRowCount', 'resultSummaries',
+    'capturedAt', 'sourceUrl', 'adapterVersion', 'searchStrategy', 'searchAttemptCount',
+  ]);
+  if (Object.keys(body).some((key) => !allowedKeys.has(key))) throw new Error('INVALID_SEARCH_RESULT');
+  const pdfFilename = safeResultFilename(body.pdfFilename, jobId, '.pdf');
+  const metadataFilename = safeResultFilename(body.metadataFilename, jobId, '.json');
+  if (typeof body.pdfSha256 !== 'string' || !/^[0-9a-f]{64}$/.test(body.pdfSha256)) throw new Error('INVALID_SEARCH_RESULT');
+  if (!Number.isInteger(body.resultRowCount) || body.resultRowCount < 0 || body.resultRowCount > 10_000) {
+    throw new Error('INVALID_SEARCH_RESULT');
+  }
+  const sourceUrl = new URL(cleanSearchText(body.sourceUrl, 8, 300, 'INVALID_SEARCH_RESULT'));
+  const allowedResultHost = job.context.source === 'FDA_PUBLIC'
+    ? 'meshlog.fda.moph.go.th'
+    : job.context.source === 'FDA_SKYNET'
+    ? 'help.fda.moph.go.th'
+    : job.context.source === 'HSS_ESTA2'
+      ? 'esta2.hss.moph.go.th'
+      : 'oss.hss.moph.go.th';
+  if (sourceUrl.hostname !== allowedResultHost || sourceUrl.username || sourceUrl.password
+    || (job.context.source !== 'HSS_OSS' && sourceUrl.protocol !== 'https:')
+    || (job.context.source === 'HSS_OSS' && sourceUrl.protocol !== 'http:')) {
+    throw new Error('INVALID_SEARCH_RESULT_SOURCE');
+  }
+  const pdfPath = path.resolve(searchResultRoot, pdfFilename);
+  const metadataPath = path.resolve(searchResultRoot, metadataFilename);
+  const rootPrefix = `${path.resolve(searchResultRoot)}${path.sep}`;
+  if (!pdfPath.startsWith(rootPrefix) || !metadataPath.startsWith(rootPrefix)) throw new Error('INVALID_SEARCH_RESULT');
+  const [pdfBytes, pdfInfo] = await Promise.all([readFile(pdfPath), stat(pdfPath)]);
+  if (pdfInfo.size < 5 || pdfInfo.size > 200 * 1024 * 1024 || pdfBytes.subarray(0, 5).toString('ascii') !== '%PDF-') {
+    throw new Error('INVALID_SEARCH_RESULT');
+  }
+  const actualSha256 = createHash('sha256').update(pdfBytes).digest('hex');
+  if (actualSha256 !== body.pdfSha256) throw new Error('INVALID_SEARCH_RESULT_HASH');
+  return {
+    source: job.context.source,
+    service: job.context.service,
+    searchField: job.context.field,
+    pdfFilename,
+    metadataFilename,
+    pdfSha256: body.pdfSha256,
+    pdfSize: pdfInfo.size,
+    resultRowCount: body.resultRowCount,
+    resultSummaries: cleanResultSummaries(body.resultSummaries),
+    capturedAt: cleanSearchText(body.capturedAt, 10, 40, 'INVALID_SEARCH_RESULT'),
+    sourceUrl: sourceUrl.toString(),
+    adapterVersion: cleanSearchText(body.adapterVersion, 1, 100, 'INVALID_SEARCH_RESULT'),
+    searchStrategy: cleanSearchText(body.searchStrategy, 1, 40, 'INVALID_SEARCH_RESULT'),
+    searchAttemptCount: Number.isInteger(body.searchAttemptCount) ? body.searchAttemptCount : 1,
+    pdfPath,
+  };
 }
 
 async function readJsonBody(request) {
@@ -98,12 +169,13 @@ export function validateLocalSearch(search, command) {
   const allowedKeys = new Set(['field', 'value', 'purpose', 'confirmed']);
   if (Object.keys(search).some((key) => !allowedKeys.has(key))) throw new Error('INVALID_SEARCH_REQUEST');
   if (search.confirmed !== true) throw new Error('SEARCH_CONFIRMATION_REQUIRED');
-  if (command.action !== 'launch' || !['FDA_SKYNET', 'HSS_OSS', 'HSS_ESTA2'].includes(command.source.key)
+  if (command.action !== 'launch' || !['FDA_PUBLIC', 'FDA_SKYNET', 'HSS_OSS', 'HSS_ESTA2'].includes(command.source.key)
     || !command.caseId || !command.service) {
     throw new Error('AUTOMATED_SEARCH_NOT_ALLOWED');
   }
   const field = cleanSearchText(search.field, 1, 50, 'INVALID_SEARCH_FIELD');
-  if (command.source.key === 'FDA_SKYNET') resolveFdaSearchModel(command.service, field);
+  if (command.source.key === 'FDA_PUBLIC') resolveFdaPublicSearchContract(command.service, field);
+  else if (command.source.key === 'FDA_SKYNET') resolveFdaSearchModel(command.service, field);
   else if (command.source.key === 'HSS_OSS') resolveHssSearchFilter(command.service, field);
   else resolveEsta2SearchOption(command.service, field);
   const value = cleanSearchText(search.value, 2, 200, 'INVALID_SEARCH_VALUE');
@@ -126,7 +198,17 @@ export function createLocalBridgeServer(options = {}) {
   const jobTtlMs = Number.isFinite(options.jobTtlMs) && options.jobTtlMs > 0
     ? options.jobTtlMs
     : LOCAL_SEARCH_JOB_TTL_MS;
+  const resultTtlMs = Number.isFinite(options.resultTtlMs) && options.resultTtlMs > 0
+    ? options.resultTtlMs
+    : LOCAL_SEARCH_RESULT_TTL_MS;
+  const searchResultRoot = typeof options.resultRoot === 'string' ? path.resolve(options.resultRoot) : resultRoot;
   const jobs = new Map();
+  const scheduleExpiry = (jobId, job, ttlMs) => {
+    clearTimeout(job.timer);
+    job.expiresAt = Date.now() + ttlMs;
+    job.timer = setTimeout(() => jobs.delete(jobId), ttlMs);
+    job.timer.unref?.();
+  };
   const pruneJobs = () => {
     const now = Date.now();
     for (const [id, job] of jobs) {
@@ -160,13 +242,51 @@ export function createLocalBridgeServer(options = {}) {
       }
       pruneJobs();
       const job = jobs.get(jobMatch[1]);
-      jobs.delete(jobMatch[1]);
-      if (job) clearTimeout(job.timer);
-      if (!job) {
+      if (!job || job.state !== 'QUEUED' || !job.search) {
         sendJson(response, 404, { error: 'SEARCH_JOB_NOT_FOUND' });
         return;
       }
-      sendJson(response, 200, { data: job.search });
+      const search = job.search;
+      job.search = undefined;
+      job.state = 'RUNNING';
+      scheduleExpiry(jobMatch[1], job, resultTtlMs);
+      sendJson(response, 200, { data: search });
+      return;
+    }
+
+    const companionResultMatch = request.method === 'POST'
+      ? request.url?.match(/^\/v1\/jobs\/([0-9a-f-]{36})\/(complete|fail)$/i)
+      : undefined;
+    if (companionResultMatch) {
+      const [, jobId, operation] = companionResultMatch;
+      if (origin || request.headers['x-lawirisk-recon-job'] !== jobId) {
+        sendJson(response, 403, { error: 'JOB_ACCESS_DENIED' });
+        return;
+      }
+      pruneJobs();
+      const job = jobs.get(jobId);
+      if (!job || job.state !== 'RUNNING') {
+        sendJson(response, 404, { error: 'SEARCH_JOB_NOT_FOUND' });
+        return;
+      }
+      try {
+        const body = await readJsonBody(request);
+        if (operation === 'fail') {
+          const code = cleanSearchText(body?.errorCode, 3, 80, 'INVALID_SEARCH_RESULT');
+          if (!/^[A-Z0-9_]+$/.test(code)) throw new Error('INVALID_SEARCH_RESULT');
+          job.state = 'FAILED';
+          job.errorCode = code;
+        }
+        else {
+          job.result = await validateCompletedResult(body, jobId, job, searchResultRoot);
+          job.state = 'COMPLETE';
+        }
+        scheduleExpiry(jobId, job, resultTtlMs);
+        sendJson(response, 200, { accepted: true });
+      }
+      catch (error) {
+        sendJson(response, 400, { error: error instanceof Error ? error.message : 'INVALID_SEARCH_RESULT' });
+      }
       return;
     }
 
@@ -177,6 +297,67 @@ export function createLocalBridgeServer(options = {}) {
 
     if (request.headers['x-lawirisk-recon-client'] !== LOCAL_BRIDGE_CLIENT_HEADER) {
       sendJson(response, 403, { error: 'CLIENT_HEADER_REQUIRED' });
+      return;
+    }
+
+    const browserJobMatch = request.url?.match(/^\/v1\/jobs\/([0-9a-f-]{36})\/(status|result|imported)$/i);
+    if (browserJobMatch) {
+      const [, jobId, operation] = browserJobMatch;
+      pruneJobs();
+      const job = jobs.get(jobId);
+      if (!job) {
+        sendJson(response, 404, { error: 'SEARCH_JOB_NOT_FOUND' });
+        return;
+      }
+      if (operation === 'status' && request.method === 'GET') {
+        sendJson(response, 200, {
+          data: {
+            jobId,
+            state: job.state,
+            ...job.context,
+            result: job.result ? { ...job.result, pdfPath: undefined } : undefined,
+            errorCode: job.errorCode,
+          },
+        });
+        return;
+      }
+      if (operation === 'result' && request.method === 'GET') {
+        if (job.state !== 'COMPLETE' || !job.result) {
+          sendJson(response, 409, { error: 'SEARCH_RESULT_NOT_READY' });
+          return;
+        }
+        try {
+          const pdfBytes = await readFile(job.result.pdfPath);
+          response.writeHead(200, {
+            'Content-Type': 'application/pdf',
+            'Content-Length': String(pdfBytes.length),
+            'Content-Disposition': `attachment; filename="${job.result.pdfFilename}"`,
+            'Cache-Control': 'no-store',
+            'X-Content-Type-Options': 'nosniff',
+          });
+          response.end(pdfBytes);
+        }
+        catch {
+          sendJson(response, 410, { error: 'SEARCH_RESULT_FILE_UNAVAILABLE' });
+        }
+        return;
+      }
+      if (operation === 'imported' && request.method === 'POST') {
+        try {
+          const body = await readJsonBody(request);
+          if (!body || typeof body.evidenceId !== 'string' || !/^[0-9a-f-]{36}$/i.test(body.evidenceId)) {
+            throw new Error('INVALID_EVIDENCE_ID');
+          }
+          clearTimeout(job.timer);
+          jobs.delete(jobId);
+          sendJson(response, 200, { imported: true });
+        }
+        catch (error) {
+          sendJson(response, 400, { error: error instanceof Error ? error.message : 'INVALID_EVIDENCE_ID' });
+        }
+        return;
+      }
+      sendJson(response, 405, { error: 'METHOD_NOT_ALLOWED' });
       return;
     }
 
@@ -192,13 +373,20 @@ export function createLocalBridgeServer(options = {}) {
       if (command.action === 'launch') assertSourceLaunchAllowed(command);
       let launchUri = body.uri;
       let mode = 'OPEN_FORM';
+      let jobId;
       if (body.search !== undefined) {
         const search = validateLocalSearch(body.search, command);
         pruneJobs();
-        const jobId = randomUUID();
-        const timer = setTimeout(() => jobs.delete(jobId), jobTtlMs);
-        timer.unref?.();
-        jobs.set(jobId, { search, expiresAt: Date.now() + jobTtlMs, timer });
+        jobId = randomUUID();
+        const job = {
+          search,
+          state: 'QUEUED',
+          context: { source: search.source, service: search.service, field: search.field },
+          expiresAt: 0,
+          timer: undefined,
+        };
+        jobs.set(jobId, job);
+        scheduleExpiry(jobId, job, jobTtlMs);
         const uri = new URL(body.uri);
         uri.searchParams.set('job_id', jobId);
         launchUri = uri.toString();
@@ -214,7 +402,7 @@ export function createLocalBridgeServer(options = {}) {
         if (job) clearTimeout(job.timer);
         throw error;
       }
-      sendJson(response, 202, { accepted: true, action: command.action, source: command.source.key, mode });
+      sendJson(response, 202, { accepted: true, action: command.action, source: command.source.key, mode, job_id: jobId });
     }
     catch (error) {
       const code = error instanceof Error ? error.message : 'INVALID_COMMAND';

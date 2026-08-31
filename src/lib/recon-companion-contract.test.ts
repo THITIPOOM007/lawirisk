@@ -4,6 +4,7 @@ import {
   buildLocalSearchCandidates,
   isHssResultBoundToQuery,
   parseReconUri,
+  resolveFdaPublicSearchContract,
   resolveFdaSearchModel,
   resolveEsta2SearchOption,
   resolveHssSearchFilter,
@@ -28,11 +29,22 @@ describe('local recon companion contract', () => {
   });
 
   it('allows only source-bound service navigation', () => {
+    expect(parseReconUri('lawirisk-recon://launch?source=FDA_PUBLIC&service=FDA_DRUG_REGISTRY').service).toBe('FDA_DRUG_REGISTRY');
     expect(parseReconUri('lawirisk-recon://launch?source=FDA_SKYNET&service=DBD').service).toBe('DBD');
     expect(parseReconUri('lawirisk-recon://launch?source=HSS_OSS&service=HSS_FACILITY&allow_insecure_http=1').service).toBe('HSS_FACILITY');
     expect(parseReconUri('lawirisk-recon://launch?source=HSS_ESTA2&service=HSS_HEALTH_BUSINESS_APPROVED').service).toBe('HSS_HEALTH_BUSINESS_APPROVED');
     expect(() => assertSourceLaunchAllowed(parseReconUri('lawirisk-recon://launch?source=HSS_ESTA2'))).not.toThrow();
     expect(() => parseReconUri('lawirisk-recon://launch?source=HSS_OSS&service=DBD&allow_insecure_http=1')).toThrow('SERVICE_NOT_ALLOWED');
+  });
+
+  it('maps every FDA public category to a reviewed central-search selector', () => {
+    expect(resolveFdaPublicSearchContract('FDA_DRUG_REGISTRY', 'FACILITY_TERM')).toEqual({ selector: '#ContentPlaceHolder1_R_LCN_DRUG', mode: 'LOCATION' });
+    expect(resolveFdaPublicSearchContract('FDA_FOOD_REGISTRY', 'PRODUCT_TERM')).toEqual({ selector: '#ContentPlaceHolder1_CheckBoxList1_0', mode: 'PRODUCT' });
+    expect(resolveFdaPublicSearchContract('FDA_HAZARDOUS_REGISTRY', 'PRODUCT_TERM').selector).toContain('CheckBoxList1_3');
+    expect(resolveFdaPublicSearchContract('FDA_COSMETIC_REGISTRY', 'PRODUCT_TERM').selector).toContain('CheckBoxList1_4');
+    expect(resolveFdaPublicSearchContract('FDA_HERBAL_REGISTRY', 'FACILITY_TERM').selector).toContain('R_LCN_DRUG_HERB');
+    expect(resolveFdaPublicSearchContract('FDA_MEDICAL_DEVICE_REGISTRY', 'FACILITY_TERM').selector).toContain('R_LCN_MDC');
+    expect(() => resolveFdaPublicSearchContract('FDA_COSMETIC_REGISTRY', 'FACILITY_TERM')).toThrow('SEARCH_FIELD_NOT_ALLOWED');
   });
 
   it('maps only the reviewed ESTA2 approved-business search field', () => {

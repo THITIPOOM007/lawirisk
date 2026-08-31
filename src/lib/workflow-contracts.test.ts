@@ -5,6 +5,8 @@ import {
   automationJobCreateSchema,
   automationRunRequestSchema,
   createReportSchema,
+  evidenceScreeningRequestSchema,
+  evidenceScreeningReviewSchema,
   matchReviewSchema,
   reviewSuggestionSchema,
 } from './workflow-contracts';
@@ -17,6 +19,14 @@ describe('human review workflow contracts', () => {
 
   it('rejects client-controlled report fields', () => {
     expect(createReportSchema.safeParse({ case_id: 'case-1', report_type: 'SUMMARY', created_by: 'attacker' }).success).toBe(false);
+    expect(createReportSchema.safeParse({ case_id: 'case-1', report_type: 'PREDICTION_FORM' }).success).toBe(true);
+  });
+
+  it('requires a UUID and review reason for evidence screening', () => {
+    const caseId = '11111111-1111-4111-8111-111111111111';
+    expect(evidenceScreeningRequestSchema.safeParse({ case_id: caseId }).success).toBe(true);
+    expect(evidenceScreeningReviewSchema.safeParse({ decision: 'CONFIRMED', reason: 'ตรวจต้นฉบับและ hash แล้ว' }).success).toBe(true);
+    expect(evidenceScreeningReviewSchema.safeParse({ decision: 'CONFIRMED', reason: '' }).success).toBe(false);
   });
 
   it('bounds AI extraction input and validates provider output', () => {
@@ -29,6 +39,8 @@ describe('human review workflow contracts', () => {
     };
     expect(aiExtractionRequestSchema.safeParse(request).success).toBe(true);
     expect(automationJobCreateSchema.safeParse(request).success).toBe(true);
+    const blankSource = aiExtractionRequestSchema.parse({ ...request, source_text: '   ' });
+    expect(blankSource.source_text).toBeUndefined();
     expect(aiExtractionRequestSchema.safeParse({ ...request, source_text: 'x'.repeat(4001) }).success).toBe(false);
     expect(aiExtractionProviderResultSchema.safeParse({ candidates: [{
       entity_type: 'ORGANIZATION',

@@ -115,9 +115,7 @@ export default function CasesPage() {
             >
               <div className="space-y-4">
                 <div className="flex items-start justify-between">
-                  <span className="text-xs font-mono font-bold text-indigo-400 px-3 py-1.5 bg-indigo-500/5 rounded-xl border border-indigo-500/15">
-                    {c.number}
-                  </span>
+                  <div className="flex flex-wrap items-center gap-2"><span className="text-xs font-mono font-bold text-indigo-400 px-3 py-1.5 bg-indigo-500/5 rounded-xl border border-indigo-500/15">{c.number}</span>{c.number.startsWith('DEMO-') && <span className="rounded-full border border-amber-300/25 bg-amber-300/[0.08] px-2.5 py-1 text-[9px] font-black uppercase tracking-[0.12em] text-amber-200">Synthetic test data</span>}</div>
                   <span className={`px-2.5 py-1 text-[10px] font-semibold border rounded-lg ${getStatusColor(c.status)}`}>
                     {c.status === 'ACTIVE' ? 'กำลังดำเนินการ' : c.status === 'ARCHIVED' ? 'เก็บถาวร' : 'ปิดคดีแล้ว'}
                   </span>

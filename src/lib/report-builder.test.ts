@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { buildCaseReport } from './report-builder';
+import { buildCaseReport, buildPredictionFormReport } from './report-builder';
 
 describe('deterministic report builder', () => {
   it('includes source-backed facts and an explicit non-adjudication boundary', () => {
@@ -15,5 +15,42 @@ describe('deterministic report builder', () => {
     expect(report).toContain('PHONE: 0800000000');
     expect(report).toContain('ไม่ใช่ข้อวินิจฉัยความผิด');
     expect(report).toContain('2026-08-18T01:00:00.000Z');
+  });
+
+  it('builds the ten-section prediction form without inventing legal conclusions', () => {
+    const report = buildPredictionFormReport({
+      caseRecord: { number: 'ค.2/2569', title: 'กรณีทดสอบฟอร์ม', description: 'ตรวจสอบข้อเท็จจริง', status: 'ACTIVE', jurisdiction_region: 'พื้นที่สังเคราะห์', created_at: '2026-08-30T00:00:00.000Z' },
+      evidence: [{ filename: 'evidence.pdf', sha256: 'b'.repeat(64), malware_scan_status: 'CLEAN' }],
+      sourcedEntities: [{ type: 'ORGANIZATION', value: 'องค์กรตัวอย่าง' }],
+      sourcedRelationships: [],
+      screenings: [{ filename: 'evidence.pdf', classification: 'DIRECT', summary: 'พบข้อมูลที่ยืนยันแล้ว', status: 'SUGGESTED' }],
+      automaticAdvice: [
+        {
+          id: 'advice-evidence', status: 'AUTO_ADVICE', priority: 'HIGH', category: 'EVIDENCE_PRIORITY',
+          title: 'เริ่มตรวจจากหลักฐานที่เชื่อมโยงมากที่สุด',
+          recommendation: 'เปิด evidence.pdf และตรวจ source trace ก่อน',
+          rationale: 'พบข้อความที่เชื่อมโยงกับประเด็นคดีโดยตรง', confidence: 0.9,
+          sourceEvidenceIds: ['evidence-1'], sourceCount: 1, officialConfirmationRequired: false,
+        },
+        {
+          id: 'advice-legal', status: 'AUTO_ADVICE', priority: 'MEDIUM', category: 'LEGAL_RESEARCH',
+          title: 'ประเด็นกฎหมายที่ควรค้นจากฐานข้อมูลทางการ',
+          recommendation: 'ค้นฐานข้อมูลทางการเรื่องใบอนุญาตและฉลาก',
+          rationale: 'เป็นหัวข้อค้นคว้าจากประเภทกิจการ ไม่ใช่ข้อวินิจฉัย', confidence: 0.68,
+          sourceEvidenceIds: ['evidence-1'], sourceCount: 1, officialConfirmationRequired: true,
+        },
+      ],
+      generatedAt: new Date('2026-08-30T01:00:00.000Z'),
+    });
+    expect(report.sections).toHaveLength(10);
+    expect(report.sections[8].content).toContain('SHA-256');
+    expect(report.automationSummary?.status).toBe('AUTO_ADVICE_READY');
+    expect(report.automatedAdvice).toHaveLength(2);
+    expect(report.sections[4].content).toContain('เปิด evidence.pdf');
+    expect(report.sections[4].content).toContain('ไม่วินิจฉัยข้อหา');
+    expect(report.sections[5].content).toContain('ค้นฐานข้อมูลทางการเรื่องใบอนุญาตและฉลาก');
+    expect(report.sections[5].content).toContain('ไม่ใช่การยืนยัน');
+    expect(report.sections[9].content).toContain('ความเชื่อมั่น: 90%');
+    expect(report.schemaVersion).toBe('lawirisk-prediction-form-v1');
   });
 });

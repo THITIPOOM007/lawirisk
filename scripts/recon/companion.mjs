@@ -14,6 +14,7 @@ import {
   buildLocalSearchCandidates,
   isHssResultBoundToQuery,
   parseReconUri,
+  resolveFdaPublicSearchContract,
   resolveFdaSearchModel,
   resolveEsta2SearchOption,
   resolveHssSearchFilter,
@@ -162,6 +163,15 @@ async function loginEsta2(page, credential) {
 
 async function navigateToService(page, request) {
   if (!request.service) return page;
+  if (request.source.key === 'FDA_PUBLIC') {
+    await page.goto(request.source.startUrl, { waitUntil: 'domcontentloaded' });
+    const targetUrl = new URL(page.url());
+    if (targetUrl.protocol !== 'https:' || targetUrl.hostname !== 'meshlog.fda.moph.go.th'
+      || targetUrl.pathname.toLocaleUpperCase('en-US') !== '/SEARCH_CENTER_HERB/MAIN/SEARCH_CENTER_MAIN.ASPX') {
+      throw new Error('FDA_PUBLIC_SOURCE_REDIRECTED');
+    }
+    return page;
+  }
   if (request.source.key === 'HSS_ESTA2') {
     if (request.service !== 'HSS_HEALTH_BUSINESS_APPROVED') throw new Error('SERVICE_NOT_ALLOWED');
     await page.goto('https://esta2.hss.moph.go.th/business/approved', { waitUntil: 'domcontentloaded' })
@@ -231,6 +241,24 @@ async function consumeLocalSearchJob(request) {
   return search;
 }
 
+function summarizeResultRows(rows) {
+  return rows.slice(0, 10).map((value) => value.replace(/\s+/g, ' ').trim().slice(0, 500)).filter(Boolean);
+}
+
+async function reportSearchJob(request, operation, body) {
+  if (!request.jobId) return;
+  const response = await fetch(`${localBridgeOrigin}/v1/jobs/${request.jobId}/${operation}`, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      'X-LawiRisk-Recon-Job': request.jobId,
+    },
+    body: JSON.stringify(body),
+    signal: AbortSignal.timeout(10_000),
+  }).catch(() => undefined);
+  if (!response?.ok) throw new Error('SEARCH_RESULT_REPORT_FAILED');
+}
+
 async function runHssLocalSearch(page, request, search) {
   if (!search) return undefined;
   if (request.source.key !== 'HSS_OSS' || !request.service) throw new Error('SEARCH_FIELD_NOT_ALLOWED');
@@ -248,6 +276,7 @@ async function runHssLocalSearch(page, request, search) {
   const querySha256 = createHash('sha256').update(search.value, 'utf8').digest('hex');
   search.value = '';
   const attempts = [];
+  let resultSummaries = [];
   for (const candidate of candidates) {
     await filter.selectOption(filterValue);
     await value.fill(candidate.value);
@@ -262,6 +291,7 @@ async function runHssLocalSearch(page, request, search) {
     if (!isHssResultBoundToQuery(resultRows, candidate.value)) {
       throw new Error('SEARCH_RESULT_NOT_BOUND_TO_QUERY');
     }
+    resultSummaries = summarizeResultRows(resultRows);
     attempts.push({
       strategy: candidate.strategy,
       querySha256: createHash('sha256').update(candidate.value, 'utf8').digest('hex'),
@@ -277,6 +307,7 @@ async function runHssLocalSearch(page, request, search) {
     attemptCount: attempts.length,
     attempts,
     resultRowCount: executed?.resultRowCount || 0,
+    resultSummaries,
   };
 }
 
@@ -323,6 +354,78 @@ async function runFdaLocalSearch(page, request, search) {
     attemptCount: 1,
     attempts: [{ strategy: 'EXACT', querySha256, resultRowCount: resultRows.length }],
     resultRowCount: resultRows.length,
+    resultSummaries: summarizeResultRows(resultRows),
+  };
+}
+
+async function runFdaPublicLocalSearch(page, request, search) {
+  if (!search || request.source.key !== 'FDA_PUBLIC' || !request.service) {
+    throw new Error('SEARCH_FIELD_NOT_ALLOWED');
+  }
+  const contract = resolveFdaPublicSearchContract(request.service, search.field);
+  const searchValue = search.value;
+  const querySha256 = createHash('sha256').update(searchValue, 'utf8').digest('hex');
+  const category = page.locator(contract.selector);
+  const value = page.locator('#ContentPlaceHolder1_txt_search');
+  const submit = page.locator('#ContentPlaceHolder1_btn_search');
+  if (!await category.isVisible().catch(() => false)
+    || !await value.isVisible().catch(() => false)
+    || !await submit.isVisible().catch(() => false)) {
+    throw new Error('SEARCH_FORM_CHANGED');
+  }
+
+  if (contract.mode === 'PRODUCT') {
+    const productMode = page.locator('#ContentPlaceHolder1_R_LIST');
+    if (!await productMode.isVisible().catch(() => false)) throw new Error('SEARCH_FORM_CHANGED');
+    await productMode.evaluate((element) => {
+      if (!(element instanceof HTMLInputElement) || element.type !== 'radio') throw new Error('SEARCH_FORM_CHANGED');
+      element.checked = true;
+    });
+    await category.evaluate((element) => {
+      if (!(element instanceof HTMLInputElement) || element.type !== 'checkbox') throw new Error('SEARCH_FORM_CHANGED');
+      element.checked = true;
+    });
+  }
+  else {
+    await category.click();
+    await page.waitForTimeout(750);
+  }
+  const currentValue = page.locator('#ContentPlaceHolder1_txt_search');
+  const currentSubmit = page.locator('#ContentPlaceHolder1_btn_search');
+  if (!await currentValue.isVisible().catch(() => false) || !await currentSubmit.isVisible().catch(() => false)) {
+    throw new Error('SEARCH_FORM_CHANGED');
+  }
+  await currentValue.fill(searchValue);
+  search.value = '';
+  await currentSubmit.click();
+  await page.waitForLoadState('domcontentloaded', { timeout: 20_000 }).catch(() => undefined);
+  await page.waitForTimeout(2_000);
+
+  const currentUrl = new URL(page.url());
+  if (currentUrl.protocol !== 'https:' || currentUrl.hostname !== 'meshlog.fda.moph.go.th'
+    || currentUrl.pathname.toLocaleUpperCase('en-US') !== '/SEARCH_CENTER_HERB/MAIN/SEARCH_CENTER_MAIN.ASPX') {
+    throw new Error('FDA_PUBLIC_SOURCE_REDIRECTED');
+  }
+  const echoed = await page.locator('#ContentPlaceHolder1_txt_search')
+    .evaluate((element) => element instanceof HTMLInputElement ? element.value : '');
+  if (echoed !== searchValue) throw new Error('SEARCH_REQUEST_NOT_RETAINED');
+  const resultGridSelector = contract.mode === 'LOCATION'
+    ? '#ContentPlaceHolder1_RAD_LCN_ctl00 tr'
+    : '#ContentPlaceHolder1_RadGrid1_ctl00 tr';
+  const resultRows = await page.locator(resultGridSelector).evaluateAll((rows) => rows
+    .filter((row) => row.querySelectorAll('td').length > 1)
+    .map((row) => Array.from(row.querySelectorAll('td')).map((cell) => cell.textContent || '').join(' ').replace(/\s+/g, ' ').trim())
+    .filter((row) => row && !/No records to display|ไม่พบข้อมูล/i.test(row)));
+  const boundedRows = resultRows.filter((row) => isHssResultBoundToQuery([row], searchValue));
+  if (resultRows.length > 0 && boundedRows.length === 0) throw new Error('SEARCH_RESULT_NOT_BOUND_TO_QUERY');
+  return {
+    querySha256,
+    executedQuerySha256: querySha256,
+    searchStrategy: contract.mode === 'LOCATION' ? 'EXACT_LOCATION' : 'EXACT_PRODUCT',
+    attemptCount: 1,
+    attempts: [{ strategy: contract.mode, querySha256, resultRowCount: boundedRows.length }],
+    resultRowCount: boundedRows.length,
+    resultSummaries: summarizeResultRows(boundedRows),
   };
 }
 
@@ -355,6 +458,7 @@ async function runEsta2LocalSearch(page, request, search) {
   const querySha256 = createHash('sha256').update(search.value, 'utf8').digest('hex');
   search.value = '';
   const attempts = [];
+  let resultSummaries = [];
   for (const candidate of candidates) {
     await filter.selectOption({ label: optionLabel });
     await value.fill(candidate.value);
@@ -380,6 +484,7 @@ async function runEsta2LocalSearch(page, request, search) {
     if (!isHssResultBoundToQuery(resultRows, candidate.value)) {
       throw new Error('SEARCH_RESULT_NOT_BOUND_TO_QUERY');
     }
+    resultSummaries = summarizeResultRows(resultRows);
     attempts.push({
       strategy: candidate.strategy,
       querySha256: createHash('sha256').update(candidate.value, 'utf8').digest('hex'),
@@ -395,11 +500,13 @@ async function runEsta2LocalSearch(page, request, search) {
     attemptCount: attempts.length,
     attempts,
     resultRowCount: executed?.resultRowCount || 0,
+    resultSummaries,
   };
 }
 
 async function runLocalSearch(page, request, search) {
   if (!search) return undefined;
+  if (request.source.key === 'FDA_PUBLIC') return runFdaPublicLocalSearch(page, request, search);
   if (request.source.key === 'FDA_SKYNET') return runFdaLocalSearch(page, request, search);
   if (request.source.key === 'HSS_OSS') return runHssLocalSearch(page, request, search);
   if (request.source.key === 'HSS_ESTA2') return runEsta2LocalSearch(page, request, search);
@@ -407,7 +514,7 @@ async function runLocalSearch(page, request, search) {
 }
 
 async function captureLocalSearchResult(page, request, search, searchResult) {
-  if (!search || !searchResult || !request.jobId) return;
+  if (!search || !searchResult || !request.jobId) return undefined;
   const resultDir = path.join(localRoot, 'recon-results');
   await mkdir(resultDir, { recursive: true });
   const timestamp = new Date().toISOString().replace(/[:.]/g, '-');
@@ -444,6 +551,18 @@ async function captureLocalSearchResult(page, request, search, searchResult) {
     await writeFile(metadataPath, JSON.stringify(metadata, null, 2), 'utf8');
     console.log(`บันทึกผลค้นและ SHA-256 ไว้บนเครื่องแล้ว: ${pdfPath}`);
     search.purpose = '';
+    return {
+      pdfFilename: metadata.pdfFilename,
+      metadataFilename: path.basename(metadataPath),
+      pdfSha256: metadata.pdfSha256,
+      resultRowCount: metadata.resultRowCount,
+      resultSummaries: searchResult.resultSummaries || [],
+      capturedAt: metadata.capturedAt,
+      sourceUrl: metadata.sourceUrl,
+      adapterVersion: metadata.adapterVersion,
+      searchStrategy: metadata.searchStrategy,
+      searchAttemptCount: metadata.searchAttemptCount,
+    };
   }
   catch {
     throw new Error('SEARCH_CAPTURE_FAILED');
@@ -574,7 +693,9 @@ async function main() {
     console.warn('คำเตือน: HSS ใช้ HTTP รหัสผ่านจะถูกส่งโดยไม่มี TLS ตามข้อจำกัดของระบบต้นทาง');
   }
 
-  const credential = await getOrConfigureCredential(request.source.key);
+  const credential = request.source.key === 'FDA_PUBLIC'
+    ? undefined
+    : await getOrConfigureCredential(request.source.key);
   const profileDir = path.join(localRoot, 'recon-browser-profiles', request.source.key);
   await mkdir(profileDir, { recursive: true });
   const context = await chromium.launchPersistentContext(profileDir, {
@@ -584,7 +705,8 @@ async function main() {
   });
   const page = context.pages()[0] || await context.newPage();
   try {
-    if (request.source.key === 'FDA_SKYNET') await loginFda(page, credential);
+    if (request.source.key === 'FDA_PUBLIC') await page.goto(request.source.startUrl, { waitUntil: 'domcontentloaded' });
+    else if (request.source.key === 'FDA_SKYNET') await loginFda(page, credential);
     else if (request.source.key === 'HSS_OSS') await loginHss(page, credential);
     else if (request.source.key === 'HSS_ESTA2') await loginEsta2(page, credential);
     else throw new Error('SOURCE_NOT_ALLOWED');
@@ -592,17 +714,21 @@ async function main() {
     await targetPage.waitForTimeout(1_000);
     await captureSanitizedPageContract(targetPage, request.source, request.service);
     const searchResult = await runLocalSearch(targetPage, request, localSearch);
-    await captureLocalSearchResult(targetPage, request, localSearch, searchResult);
+    const capturedResult = await captureLocalSearchResult(targetPage, request, localSearch, searchResult);
+    if (capturedResult) await reportSearchJob(request, 'complete', capturedResult);
   }
   catch (error) {
     await context.close().catch(() => undefined);
     throw error;
   }
   finally {
-    credential.username = '';
-    credential.password = '';
+    if (credential) {
+      credential.username = '';
+      credential.password = '';
+    }
   }
-  await keepAlive(context);
+  if (localSearch) await context.close().catch(() => undefined);
+  else await keepAlive(context);
 }
 
 main().catch(async (error) => {
@@ -618,6 +744,13 @@ main().catch(async (error) => {
     credentialsCaptured: false,
     rawQueryCaptured: false,
   }, null, 2), 'utf8').catch(() => undefined);
+  try {
+    const failedRequest = process.argv[2] ? parseReconUri(process.argv[2]) : undefined;
+    if (failedRequest?.jobId) await reportSearchJob(failedRequest, 'fail', { errorCode });
+  }
+  catch {
+    // The local failure record remains available when the bridge callback cannot be reached.
+  }
   console.error(safeCompanionMessage(error));
   process.exitCode = 1;
 });

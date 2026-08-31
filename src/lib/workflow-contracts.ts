@@ -19,7 +19,10 @@ export const aiExtractionRequestSchema = z.object({
   case_id: z.string().uuid(),
   evidence_id: z.string().uuid(),
   page_number: z.number().int().min(1).max(100_000),
-  source_text: z.string().trim().min(1).max(4000).optional(),
+  source_text: z.preprocess(
+    (value) => typeof value === 'string' && value.trim() === '' ? undefined : value,
+    z.string().trim().min(1).max(4000).optional(),
+  ),
   source_location: z.record(z.string(), z.unknown()).default({}),
 }).strict();
 
@@ -56,6 +59,23 @@ export const matchReviewSchema = z.object({
 
 export const createReportSchema = z.object({
   case_id: z.string().trim().min(1).max(100),
-  report_type: z.enum(['SUMMARY', 'OVERLAP']),
+  report_type: z.enum(['SUMMARY', 'OVERLAP', 'PREDICTION_FORM']),
   title: z.string().trim().min(1).max(300).optional(),
+}).strict();
+
+export const batchReviewSuggestionsSchema = z.object({
+  items: z.array(z.object({
+    id: z.string().trim().min(1).max(100),
+    reason: z.string().trim().min(1).max(2000),
+    edited_value: z.string().trim().min(1).max(1000).optional(),
+  }).strict()).min(2).max(50),
+}).strict();
+
+export const evidenceScreeningRequestSchema = z.object({
+  case_id: z.string().trim().min(1).max(100),
+}).strict();
+
+export const evidenceScreeningReviewSchema = z.object({
+  decision: z.enum(['CONFIRMED', 'REJECTED', 'UNCERTAIN']),
+  reason: z.string().trim().min(1).max(2000),
 }).strict();
