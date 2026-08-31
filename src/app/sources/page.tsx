@@ -1,16 +1,18 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import Link from 'next/link';
 import {
   ArrowUpRight,
   BadgeCheck,
   Building2,
   DatabaseZap,
+  Download,
   FileUp,
   KeyRound,
   Loader2,
   LockKeyhole,
+  MonitorCheck,
   RefreshCw,
   Route,
   SearchCheck,
@@ -20,6 +22,7 @@ import type { ExternalSource, ReconServiceKey } from '@/lib/external-sources';
 import type { Case } from '@/lib/demo-data';
 
 const LOCAL_RECON_BRIDGE_URL = 'http://127.0.0.1:32147/v1/command';
+const LOCAL_RECON_HEALTH_URL = 'http://127.0.0.1:32147/health';
 
 type LocalSearchRequest = {
   field: string;
@@ -93,6 +96,16 @@ export default function SourcesPage() {
   const [insecureAcknowledged, setInsecureAcknowledged] = useState(false);
   const [selectedServices, setSelectedServices] = useState<Partial<Record<ExternalSource['key'], ReconServiceKey>>>({});
   const [searchDrafts, setSearchDrafts] = useState<Partial<Record<ExternalSource['key'], SearchDraft>>>({});
+  const [companionState, setCompanionState] = useState<'CHECKING' | 'READY' | 'MISSING'>('CHECKING');
+
+  const checkCompanion = useCallback(async () => {
+    setCompanionState('CHECKING');
+    const response = await fetch(LOCAL_RECON_HEALTH_URL, {
+      cache: 'no-store',
+      signal: AbortSignal.timeout(3_500),
+    }).catch(() => undefined);
+    setCompanionState(response?.ok ? 'READY' : 'MISSING');
+  }, []);
 
   function updateSearchDraft(source: ExternalSource, patch: Partial<SearchDraft>) {
     const service = source.services.find((item) => item.key === (selectedServices[source.key] || source.services[0]?.key));
@@ -230,6 +243,11 @@ export default function SourcesPage() {
     return () => controller.abort();
   }, [reloadToken]);
 
+  useEffect(() => {
+    const timer = window.setTimeout(() => { void checkCompanion(); }, 0);
+    return () => window.clearTimeout(timer);
+  }, [checkCompanion]);
+
   return (
     <div className="space-y-7">
       <header className="glass-panel relative overflow-hidden rounded-[28px] p-6 sm:p-8">
@@ -257,6 +275,20 @@ export default function SourcesPage() {
           {notice}
         </div>
       )}
+
+      <section className={`rounded-[26px] border p-5 sm:p-6 ${companionState === 'READY' ? 'border-emerald-300/20 bg-emerald-300/[0.055]' : companionState === 'MISSING' ? 'border-amber-300/20 bg-amber-300/[0.055]' : 'border-sky-300/15 bg-sky-300/[0.04]'}`} aria-label="ความพร้อม Recon Companion บนเครื่องนี้">
+        <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
+          <div className="flex items-start gap-3">
+            <span className="grid h-11 w-11 shrink-0 place-items-center rounded-2xl border border-white/[0.08] bg-slate-950/35"><MonitorCheck className={`h-5 w-5 ${companionState === 'READY' ? 'text-emerald-200' : companionState === 'MISSING' ? 'text-amber-200' : 'text-sky-200'}`} /></span>
+            <div><p className="font-mono text-[9px] font-bold uppercase tracking-[0.18em] text-slate-500">This device · Local-only</p><h2 className="mt-1 text-sm font-black text-white">{companionState === 'READY' ? 'Recon Companion พร้อมใช้งานบนเครื่องนี้' : companionState === 'MISSING' ? 'เครื่องนี้ยังไม่มี Recon Companion หรือ Local Bridge ไม่ได้ทำงาน' : 'กำลังตรวจ Recon Companion บนเครื่องนี้…'}</h2><p className="mt-1 max-w-3xl text-xs leading-6 text-slate-400">Companion ต้องติดตั้งแยกทุกเครื่อง เพราะบัญชีและ session ถูกเข้ารหัสด้วย Windows DPAPI และเก็บเฉพาะเครื่องนั้น ระบบเว็บจึงไม่สามารถนำการตั้งค่าจากคอมพิวเตอร์อีกเครื่องมาใช้โดยอัตโนมัติได้</p></div>
+          </div>
+          <div className="flex shrink-0 flex-wrap gap-2">
+            <button type="button" onClick={() => void checkCompanion()} disabled={companionState === 'CHECKING'} className="secondary-action inline-flex min-h-10 items-center justify-center gap-2 rounded-xl border border-white/[0.08] px-4 text-xs font-semibold disabled:opacity-50"><RefreshCw className={`h-4 w-4 ${companionState === 'CHECKING' ? 'animate-spin' : ''}`} />ตรวจอีกครั้ง</button>
+            {companionState !== 'READY' && <a href="/recon/install.ps1" download="LAW-i-RISK-Recon-Installer.ps1" className="primary-action inline-flex min-h-10 items-center justify-center gap-2 rounded-xl px-4 text-xs font-bold"><Download className="h-4 w-4" />ดาวน์โหลดตัวติดตั้งเครื่องนี้</a>}
+          </div>
+        </div>
+        {companionState === 'MISSING' && <p className="mt-3 rounded-xl border border-amber-300/15 bg-slate-950/30 p-3 text-[10px] leading-5 text-amber-100/80">หลังดาวน์โหลด ให้คลิกขวาไฟล์แล้วเลือก Run with PowerShell (ต้องมี Node.js 20 LTS) ตัวติดตั้งจะลง Chromium และลงทะเบียน <code>lawirisk-recon://</code> ให้ Windows user ปัจจุบัน จากนั้นกลับมาหน้านี้และกด “ตรวจอีกครั้ง”</p>}
+      </section>
 
       <section className="rounded-[26px] border border-sky-300/15 bg-[linear-gradient(120deg,rgba(14,165,233,0.08),rgba(15,23,42,0.45))] p-5 sm:p-6" aria-label="คำอธิบายความพร้อมของแหล่งข้อมูล">
         <div className="flex items-start gap-3"><span className="grid h-10 w-10 shrink-0 place-items-center rounded-2xl border border-sky-300/15 bg-sky-300/[0.07]"><ShieldAlert className="h-4 w-4 text-sky-200" /></span><div><h2 className="text-sm font-bold text-white">คำว่า “ไม่พร้อม” ไม่ได้แปลว่าลิงก์เสีย</h2><p className="mt-2 text-xs leading-6 text-slate-400">เว็บไซต์สาธารณะที่ไม่ต้องล็อกอินจะค้นผ่าน Public Web/Open Data จากหน้าคดี ส่วนรายการด้านล่างเป็นระบบทางการที่ต้องใช้บัญชีเจ้าหน้าที่หรือฟอร์มเฉพาะ หากขึ้น “เปิดฟอร์มเท่านั้น” หมายถึงลิงก์เปิดได้ แต่ยังไม่มี adapter ที่ตรวจชื่อช่อง กติกาค้น และรูปแบบผลลัพธ์ครบ จึงไม่กรอกหรือกดค้นแบบเดาสุ่ม</p><div className="mt-3 flex flex-wrap gap-2 text-[9px] font-semibold"><span className="rounded-full border border-emerald-300/15 bg-emerald-300/[0.06] px-2.5 py-1 text-emerald-200">HTTPS + field contract = ค้นอัตโนมัติ</span><span className="rounded-full border border-amber-300/15 bg-amber-300/[0.06] px-2.5 py-1 text-amber-200">ลิงก์มี แต่ยังไม่มี adapter = เปิดฟอร์ม</span><span className="rounded-full border border-rose-300/15 bg-rose-300/[0.06] px-2.5 py-1 text-rose-200">HTTP/OTP/CAPTCHA = ต้องให้เจ้าหน้าที่ดำเนินการ</span></div></div></div>

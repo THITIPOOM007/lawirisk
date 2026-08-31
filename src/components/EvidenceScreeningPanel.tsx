@@ -1,7 +1,7 @@
 'use client';
 
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { Bot, Check, ChevronRight, CircleDot, FileCheck2, GitBranch, Lightbulb, Loader2, RefreshCw, SearchCheck, ShieldAlert, Sparkles, X } from 'lucide-react';
+import { Bot, Check, ChevronRight, CircleDot, ExternalLink, FileCheck2, GitBranch, Lightbulb, Loader2, RefreshCw, SearchCheck, ShieldAlert, Sparkles, X } from 'lucide-react';
 import type { LucideIcon } from 'lucide-react';
 
 type Assessment = {
@@ -42,6 +42,7 @@ type ScreeningData = {
     sourceEvidenceIds: string[];
     sourceCount: number;
     officialConfirmationRequired: boolean;
+    sources?: Array<{ label: string; authority: string; url: string; scope: string; access: 'PUBLIC' | 'STAFF' }>;
   }>;
   assessments: Assessment[];
   graph: {
@@ -201,6 +202,7 @@ export function EvidenceScreeningPanel({ caseId, refreshSignal = 0 }: { caseId: 
                 <h5 className="mt-3 text-sm font-black leading-6 text-white">{advice.title}</h5>
                 <p className="mt-2 text-xs font-semibold leading-6 text-cyan-50">คำแนะนำ: {advice.recommendation}</p>
                 <p className="mt-2 text-[10px] leading-5 text-slate-500">เหตุผล: {advice.rationale}</p>
+                {advice.sources?.length ? <div className="mt-3 space-y-2" aria-label="แหล่งกฎหมายที่ระบบจับคู่ให้"><p className="text-[9px] font-black uppercase tracking-[0.16em] text-cyan-200/70">แหล่งค้นที่ตรงบริบท</p>{advice.sources.map((source) => <a key={source.url} href={source.url} target="_blank" rel="noreferrer" className="flex items-start justify-between gap-3 rounded-2xl border border-cyan-300/10 bg-slate-950/35 p-3 transition hover:border-cyan-300/30 hover:bg-cyan-300/[0.05]"><span><span className="block text-[10px] font-bold text-cyan-50">{source.label}</span><span className="mt-1 block text-[9px] leading-4 text-slate-500">{source.scope} · {source.access === 'STAFF' ? 'ต้องเข้าสู่ระบบเจ้าหน้าที่' : 'เปิดสาธารณะ'}</span></span><ExternalLink className="mt-0.5 h-3.5 w-3.5 shrink-0 text-cyan-200" /></a>)}</div> : null}
                 <div className="mt-3 flex flex-wrap gap-2 border-t border-white/[0.06] pt-3 text-[9px] text-slate-500"><span>แหล่งอ้างอิง {advice.sourceCount}</span><span>·</span><span>{advice.officialConfirmationRequired ? 'ต้องรับรองก่อนบันทึกเป็นข้อเท็จจริงทางการ' : 'ใช้จัดลำดับงานได้ทันที'}</span></div>
               </article>
             ))}

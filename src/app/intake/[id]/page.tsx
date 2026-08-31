@@ -109,45 +109,50 @@ export default function IntakeDetailPage() {
   }, [message]);
 
   const handleFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
-    if (!file) return;
+    const input = e.currentTarget;
+    const files = Array.from(input.files || []);
+    if (!files.length) return;
+    if (files.length > 5) {
+      setUploadError('เลือกไฟล์ได้สูงสุด 5 รายการต่อครั้ง');
+      input.value = '';
+      return;
+    }
 
     setIsUploadingFile(true);
     setUploadError('');
-    setUploadStatus('กำลังตรวจสอบความปลอดภัยและคำนวณ SHA-256...');
+    setUploadStatus(`กำลังตรวจสอบไฟล์ 1/${files.length}...`);
 
     try {
-      const validation = await validateFileInBrowser(file);
-      if (!validation.isValid) {
-        setUploadError(validation.error || 'ไฟล์ไม่ผ่านเกณฑ์ความปลอดภัย');
-        return;
+      for (let index = 0; index < files.length; index += 1) {
+        const validation = await validateFileInBrowser(files[index]);
+        if (!validation.isValid) {
+          throw new Error(`${files[index].name}: ${validation.error || 'ไฟล์ไม่ผ่านเกณฑ์ความปลอดภัย'}`);
+        }
       }
 
-      setUploadStatus('กำลังส่งไฟล์ขึ้นพื้นที่ส่วนตัวและตรวจรูปแบบไฟล์...');
-      const formData = new FormData();
-      formData.set('file', file);
-
-      const res = await fetch(`/api/v1/intake/${encodeURIComponent(intakeId)}/attachments`, {
-        method: 'POST',
-        credentials: 'same-origin',
-        body: formData,
-      });
-
-      const body = await res.json();
-      if (!res.ok) {
-        throw new Error(body.error?.message || 'อัปโหลดไฟล์แนบไม่สำเร็จ');
+      const uploaded: IntakeAttachment[] = [];
+      for (let index = 0; index < files.length; index += 1) {
+        const file = files[index];
+        setUploadStatus(`กำลังจัดเก็บไฟล์ ${index + 1}/${files.length}: ${file.name}`);
+        const formData = new FormData();
+        formData.set('file', file);
+        const res = await fetch(`/api/v1/intake/${encodeURIComponent(intakeId)}/attachments`, {
+          method: 'POST',
+          credentials: 'same-origin',
+          body: formData,
+        });
+        const body = await res.json();
+        if (!res.ok) throw new Error(`${file.name}: ${body.error?.message || 'อัปโหลดไฟล์แนบไม่สำเร็จ'}`);
+        if (body.data) uploaded.push(body.data as IntakeAttachment);
       }
-
-      setUploadStatus('');
-      if (body.data) {
-        setAttachments((prev) => [...prev, body.data as IntakeAttachment]);
-      }
+      setAttachments((prev) => [...prev, ...uploaded]);
+      setUploadStatus(`จัดเก็บครบ ${uploaded.length} ไฟล์แล้ว`);
     } catch (err: unknown) {
       setUploadError(err instanceof Error ? err.message : 'เกิดข้อผิดพลาดในการอัปโหลด');
     } finally {
       setIsUploadingFile(false);
-      setUploadStatus('');
-      e.target.value = '';
+      window.setTimeout(() => setUploadStatus(''), 2_500);
+      input.value = '';
     }
   };
 
@@ -495,11 +500,12 @@ export default function IntakeDetailPage() {
               <div className="p-4 bg-slate-950/40 border border-slate-800 rounded-2xl space-y-3">
                 <div className="flex flex-wrap items-center justify-between gap-2">
                   <span className="text-xs font-semibold text-slate-300">แนบไฟล์พยานหลักฐานเพิ่มเติม</span>
-                  <span className="text-[10px] text-slate-500">PDF, PNG, JPG (สูงสุด 20 MB)</span>
+                  <span className="text-[10px] text-slate-500">เลือกพร้อมกันได้สูงสุด 5 ไฟล์ · ไฟล์ละไม่เกิน 20 MB</span>
                 </div>
                 <input
                   type="file"
                   accept=".pdf,.png,.jpg,.jpeg"
+                  multiple
                   disabled={isUploadingFile}
                   onChange={handleFileUpload}
                   className="block w-full text-xs text-slate-400 file:mr-3 file:py-2 file:px-3 file:rounded-xl file:border-0 file:text-xs file:font-semibold file:bg-indigo-600 file:text-white hover:file:bg-indigo-500 cursor-pointer disabled:opacity-50"

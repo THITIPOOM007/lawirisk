@@ -91,6 +91,8 @@ function assertCloudflareSecrets() {
 try {
   assertCloudflareSecrets();
   const publicConfig = resolvePublicSupabaseConfig();
+  const reconPackage = runPnpm(['exec', 'node', 'scripts/build-recon-distribution.mjs'], { stdio: 'inherit', encoding: undefined });
+  if (reconPackage.status !== 0) throw new Error('สร้างชุดติดตั้ง Recon Companion ไม่สำเร็จ');
   const deployment = runPnpm(
     ['exec', 'vinext-cloudflare', 'deploy', '--env', 'staging'],
     {

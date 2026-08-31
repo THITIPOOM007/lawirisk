@@ -21,6 +21,13 @@ export type AutomaticAdvice = {
   sourceEvidenceIds: string[];
   sourceCount: number;
   officialConfirmationRequired: boolean;
+  sources?: Array<{
+    label: string;
+    authority: string;
+    url: string;
+    scope: string;
+    access: 'PUBLIC' | 'STAFF';
+  }>;
 };
 
 type ScreeningRow = {
@@ -41,18 +48,36 @@ type ScreeningRow = {
 type EvidenceRow = { id: string; filename: string; sha256: string };
 type EntityRow = { id: string; type: string; value: string };
 
-function legalResearchTopics(caseTitle: string) {
+export function buildLegalResearchPlan(caseTitle: string) {
   const normalized = caseTitle.toLocaleLowerCase('th-TH');
   const topics = new Set<string>();
+  const sources = new Map<string, NonNullable<AutomaticAdvice['sources']>[number]>();
+  const addSource = (source: NonNullable<AutomaticAdvice['sources']>[number]) => sources.set(source.url, source);
   if (/น้ำดื่ม|อาหาร|ผลิตภัณฑ์|ฉลาก|โรงงาน/.test(normalized)) {
     topics.add('ใบอนุญาตผลิตและสถานที่ผลิต');
     topics.add('ฉลากและการแสดงข้อมูลต่อผู้บริโภค');
+    addSource({ label: 'กองกฎหมาย อย. — พระราชบัญญัติและกฎหมายผลิตภัณฑ์สุขภาพ', authority: 'สำนักงานคณะกรรมการอาหารและยา', url: 'https://laws.fda.moph.go.th/laws/category/act/', scope: 'ยา อาหาร เครื่องสำอาง วัตถุอันตราย สมุนไพร และเครื่องมือแพทย์', access: 'PUBLIC' });
   }
-  if (/โฆษณา|ออนไลน์|ขาย/.test(normalized)) topics.add('การโฆษณาและการกล่าวอ้างผลิตภัณฑ์');
-  if (/คลินิก|สถานพยาบาล|แพทย์|ทันต/.test(normalized)) topics.add('ใบอนุญาตสถานพยาบาลและผู้ประกอบวิชาชีพ');
-  if (/นวด|สถานประกอบการเพื่อสุขภาพ|สปา/.test(normalized)) topics.add('ใบอนุญาตสถานประกอบการเพื่อสุขภาพและผู้ให้บริการ');
+  if (/ยา|เภสัช|คลินิกยา/.test(normalized)) {
+    topics.add('พระราชบัญญัติยาและเงื่อนไขใบอนุญาตด้านยา');
+    addSource({ label: 'กองกฎหมาย อย. — กฎหมายด้านยา', authority: 'สำนักงานคณะกรรมการอาหารและยา', url: 'https://laws.fda.moph.go.th/laws/category/act/', scope: 'พระราชบัญญัติยาและกฎหมายลำดับรอง', access: 'PUBLIC' });
+  }
+  if (/โฆษณา|ออนไลน์|ขาย/.test(normalized)) {
+    topics.add('การโฆษณาและการกล่าวอ้างผลิตภัณฑ์');
+    addSource({ label: 'กองกฎหมาย อย.', authority: 'สำนักงานคณะกรรมการอาหารและยา', url: 'https://laws.fda.moph.go.th/', scope: 'ประกาศ คำสั่ง และกฎหมายเกี่ยวกับการโฆษณาผลิตภัณฑ์สุขภาพ', access: 'PUBLIC' });
+  }
+  if (/คลินิก|สถานพยาบาล|แพทย์|ทันต/.test(normalized)) {
+    topics.add('ใบอนุญาตสถานพยาบาลและผู้ประกอบวิชาชีพ');
+    addSource({ label: 'กฎหมายและระเบียบด้านบริการสุขภาพ', authority: 'กรมสนับสนุนบริการสุขภาพ', url: 'https://hss4.hss.moph.go.th/laws-regulations/', scope: 'สถานพยาบาลและบริการสุขภาพ', access: 'PUBLIC' });
+  }
+  if (/นวด|สถานประกอบการเพื่อสุขภาพ|สปา/.test(normalized)) {
+    topics.add('ใบอนุญาตสถานประกอบการเพื่อสุขภาพและผู้ให้บริการ');
+    addSource({ label: 'กฎหมายและระเบียบด้านบริการสุขภาพ', authority: 'กรมสนับสนุนบริการสุขภาพ', url: 'https://hss4.hss.moph.go.th/laws-regulations/', scope: 'สถานประกอบการเพื่อสุขภาพและผู้ให้บริการ', access: 'PUBLIC' });
+  }
   if (topics.size === 0) topics.add('อำนาจหน้าที่ ใบอนุญาต และเงื่อนไขเฉพาะของกิจการที่ถูกร้องเรียน');
-  return [...topics];
+  addSource({ label: 'ราชกิจจานุเบกษา', authority: 'สำนักเลขาธิการคณะรัฐมนตรี', url: 'https://ratchakitcha.soc.go.th/', scope: 'ตรวจฉบับประกาศและวันที่มีผลใช้บังคับจากต้นทาง', access: 'PUBLIC' });
+  addSource({ label: 'Kouprey Plus — iLAWS e-OFFICE', authority: 'สำนักงานสาธารณสุขจังหวัดศรีสะเกษ', url: 'https://koupreyplus.ssko.moph.go.th/admin/e-office', scope: 'ดัชนีและพื้นที่ช่วยค้นกฎหมายสำหรับเจ้าหน้าที่ ต้องเข้าสู่ระบบและตรวจเอกสารทางการซ้ำ', access: 'STAFF' });
+  return { topics: [...topics], sources: [...sources.values()] };
 }
 
 export function buildAutomaticAdvice(input: {
@@ -126,16 +151,17 @@ export function buildAutomaticAdvice(input: {
     });
   }
 
-  const topics = legalResearchTopics(input.caseRecord.title);
+  const legalPlan = buildLegalResearchPlan(input.caseRecord.title);
   advice.push({
     id: 'legal-research:topics', status: 'AUTO_ADVICE', priority: 'MEDIUM', category: 'LEGAL_RESEARCH',
     title: 'ประเด็นกฎหมายที่ควรค้นจากฐานข้อมูลทางการ',
-    recommendation: `ค้นและตรวจฉบับปัจจุบันในหัวข้อ: ${topics.join(', ')} แล้วแนบมาตราและแหล่งทางการก่อนสรุปข้อกฎหมาย`,
+    recommendation: `ค้นและตรวจฉบับปัจจุบันในหัวข้อ: ${legalPlan.topics.join(', ')} แล้วแนบมาตราและแหล่งทางการก่อนสรุปข้อกฎหมาย`,
     rationale: `คัดหัวข้อจากชื่อคดี “${input.caseRecord.title}” และประเภทหลักฐานที่ระบบจัดกลุ่ม ไม่ใช่การวินิจฉัยข้อหา`,
     confidence: 0.68,
     sourceEvidenceIds: [...new Set(priorityEvidence.map((item) => item.evidenceId))],
     sourceCount: priorityEvidence.reduce((sum, item) => sum + item.sourceCount, 0),
     officialConfirmationRequired: true,
+    sources: legalPlan.sources,
   });
 
   const weak = active.filter((item) => ['LOW_RELEVANCE', 'CONTEXTUAL', 'REVIEW_REQUIRED'].includes(item.classification));

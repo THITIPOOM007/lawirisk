@@ -44,6 +44,7 @@ output/pdf/
 temp_pdf_2/
 tmp/pdfs/
 lawirisk_user_manual*.pdf
+public/recon/
 
 # turbopack
 .turbo/

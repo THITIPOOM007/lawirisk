@@ -4,6 +4,7 @@ import { useEffect, useState } from 'react';
 import Link from 'next/link';
 import { Bot, Check, CircleAlert, Copy, Download, FileBarChart, Lightbulb, Loader2, RefreshCw, ShieldCheck } from 'lucide-react';
 import type { Case } from '@/lib/demo-data';
+import { formatReportForClipboard, parsePredictionFormContent } from '@/lib/report-presentation';
 
 type ReportRecord = {
   id: string;
@@ -24,40 +25,6 @@ type ReportReadiness = {
   relationship_reference_count?: number;
 };
 
-type PredictionFormContent = {
-  schemaVersion: 'lawirisk-prediction-form-v1';
-  title: string;
-  caseNumber: string;
-  caseTitle: string;
-  automationSummary?: { status: 'AUTO_ADVICE_READY' | 'DATA_REQUIRED'; summary: string; officialGate: string };
-  automatedAdvice?: Array<{
-    id: string; priority: 'HIGH' | 'MEDIUM' | 'LOW'; category: string; title: string;
-    recommendation: string; rationale: string; confidence: number; sourceCount: number;
-    officialConfirmationRequired: boolean;
-  }>;
-  sourceSummary?: {
-    caseStatus: string;
-    evidence: Array<{ filename: string; sha256: string; status: string }>;
-    entities: Array<{ type: string; value: string }>;
-    relationships: Array<{ type: string }>;
-    screenings: Array<{ filename: string; classification: string; summary: string; status: string }>;
-  };
-  sections: Array<{ number: number; title: string; content: string }>;
-  legalAppendix: Array<{ law: string; penalty: string; settlement: string }>;
-  reviewNotice: string;
-};
-
-function parsePredictionForm(content: string): PredictionFormContent | null {
-  try {
-    const value = JSON.parse(content) as Partial<PredictionFormContent>;
-    return value.schemaVersion === 'lawirisk-prediction-form-v1' && Array.isArray(value.sections)
-      ? value as PredictionFormContent
-      : null;
-  } catch {
-    return null;
-  }
-}
-
 export default function ReportsPage() {
   const [cases, setCases] = useState<Case[]>([]);
   const [reports, setReports] = useState<ReportRecord[]>([]);
@@ -71,7 +38,7 @@ export default function ReportsPage() {
   const [copied, setCopied] = useState(false);
   const [readiness, setReadiness] = useState<ReportReadiness | null>(null);
   const [isCheckingReadiness, setIsCheckingReadiness] = useState(false);
-  const predictionForm = activeReport?.report_type === 'PREDICTION_FORM' ? parsePredictionForm(activeReport.content) : null;
+  const predictionForm = activeReport?.report_type === 'PREDICTION_FORM' ? parsePredictionFormContent(activeReport.content) : null;
 
   const load = async () => {
     setIsLoading(true);
@@ -172,7 +139,7 @@ export default function ReportsPage() {
 
   const copy = async () => {
     if (!activeReport) return;
-    await navigator.clipboard.writeText(activeReport.content);
+    await navigator.clipboard.writeText(formatReportForClipboard(activeReport.content));
     setCopied(true);
     window.setTimeout(() => setCopied(false), 1500);
   };
@@ -255,7 +222,7 @@ export default function ReportsPage() {
               </div>
               {predictionForm ? (
                 <div className="space-y-4">
-                  <div className="rounded-3xl border border-cyan-300/15 bg-[linear-gradient(120deg,rgba(34,211,238,0.08),rgba(15,23,42,0.45))] p-5"><div className="flex flex-wrap items-center gap-2"><span className="rounded-full border border-cyan-300/20 bg-cyan-300/[0.07] px-2.5 py-1 font-mono text-[9px] font-bold uppercase tracking-[0.14em] text-cyan-200">Structured form v1</span>{predictionForm.caseNumber.startsWith('DEMO-') && <span className="rounded-full border border-amber-300/25 bg-amber-300/[0.08] px-2.5 py-1 text-[9px] font-black uppercase tracking-[0.12em] text-amber-200">Synthetic test data</span>}</div><h3 className="mt-3 text-lg font-black text-white">{predictionForm.title}</h3><p className="mt-1 text-xs text-slate-400">{predictionForm.caseNumber} · {predictionForm.caseTitle}</p></div>
+                  <div className="rounded-3xl border border-cyan-300/15 bg-[linear-gradient(120deg,rgba(34,211,238,0.08),rgba(15,23,42,0.45))] p-5"><div className="flex flex-wrap items-center gap-2"><span className="rounded-full border border-cyan-300/20 bg-cyan-300/[0.07] px-2.5 py-1 font-mono text-[9px] font-bold uppercase tracking-[0.14em] text-cyan-200">Structured form {predictionForm.schemaVersion.endsWith('-v2') ? 'v2' : 'v1'}</span>{predictionForm.caseNumber.startsWith('DEMO-') && <span className="rounded-full border border-amber-300/25 bg-amber-300/[0.08] px-2.5 py-1 text-[9px] font-black uppercase tracking-[0.12em] text-amber-200">Synthetic test data</span>}</div><h3 className="mt-3 text-lg font-black text-white">{predictionForm.title}</h3><p className="mt-1 text-xs text-slate-400">{predictionForm.caseNumber} · {predictionForm.caseTitle}</p></div>
                   {predictionForm.automationSummary && <section className="rounded-3xl border border-emerald-300/20 bg-[radial-gradient(circle_at_top_right,rgba(52,211,153,0.12),transparent_35%),rgba(2,14,20,0.7)] p-5"><div className="flex items-start gap-3"><div className="rounded-2xl border border-emerald-300/20 bg-emerald-300/[0.08] p-2.5"><Bot className="h-5 w-5 text-emerald-200" /></div><div><p className="font-mono text-[9px] font-black tracking-[0.16em] text-emerald-200">{predictionForm.automationSummary.status}</p><h3 className="mt-1 text-base font-black text-white">บทวิเคราะห์และคำแนะนำอัตโนมัติ</h3><p className="mt-2 text-xs leading-6 text-slate-300">{predictionForm.automationSummary.summary}</p><p className="mt-1 text-[10px] leading-5 text-slate-500">{predictionForm.automationSummary.officialGate}</p></div></div></section>}
                   {Boolean(predictionForm.automatedAdvice?.length) && <div className="grid gap-3 lg:grid-cols-2">{predictionForm.automatedAdvice?.map((advice) => <article key={advice.id} className="rounded-3xl border border-emerald-300/15 bg-emerald-300/[0.035] p-5"><div className="flex items-center justify-between gap-2"><span className="inline-flex items-center font-mono text-[9px] font-black text-emerald-200"><Lightbulb className="mr-1.5 h-3.5 w-3.5" />AUTO_ADVICE</span><span className="text-[9px] font-bold text-slate-500">{advice.priority} · {Math.round(advice.confidence * 100)}%</span></div><h4 className="mt-3 text-sm font-black leading-6 text-white">{advice.title}</h4><p className="mt-2 text-xs font-semibold leading-6 text-cyan-50">{advice.recommendation}</p><p className="mt-2 text-[10px] leading-5 text-slate-500">เหตุผล: {advice.rationale}</p><p className="mt-3 border-t border-white/[0.06] pt-3 text-[9px] text-slate-500">แหล่งอ้างอิง {advice.sourceCount} · {advice.officialConfirmationRequired ? 'รับรองก่อนใช้เป็นข้อเท็จจริงทางการ' : 'ใช้จัดลำดับงานได้ทันที'}</p></article>)}</div>}
                   <div className="grid gap-3 lg:grid-cols-2">{predictionForm.sections.map((section) => <article key={section.number} className="relative overflow-hidden rounded-3xl border border-white/[0.07] bg-slate-950/45 p-5"><div aria-hidden="true" className="absolute inset-y-0 left-0 w-1 bg-gradient-to-b from-cyan-300/80 to-indigo-400/70" /><div className="flex items-start gap-3"><span className="grid h-10 w-10 shrink-0 place-items-center rounded-2xl border border-cyan-300/15 bg-cyan-300/[0.06] font-mono text-[10px] font-black text-cyan-200">{String(section.number).padStart(2, '0')}</span><div><h4 className="text-sm font-black leading-6 text-white">{section.title}</h4><p className="mt-2 whitespace-pre-wrap text-xs leading-6 text-slate-400">{section.content}</p></div></div></article>)}</div>

@@ -2,7 +2,6 @@
 
 import React, { useState } from 'react';
 import Link from 'next/link';
-import Image from 'next/image';
 import {
   ShieldCheck,
   Search,
@@ -74,8 +73,7 @@ export default function PublicPortalPage() {
   const [purchaseDetails, setPurchaseDetails] = useState('');
   const [desiredAction, setDesiredAction] = useState('');
   const [isAnonymous, setIsAnonymous] = useState(false);
-  const [selectedFile, setSelectedFile] = useState<File | null>(null);
-  const [filePreview, setFilePreview] = useState<string | null>(null);
+  const [selectedFiles, setSelectedFiles] = useState<File[]>([]);
   const [fileError, setFileError] = useState('');
   const [isSubmittingComplaint, setIsSubmittingComplaint] = useState(false);
   const [complaintSuccessToken, setComplaintSuccessToken] = useState('');
@@ -118,37 +116,35 @@ export default function PublicPortalPage() {
   };
 
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
+    const files = Array.from(e.target.files || []);
     setFileError('');
-    if (!file) return;
+    if (!files.length) return;
 
-    if (file.size > 20 * 1024 * 1024) {
-      setFileError('ขนาดไฟล์เกินกำหนด (สูงสุด 20 MB)');
+    if (files.length > 5) {
+      setFileError('แนบได้สูงสุด 5 ไฟล์ต่อเรื่องร้องเรียน');
       return;
     }
-
     const validExtensions = ['pdf', 'png', 'jpg', 'jpeg'];
-    const ext = file.name.split('.').pop()?.toLowerCase();
-    if (!ext || !validExtensions.includes(ext)) {
+    if (files.some((file) => file.size <= 0 || file.size > 20 * 1024 * 1024)) {
+      setFileError('แต่ละไฟล์ต้องมีขนาดมากกว่า 0 และไม่เกิน 20 MB');
+      return;
+    }
+    if (files.reduce((total, file) => total + file.size, 0) > 50 * 1024 * 1024) {
+      setFileError('ขนาดรวมของไฟล์ทั้งหมดต้องไม่เกิน 50 MB');
+      return;
+    }
+    if (files.some((file) => {
+      const ext = file.name.split('.').pop()?.toLowerCase();
+      return !ext || !validExtensions.includes(ext);
+    })) {
       setFileError('รองรับเฉพาะไฟล์รูปภาพ (PNG, JPG) หรือเอกสาร PDF');
       return;
     }
-
-    setSelectedFile(file);
-    if (file.type.startsWith('image/')) {
-      const url = URL.createObjectURL(file);
-      setFilePreview(url);
-    } else {
-      setFilePreview(null);
-    }
+    setSelectedFiles(files);
   };
 
-  const handleRemoveFile = () => {
-    if (filePreview) {
-      URL.revokeObjectURL(filePreview);
-    }
-    setSelectedFile(null);
-    setFilePreview(null);
+  const handleRemoveFile = (index?: number) => {
+    setSelectedFiles((current) => typeof index === 'number' ? current.filter((_, itemIndex) => itemIndex !== index) : []);
     setFileError('');
   };
 
@@ -167,9 +163,7 @@ export default function PublicPortalPage() {
       const detailFields = { incidentDate, incidentTime, incidentLocation, productName, registrationNumber, businessName, businessAddress, purchaseDetails, desiredAction };
       for (const [key, value] of Object.entries(detailFields)) if (value.trim()) formData.set(key, value.trim());
       formData.set('isAnonymous', String(isAnonymous));
-      if (selectedFile) {
-        formData.set('file', selectedFile, selectedFile.name);
-      }
+      for (const file of selectedFiles) formData.append('files', file, file.name);
 
       const res = await fetch('/api/v1/public/complaints', {
         method: 'POST',
@@ -652,7 +646,7 @@ export default function PublicPortalPage() {
                     <label className="block text-xs font-semibold text-slate-300 mb-1.5 flex items-center gap-1.5">
                       <Paperclip className="w-3.5 h-3.5 text-teal-300" />
                       <span>แนบไฟล์หลักฐาน (ภาพแคปหน้าจอ / สลิปโอนเงิน / เอกสาร PDF)</span>
-                      <span className="text-[10px] text-slate-500 font-normal ml-auto">รองรับ PNG, JPG, PDF ไม่เกิน 20 MB</span>
+                      <span className="text-[10px] text-slate-500 font-normal ml-auto">สูงสุด 5 ไฟล์ · ไฟล์ละ 20 MB · รวมไม่เกิน 50 MB</span>
                     </label>
 
                     {fileError && (
@@ -661,11 +655,12 @@ export default function PublicPortalPage() {
                       </div>
                     )}
 
-                    {!selectedFile ? (
+                    {selectedFiles.length === 0 ? (
                       <label className="group relative flex flex-col items-center justify-center p-5 border-2 border-dashed border-white/[0.1] hover:border-teal-400/50 rounded-2xl bg-slate-950/60 hover:bg-teal-950/10 cursor-pointer transition">
                         <input
                           type="file"
                           accept=".png,.jpg,.jpeg,.pdf"
+                          multiple
                           onChange={handleFileChange}
                           className="absolute inset-0 w-full h-full opacity-0 cursor-pointer"
                         />
@@ -680,37 +675,17 @@ export default function PublicPortalPage() {
                         </p>
                       </label>
                     ) : (
-                      <div className="flex items-center justify-between p-3.5 rounded-2xl border border-teal-500/30 bg-teal-950/20">
-                        <div className="flex items-center gap-3 min-w-0">
-                          {filePreview ? (
-                            <Image
-                              src={filePreview}
-                              alt="ตัวอย่างไฟล์แนบ"
-                              width={48}
-                              height={48}
-                              unoptimized
-                              className="w-12 h-12 rounded-xl object-cover border border-white/[0.1] shrink-0"
-                            />
-                          ) : (
-                            <div className="w-12 h-12 rounded-xl bg-teal-400/20 border border-teal-400/30 flex items-center justify-center text-teal-300 shrink-0">
-                              <FileText className="w-6 h-6" />
+                      <div className="space-y-2">
+                        {selectedFiles.map((file, index) => (
+                          <div key={`${file.name}:${file.size}:${file.lastModified}`} className="flex items-center justify-between p-3.5 rounded-2xl border border-teal-500/30 bg-teal-950/20">
+                            <div className="flex min-w-0 items-center gap-3">
+                              <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl border border-teal-400/30 bg-teal-400/20 text-teal-300"><FileText className="h-5 w-5" /></div>
+                              <div className="min-w-0"><p className="truncate text-xs font-semibold text-white">{file.name}</p><p className="mt-0.5 font-mono text-[10px] text-teal-300/80">{(file.size / (1024 * 1024)).toFixed(2)} MB · รายการ {index + 1}/{selectedFiles.length}</p></div>
                             </div>
-                          )}
-                          <div className="min-w-0">
-                            <p className="text-xs font-semibold text-white truncate">{selectedFile.name}</p>
-                            <p className="text-[10px] text-teal-300/80 mt-0.5 font-mono">
-                              {(selectedFile.size / (1024 * 1024)).toFixed(2)} MB • {selectedFile.type || 'เอกสาร'}
-                            </p>
+                            <button type="button" onClick={() => handleRemoveFile(index)} className="ml-2 shrink-0 rounded-xl border border-white/[0.1] bg-slate-900 p-1.5 text-slate-400 transition hover:border-rose-500/40 hover:text-rose-300" title={`ลบ ${file.name}`}><X className="h-4 w-4" /></button>
                           </div>
-                        </div>
-                        <button
-                          type="button"
-                          onClick={handleRemoveFile}
-                          className="p-1.5 rounded-xl border border-white/[0.1] bg-slate-900 text-slate-400 hover:text-rose-300 hover:border-rose-500/40 transition shrink-0 cursor-pointer ml-2"
-                          title="ลบไฟล์"
-                        >
-                          <X className="w-4 h-4" />
-                        </button>
+                        ))}
+                        <button type="button" onClick={() => handleRemoveFile()} className="text-[10px] font-semibold text-rose-300 hover:text-rose-200">ล้างไฟล์ทั้งหมด</button>
                       </div>
                     )}
                   </div>

@@ -23,8 +23,16 @@ export async function PATCH(request: NextRequest, { params }: { params: Promise<
     p_reason: parsed.data.reason,
   });
   if (reviewed.error) {
-    const status = reviewed.error.message === 'SCREENING_SOURCE_NOT_CLEAN' ? 409 : 503;
-    return apiError(reviewed.error.message || 'SCREENING_REVIEW_FAILED', 'บันทึกผลตรวจทานไม่สำเร็จ', status);
+    const code = reviewed.error.message || 'SCREENING_REVIEW_FAILED';
+    if (code === 'SCREENING_SOURCE_NOT_CLEAN') {
+      return apiError(code, 'ไฟล์ต้นทางยังจัดเก็บหรือตรวจโครงสร้างไม่สมบูรณ์ จึงยังรับรองเป็นข้อเท็จจริงไม่ได้', 409);
+    }
+    if (code === 'SCREENING_REVIEW_CONFLICT' || code === 'SCREENING_NOT_REVIEWABLE') {
+      return apiError(code, 'รายการนี้ถูกตรวจทานไปแล้ว กรุณาโหลดผลล่าสุดก่อนเปลี่ยนคำตัดสิน', 409);
+    }
+    if (code === 'SCREENING_REVIEW_FORBIDDEN') return apiError(code, 'ไม่มีสิทธิ์ตรวจทานรายการนี้', 403);
+    if (code === 'SCREENING_REVIEW_INVALID') return apiError(code, 'คำตัดสินหรือเหตุผลไม่ถูกต้อง', 400);
+    return apiError(code, 'บันทึกผลตรวจทานไม่สำเร็จ กรุณาลองใหม่', 503);
   }
   return NextResponse.json({ data: reviewed.data }, { headers: { 'Cache-Control': 'private, no-store' } });
 }

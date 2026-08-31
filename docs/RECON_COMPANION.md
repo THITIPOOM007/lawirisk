@@ -17,6 +17,10 @@ Recon Companion เป็นโปรแกรมบนเครื่อง Win
 
 ## ติดตั้งบนเครื่องเจ้าหน้าที่
 
+เครื่องใช้งานแต่ละเครื่องต้องติดตั้ง Companion ของตัวเอง เพราะ Windows DPAPI ผูกบัญชีไว้กับ Windows user และเครื่องนั้นโดยเฉพาะ จากหน้า “แหล่งสืบค้นข้อมูล” ให้ตรวจสถานะเครื่อง ดาวน์โหลด `LAW-i-RISK-Recon-Installer.ps1` แล้วเลือก **Run with PowerShell** ตัวติดตั้งจะดาวน์โหลด runtime จากโดเมน LAW-i-RISK เดียวกัน ติดตั้ง Chromium และเปิด Local Bridge ให้เริ่มพร้อม Windows โดยอัตโนมัติ (ต้องมี Node.js 20 LTS หรือใหม่กว่า)
+
+ขั้นตอนด้านล่างใช้สำหรับเครื่องพัฒนาโครงการเท่านั้น:
+
 ต้องติดตั้ง dependencies ของโครงการและ Chromium ของ Playwright ก่อน:
 
 ```powershell

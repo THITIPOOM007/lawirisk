@@ -77,7 +77,7 @@ describe('release security regressions', () => {
     const migration = source('supabase/migrations/202608310002_public_attachment_finalization.sql');
     expect(publicRoute).toContain("supabase.rpc('finalize_public_complaint_attachment'");
     expect(publicRoute).not.toContain("from('intake_attachments').insert");
-    expect(publicRoute).toContain('supabase.storage.from(bucketName).remove([storagePath])');
+    expect(publicRoute).toContain('supabase.storage.from(bucketName).remove(uploadedPaths)');
     expect(migration).toContain("upload_state, malware_scan_status");
     expect(migration).toContain("'STORED', 'NOT_SCANNED'");
     expect(migration).toContain('GRANT EXECUTE ON FUNCTION public.finalize_public_complaint_attachment');

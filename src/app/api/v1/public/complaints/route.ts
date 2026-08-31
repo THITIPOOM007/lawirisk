@@ -10,6 +10,8 @@ import { consumeRateLimit } from '@/lib/rate-limit';
 import { hasTrustedBrowserOrigin } from '@/lib/request-security';
 
 const MAX_FILE_SIZE = 20 * 1024 * 1024;
+const MAX_FILE_COUNT = 5;
+const MAX_TOTAL_FILE_SIZE = 50 * 1024 * 1024;
 const allowedTypes = {
   pdf: { mime: 'application/pdf', magic: (bytes: Buffer) => bytes.subarray(0, 4).toString('hex') === '25504446' },
   png: { mime: 'image/png', magic: (bytes: Buffer) => bytes.subarray(0, 4).toString('hex') === '89504e47' },
@@ -71,7 +73,7 @@ export async function POST(request: NextRequest) {
 
     const contentType = request.headers.get('content-type') || '';
     let parsedData: z.infer<typeof publicComplaintSchema>;
-    let attachedFile: File | null = null;
+    let attachedFiles: File[] = [];
 
     if (contentType.includes('multipart/form-data')) {
       const formData = await request.formData();
@@ -115,10 +117,11 @@ export async function POST(request: NextRequest) {
       }
       parsedData = parsed.data;
 
-      const fileEntry = formData.get('file');
-      if (fileEntry instanceof File && fileEntry.size > 0) {
-        attachedFile = fileEntry;
-      }
+      const modernFiles = formData.getAll('files').filter((entry): entry is File => entry instanceof File && entry.size > 0);
+      const legacyFile = formData.get('file');
+      attachedFiles = modernFiles.length > 0
+        ? modernFiles
+        : legacyFile instanceof File && legacyFile.size > 0 ? [legacyFile] : [];
     } else {
       const json = await request.json().catch(() => null);
       const parsed = publicComplaintSchema.safeParse(json);
@@ -140,16 +143,25 @@ export async function POST(request: NextRequest) {
       businessName, businessAddress, purchaseDetails, desiredAction } = parsedData;
     const structuredPayload = { incidentDate, incidentTime, incidentLocation, productName, registrationNumber, businessName, businessAddress, purchaseDetails, desiredAction };
 
-    // Validate file if present
-    let fileBuffer: Buffer | null = null;
-    let fileSha256 = '';
-    let fileMime = '';
-    let fileExtension = '';
-
-    if (attachedFile) {
-      if (attachedFile.size > MAX_FILE_SIZE) {
+    // Validate every file before creating the intake envelope so a partial batch
+    // cannot leave an accepted complaint with only some of its selected evidence.
+    if (attachedFiles.length > MAX_FILE_COUNT) {
+      return NextResponse.json(
+        { success: false, error: `แนบไฟล์ได้สูงสุด ${MAX_FILE_COUNT} รายการต่อเรื่องร้องเรียน` },
+        { status: 400 },
+      );
+    }
+    if (attachedFiles.reduce((total, file) => total + file.size, 0) > MAX_TOTAL_FILE_SIZE) {
+      return NextResponse.json(
+        { success: false, error: 'ขนาดรวมของไฟล์แนบต้องไม่เกิน 50 MB' },
+        { status: 413 },
+      );
+    }
+    const validatedFiles: Array<{ file: File; buffer: Buffer; sha256: string; mime: string; extension: string }> = [];
+    for (const attachedFile of attachedFiles) {
+      if (attachedFile.size <= 0 || attachedFile.size > MAX_FILE_SIZE) {
         return NextResponse.json(
-          { success: false, error: 'ขนาดไฟล์เกินกำหนดสูงสุด 20 MB' },
+          { success: false, error: `ไฟล์ ${attachedFile.name} ต้องมีขนาดมากกว่า 0 และไม่เกิน 20 MB` },
           { status: 400 },
         );
       }
@@ -162,7 +174,7 @@ export async function POST(request: NextRequest) {
         );
       }
 
-      fileBuffer = Buffer.from(await attachedFile.arrayBuffer());
+      const fileBuffer = Buffer.from(await attachedFile.arrayBuffer());
       if (!rule.magic(fileBuffer)) {
         return NextResponse.json(
           { success: false, error: 'โครงสร้างไฟล์ไม่ถูกต้องหรือไม่ตรงกับนามสกุลไฟล์' },
@@ -170,9 +182,13 @@ export async function POST(request: NextRequest) {
         );
       }
 
-      fileSha256 = crypto.createHash('sha256').update(fileBuffer).digest('hex');
-      fileMime = rule.mime;
-      fileExtension = ext === 'jpeg' ? 'jpg' : ext;
+      validatedFiles.push({
+        file: attachedFile,
+        buffer: fileBuffer,
+        sha256: crypto.createHash('sha256').update(fileBuffer).digest('hex'),
+        mime: rule.mime,
+        extension: ext === 'jpeg' ? 'jpg' : ext,
+      });
     }
 
     // Generate Public Tracking Token (e.g. TRK-2026-AB12CD)
@@ -212,7 +228,8 @@ export async function POST(request: NextRequest) {
           complainantName: isAnonymous ? 'ไม่ประสงค์ออกนาม' : complainantName,
           complainantContact: isAnonymous ? '-' : complainantContact,
           source: 'CITIZEN_PUBLIC_PORTAL',
-          hasAttachment: Boolean(attachedFile),
+          hasAttachment: validatedFiles.length > 0,
+          attachmentCount: validatedFiles.length,
           ...structuredPayload,
         }),
         message_id: trackingToken,
@@ -228,15 +245,15 @@ export async function POST(request: NextRequest) {
         });
       }
 
-      if (attachedFile && fileBuffer) {
+      for (const validated of validatedFiles) {
         saveIntakeAttachment({
           id: `att-${crypto.randomUUID()}`,
           envelope_id: envelopeId,
-          filename: attachedFile.name,
-          file_size: attachedFile.size,
-          mime_type: fileMime,
-          sha256: fileSha256,
-          storage_path: `intake/${envelopeId}/${crypto.randomUUID()}.${fileExtension}`,
+          filename: validated.file.name,
+          file_size: validated.file.size,
+          mime_type: validated.mime,
+          sha256: validated.sha256,
+          storage_path: `intake/${envelopeId}/${crypto.randomUUID()}.${validated.extension}`,
           malware_scan_status: UNSCANNED_EVIDENCE_STATUS,
         });
       }
@@ -277,7 +294,8 @@ export async function POST(request: NextRequest) {
           complainantName: isAnonymous ? 'ไม่ประสงค์ออกนาม' : complainantName,
           complainantContact: isAnonymous ? '-' : complainantContact,
           source: 'CITIZEN_PUBLIC_PORTAL',
-          hasAttachment: Boolean(attachedFile),
+          hasAttachment: validatedFiles.length > 0,
+          attachmentCount: validatedFiles.length,
           ...structuredPayload,
         }),
         message_id: trackingToken,
@@ -308,45 +326,45 @@ export async function POST(request: NextRequest) {
       }
 
       let complaintAuditPersisted = false;
-      if (attachedFile && fileBuffer) {
+      const uploadedPaths: string[] = [];
+      const bucketName = process.env.PRIVATE_EVIDENCE_BUCKET || 'evidence-vault';
+      for (const validated of validatedFiles) {
         const attachmentId = crypto.randomUUID();
-        const bucketName = process.env.PRIVATE_EVIDENCE_BUCKET || 'evidence-vault';
-        const storagePath = `intake/${envelopeId}/${attachmentId}.${fileExtension}`;
-
-        const { error: uploadError } = await supabase.storage.from(bucketName).upload(storagePath, fileBuffer, {
-          contentType: fileMime,
+        const storagePath = `intake/${envelopeId}/${attachmentId}.${validated.extension}`;
+        const { error: uploadError } = await supabase.storage.from(bucketName).upload(storagePath, validated.buffer, {
+          contentType: validated.mime,
           upsert: false,
         });
-
         if (uploadError) {
-          console.error('Failed to upload public attachment to storage:', uploadError);
+          console.error('Failed to upload public attachment batch to storage:', uploadError);
+          if (uploadedPaths.length) await supabase.storage.from(bucketName).remove(uploadedPaths);
           await supabase.from('intake_envelopes').delete().eq('id', envelopeId);
           return NextResponse.json(
-            { success: false, error: { code: 'STORAGE_UNAVAILABLE', message: 'จัดเก็บไฟล์แนบไม่สำเร็จ กรุณาลองใหม่' } },
+            { success: false, error: { code: 'STORAGE_UNAVAILABLE', message: 'จัดเก็บชุดไฟล์แนบไม่สำเร็จ ระบบยกเลิกทั้งชุดแล้ว กรุณาลองใหม่' } },
             { status: 503 },
           );
-        } else {
-          const { error: attachmentError } = await supabase.rpc('finalize_public_complaint_attachment', {
+        }
+        uploadedPaths.push(storagePath);
+        const { error: attachmentError } = await supabase.rpc('finalize_public_complaint_attachment', {
             p_attachment_id: attachmentId,
             p_envelope_id: envelopeId,
             p_bucket_name: bucketName,
-            p_filename: attachedFile.name,
-            p_file_size: attachedFile.size,
-            p_mime_type: fileMime,
-            p_sha256: fileSha256,
+            p_filename: validated.file.name,
+            p_file_size: validated.file.size,
+            p_mime_type: validated.mime,
+            p_sha256: validated.sha256,
             p_storage_path: storagePath,
             p_tracking_token: trackingToken,
           });
-          if (attachmentError) {
-            await supabase.storage.from(bucketName).remove([storagePath]);
-            await supabase.from('intake_envelopes').delete().eq('id', envelopeId);
-            return NextResponse.json(
-              { success: false, error: { code: 'METADATA_WRITE_FAILED', message: 'บันทึกทะเบียนไฟล์แนบไม่สำเร็จ กรุณาลองใหม่' } },
-              { status: 503 },
-            );
-          }
-          complaintAuditPersisted = true;
+        if (attachmentError) {
+          await supabase.storage.from(bucketName).remove(uploadedPaths);
+          await supabase.from('intake_envelopes').delete().eq('id', envelopeId);
+          return NextResponse.json(
+            { success: false, error: { code: 'METADATA_WRITE_FAILED', message: 'บันทึกทะเบียนชุดไฟล์แนบไม่สำเร็จ ระบบยกเลิกทั้งชุดแล้ว กรุณาลองใหม่' } },
+            { status: 503 },
+          );
         }
+        complaintAuditPersisted = true;
       }
 
       if (!complaintAuditPersisted) {
@@ -454,13 +472,14 @@ export async function POST(request: NextRequest) {
         success: true,
         data: {
           trackingToken,
-          message: attachedFile
-            ? 'บันทึกเรื่องร้องเรียนและตรวจรูปแบบไฟล์แนบแล้ว เจ้าหน้าที่สามารถคัดกรองต่อได้'
+          message: validatedFiles.length > 0
+            ? `บันทึกเรื่องร้องเรียนและตรวจรูปแบบไฟล์แนบ ${validatedFiles.length} รายการแล้ว เจ้าหน้าที่สามารถคัดกรองต่อได้`
             : 'บันทึกเรื่องร้องเรียนแล้ว เจ้าหน้าที่จะดำเนินการคัดกรองต่อไป',
           receivedAt: now,
           status: intakeStatus,
-          hasAttachment: Boolean(attachedFile),
-          attachmentValidationStatus: attachedFile ? 'VALIDATED' : null,
+          hasAttachment: validatedFiles.length > 0,
+          attachmentCount: validatedFiles.length,
+          attachmentValidationStatus: validatedFiles.length > 0 ? 'VALIDATED' : null,
           preliminarySearch: {
             status: enrichmentDeliveryStatus,
             checkCount: preliminaryChecks.length,
