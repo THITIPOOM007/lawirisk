@@ -204,15 +204,15 @@ export default function EvidenceUniverseGraph({ data }: { data: UniverseGraphDat
 
   return (
     <div className="space-y-3">
-      <div className="glass-panel rounded-2xl border border-white/[0.07] p-3">
+      <div className="glass-panel relative z-40 overflow-visible rounded-2xl border border-white/[0.07] p-3">
         <div className="flex flex-col gap-3 xl:flex-row xl:items-center xl:justify-between">
-          <div className="relative min-w-0 flex-1 xl:max-w-md">
+          <div className="relative z-50 min-w-0 flex-1 xl:max-w-md">
             <Search className="pointer-events-none absolute left-3 top-3.5 h-4 w-4 text-slate-500" />
             <label htmlFor="universe-search" className="sr-only">ค้นหาโหนดในผังความเชื่อมโยง</label>
             <input id="universe-search" value={query} onChange={(event) => setQuery(event.target.value)} placeholder="ค้นหาคดี บุคคล เบอร์โทร หรือชื่อหลักฐาน…" className="min-h-11 w-full rounded-xl border border-white/[0.08] bg-[#06111d]/90 pl-10 pr-10 text-sm text-white placeholder:text-slate-600 focus:border-teal-300/35 focus:outline-none" />
             {query && <button type="button" onClick={() => setQuery('')} aria-label="ล้างคำค้น" className="absolute right-2 top-2 grid h-7 w-7 place-items-center rounded-lg text-slate-500 hover:bg-white/[0.05] hover:text-white"><X className="h-3.5 w-3.5" /></button>}
             {searchResults.length > 0 && (
-              <div className="absolute inset-x-0 top-[calc(100%+6px)] z-30 overflow-hidden rounded-xl border border-white/[0.1] bg-[#071421]/95 p-1 shadow-2xl backdrop-blur-xl">
+              <div className="absolute inset-x-0 top-[calc(100%+6px)] z-[70] max-h-[min(24rem,55vh)] overflow-y-auto rounded-xl border border-white/[0.1] bg-[#071421]/98 p-1 shadow-[0_24px_70px_rgba(0,0,0,0.65)] backdrop-blur-xl">
                 {searchResults.map((node) => <button key={node.id} type="button" onClick={() => focusNode(node)} className="flex min-h-10 w-full items-center gap-2 rounded-lg px-3 text-left text-xs text-slate-300 hover:bg-white/[0.06] hover:text-white"><span className="h-2 w-2 shrink-0 rounded-full" style={{ backgroundColor: getMeta(node.group).color }} /><span className="truncate">{node.label}</span><ChevronRight className="ml-auto h-3.5 w-3.5 shrink-0 text-slate-600" /></button>)}
               </div>
             )}
@@ -239,7 +239,7 @@ export default function EvidenceUniverseGraph({ data }: { data: UniverseGraphDat
         </div>
       </div>
 
-      <div className="grid gap-3 xl:grid-cols-[minmax(0,1fr)_320px]">
+      <div className="relative z-0 grid gap-3 xl:grid-cols-[minmax(0,1fr)_320px]">
         <div ref={graphContainerRef} role="img" aria-label="ผังความเชื่อมโยงแบบโต้ตอบ ใช้เมาส์ลากเพื่อหมุน เลื่อนเพื่อซูม และคลิกโหนดเพื่อดูรายละเอียด" className="relative h-[66vh] min-h-[580px] overflow-hidden rounded-2xl border border-white/[0.08] bg-[radial-gradient(circle_at_50%_35%,#0b2131_0%,#040b14_52%,#02070d_100%)]">
           <div className="pointer-events-none absolute left-3 top-3 z-10 flex items-center gap-2 rounded-full border border-white/[0.08] bg-[#020914]/75 px-3 py-1.5 text-[10px] text-slate-400 backdrop-blur-lg"><Waypoints className="h-3.5 w-3.5 text-teal-300" />คลิกโหนดเพื่อซูมภายใน 0.45 วินาที</div>
           {viewMode === 3 && <button type="button" onClick={() => setAutoRotate((value) => !value)} className="absolute right-3 top-3 z-20 inline-flex min-h-9 items-center gap-2 rounded-xl border border-white/[0.09] bg-[#020914]/80 px-3 text-[10px] text-slate-300 backdrop-blur-lg" aria-pressed={autoRotate}>{autoRotate ? <Pause className="h-3.5 w-3.5" /> : <Play className="h-3.5 w-3.5" />}{autoRotate ? 'หยุดหมุน' : 'หมุนอัตโนมัติ'}</button>}
