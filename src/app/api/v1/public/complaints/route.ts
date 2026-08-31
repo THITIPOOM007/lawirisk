@@ -24,6 +24,15 @@ const publicComplaintSchema = z.object({
   region: z.string().trim().max(100).optional(),
   complainantName: z.string().trim().max(200).optional(),
   complainantContact: z.string().trim().max(200).optional(),
+  incidentDate: z.string().trim().max(20).optional(),
+  incidentTime: z.string().trim().max(20).optional(),
+  incidentLocation: z.string().trim().max(500).optional(),
+  productName: z.string().trim().max(300).optional(),
+  registrationNumber: z.string().trim().max(120).optional(),
+  businessName: z.string().trim().max(300).optional(),
+  businessAddress: z.string().trim().max(500).optional(),
+  purchaseDetails: z.string().trim().max(1000).optional(),
+  desiredAction: z.string().trim().max(1000).optional(),
   isAnonymous: z.boolean().default(false),
 });
 
@@ -72,6 +81,7 @@ export async function POST(request: NextRequest) {
       const rawRegion = (formData.get('region') as string) || undefined;
       const rawComplainantName = (formData.get('complainantName') as string) || undefined;
       const rawComplainantContact = (formData.get('complainantContact') as string) || undefined;
+      const optional = (key: string) => (formData.get(key) as string) || undefined;
       const rawIsAnonymous = formData.get('isAnonymous') === 'true';
 
       const parsed = publicComplaintSchema.safeParse({
@@ -81,6 +91,15 @@ export async function POST(request: NextRequest) {
         region: rawRegion,
         complainantName: rawComplainantName,
         complainantContact: rawComplainantContact,
+        incidentDate: optional('incidentDate'),
+        incidentTime: optional('incidentTime'),
+        incidentLocation: optional('incidentLocation'),
+        productName: optional('productName'),
+        registrationNumber: optional('registrationNumber'),
+        businessName: optional('businessName'),
+        businessAddress: optional('businessAddress'),
+        purchaseDetails: optional('purchaseDetails'),
+        desiredAction: optional('desiredAction'),
         isAnonymous: rawIsAnonymous,
       });
 
@@ -116,7 +135,10 @@ export async function POST(request: NextRequest) {
       parsedData = parsed.data;
     }
 
-    const { topic, description, category, region, complainantName, complainantContact, isAnonymous } = parsedData;
+    const { topic, description, category, region, complainantName, complainantContact, isAnonymous,
+      incidentDate, incidentTime, incidentLocation, productName, registrationNumber,
+      businessName, businessAddress, purchaseDetails, desiredAction } = parsedData;
+    const structuredPayload = { incidentDate, incidentTime, incidentLocation, productName, registrationNumber, businessName, businessAddress, purchaseDetails, desiredAction };
 
     // Validate file if present
     let fileBuffer: Buffer | null = null;
@@ -191,6 +213,7 @@ export async function POST(request: NextRequest) {
           complainantContact: isAnonymous ? '-' : complainantContact,
           source: 'CITIZEN_PUBLIC_PORTAL',
           hasAttachment: Boolean(attachedFile),
+          ...structuredPayload,
         }),
         message_id: trackingToken,
       });
@@ -255,6 +278,7 @@ export async function POST(request: NextRequest) {
           complainantContact: isAnonymous ? '-' : complainantContact,
           source: 'CITIZEN_PUBLIC_PORTAL',
           hasAttachment: Boolean(attachedFile),
+          ...structuredPayload,
         }),
         message_id: trackingToken,
       });
@@ -353,7 +377,11 @@ export async function POST(request: NextRequest) {
     // Preliminary checks are deliberately source-bound and non-blocking. A source outage
     // must not discard a complaint that has already been accepted into the intake ledger.
     try {
-      const enrichmentPlan = planComplaintEnrichment({ topic, description, category });
+      const enrichmentPlan = planComplaintEnrichment({
+        topic,
+        description: [description, productName, registrationNumber, businessName, businessAddress].filter(Boolean).join(' '),
+        category,
+      });
       if (hasSupabase && enrichmentPlan.length > 0) {
         const requestAudit = await service!.from('audit_logs').insert({
           profile_id: null,

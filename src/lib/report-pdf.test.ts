@@ -16,8 +16,11 @@ describe('report PDF renderer', () => {
       sourcedEntities: [{ type: 'ORGANIZATION', value: 'Example organization' }],
       sourcedRelationships: [{ type: 'RELATED_TO' }],
     });
+    report.legalAppendix = Array.from({ length: 20 }, (_, index) => ({
+      law: `Official-law-source-${index + 1} `.repeat(4), penalty: `Penalty-${index + 1} `.repeat(3), settlement: `Procedure-${index + 1} `.repeat(3),
+    }));
     renderPredictionFormPdf({ pdfDoc, font, bold: font, report, snapshotHash: 'a'.repeat(64), unicode: false });
-    expect(pdfDoc.getPageCount()).toBeGreaterThan(2);
+    expect(pdfDoc.getPageCount()).toBeGreaterThan(5);
     const lastPage = pdfDoc.getPages().at(-1);
     expect(lastPage?.getWidth()).toBeGreaterThan(lastPage?.getHeight() || Infinity);
     const bytes = await pdfDoc.save();

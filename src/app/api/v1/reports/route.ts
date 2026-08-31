@@ -5,6 +5,7 @@ import { apiError, authError } from '@/lib/api-errors';
 import { addAuditLog, getCases, getEntities, getEvidence, getRelationships } from '@/lib/demo-data';
 import { consumeRateLimit } from '@/lib/rate-limit';
 import { buildCaseReport, buildPredictionFormReport } from '@/lib/report-builder';
+import { buildReportIntakeContext, type ReportIntakeContext } from '@/lib/report-context';
 import { buildAutomaticAdvice, type EvidenceScreeningClassification, type EvidenceScreeningStatus } from '@/lib/evidence-screening';
 import { CASE_WRITE_ROLES, STAFF_READ_ROLES } from '@/lib/roles';
 import { createServer } from '@/lib/supabase-server';
@@ -66,7 +67,7 @@ export async function POST(request: NextRequest) {
 
   const [caseResult, evidenceResult, entitiesResult, relationshipsResult, screeningsResult] = await Promise.all([
     supabase.from('cases').select('id,number,title,description,status,jurisdiction_region,jurisdiction_agency,created_at').eq('id', payload.case_id).maybeSingle(),
-    supabase.from('evidence_files').select('id,filename,sha256,malware_scan_status').eq('case_id', payload.case_id).eq('upload_state', 'STORED').in('malware_scan_status', ['CLEAN', 'NOT_SCANNED']).order('created_at'),
+    supabase.from('evidence_files').select('id,filename,sha256,malware_scan_status,mime_type,file_size,created_at').eq('case_id', payload.case_id).eq('upload_state', 'STORED').in('malware_scan_status', ['CLEAN', 'NOT_SCANNED']).order('created_at'),
     supabase.from('extracted_entities').select('id,type,value').eq('case_id', payload.case_id),
     supabase.from('entity_relationships').select('id,type,status').eq('case_id', payload.case_id).eq('status', 'VERIFIED'),
     payload.report_type === 'PREDICTION_FORM'
@@ -87,6 +88,35 @@ export async function POST(request: NextRequest) {
   const sourcedRelationshipIds = new Set((references.data || []).map((item) => item.relationship_id));
   const sourcedEntities = (entitiesResult.data || []).filter((item) => sourcedEntityIds.has(item.id));
   const sourcedRelationships = (relationshipsResult.data || []).filter((item) => sourcedRelationshipIds.has(item.id));
+  const triageResult = await supabase.from('triage_decisions')
+    .select('envelope_id,reason,created_at')
+    .eq('destination_case_id', payload.case_id)
+    .order('created_at', { ascending: false })
+    .limit(10);
+  if (triageResult.error) return apiError('REPORT_CONTEXT_FAILED', 'โหลดข้อมูลรับเรื่องที่เชื่อมกับคดีไม่สำเร็จ', 503);
+  const envelopeIds = [...new Set((triageResult.data || []).map((item) => item.envelope_id))];
+  let intakeContexts: ReportIntakeContext[] = [];
+  if (envelopeIds.length) {
+    const [envelopesResult, messagesResult, participantsResult, checksResult] = await Promise.all([
+      supabase.from('intake_envelopes').select('id,created_at,complainant_mode,urgency,jurisdiction_region').in('id', envelopeIds),
+      supabase.from('intake_messages').select('envelope_id,raw_payload,created_at').in('envelope_id', envelopeIds).order('created_at', { ascending: false }),
+      supabase.from('intake_participants').select('envelope_id,role,name,email,phone,citizen_id,address').in('envelope_id', envelopeIds),
+      supabase.from('intake_source_checks').select('envelope_id,source_label,source_url,query_text,status,classification,summary,checked_at,result_count,results').in('envelope_id', envelopeIds).order('checked_at', { ascending: false }),
+    ]);
+    if (envelopesResult.error || messagesResult.error || participantsResult.error || checksResult.error) {
+      return apiError('REPORT_CONTEXT_FAILED', 'โหลดข้อมูลรับเรื่องหรือผลตรวจฐานข้อมูลทางการไม่สำเร็จ', 503);
+    }
+    const triageByEnvelope = new Map((triageResult.data || []).map((item) => [item.envelope_id, item.reason]));
+    const messageByEnvelope = new Map<string, { raw_payload: string | null }>();
+    for (const item of messagesResult.data || []) if (!messageByEnvelope.has(item.envelope_id)) messageByEnvelope.set(item.envelope_id, item);
+    intakeContexts = (envelopesResult.data || []).map((envelope) => buildReportIntakeContext({
+      envelope,
+      message: messageByEnvelope.get(envelope.id),
+      triageReason: triageByEnvelope.get(envelope.id),
+      participants: (participantsResult.data || []).filter((item) => item.envelope_id === envelope.id),
+      officialChecks: (checksResult.data || []).filter((item) => item.envelope_id === envelope.id),
+    }));
+  }
   const evidenceById = new Map((evidenceResult.data || []).map((item) => [item.id, item]));
   const screeningAssessments = (screeningsResult.data || []).flatMap((item) => {
     const evidence = evidenceById.get(item.evidence_id);
@@ -116,10 +146,11 @@ export async function POST(request: NextRequest) {
       evidence: evidenceResult.data || [],
       sourcedEntities,
       sourcedRelationships,
+      intakeContexts,
       screenings: screeningAssessments.map((item) => ({ filename: item.filename, classification: item.classification, summary: item.summary, status: item.status })),
       automaticAdvice,
     }))
-    : buildCaseReport({ caseRecord: caseResult.data, reportType: payload.report_type, evidence: evidenceResult.data || [], sourcedEntities, sourcedRelationships });
+    : buildCaseReport({ caseRecord: caseResult.data, reportType: payload.report_type, evidence: evidenceResult.data || [], sourcedEntities, sourcedRelationships, intakeContexts });
   const defaultTitle = payload.report_type === 'SUMMARY' ? 'รายงานสรุป' : payload.report_type === 'OVERLAP' ? 'รายงานจุดทับซ้อน' : 'ฟอร์มกำหนดคาดการณ์';
   const title = payload.title || `${defaultTitle} ${caseResult.data.number}`;
   const { data: reportId, error } = await supabase.rpc('create_report_snapshot', {

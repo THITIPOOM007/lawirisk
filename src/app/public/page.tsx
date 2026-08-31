@@ -64,6 +64,15 @@ export default function PublicPortalPage() {
   const [region, setRegion] = useState('');
   const [complainantName, setComplainantName] = useState('');
   const [complainantContact, setComplainantContact] = useState('');
+  const [incidentDate, setIncidentDate] = useState('');
+  const [incidentTime, setIncidentTime] = useState('');
+  const [incidentLocation, setIncidentLocation] = useState('');
+  const [productName, setProductName] = useState('');
+  const [registrationNumber, setRegistrationNumber] = useState('');
+  const [businessName, setBusinessName] = useState('');
+  const [businessAddress, setBusinessAddress] = useState('');
+  const [purchaseDetails, setPurchaseDetails] = useState('');
+  const [desiredAction, setDesiredAction] = useState('');
   const [isAnonymous, setIsAnonymous] = useState(false);
   const [selectedFile, setSelectedFile] = useState<File | null>(null);
   const [filePreview, setFilePreview] = useState<string | null>(null);
@@ -155,6 +164,8 @@ export default function PublicPortalPage() {
       if (region.trim()) formData.set('region', region.trim());
       if (!isAnonymous && complainantName.trim()) formData.set('complainantName', complainantName.trim());
       if (!isAnonymous && complainantContact.trim()) formData.set('complainantContact', complainantContact.trim());
+      const detailFields = { incidentDate, incidentTime, incidentLocation, productName, registrationNumber, businessName, businessAddress, purchaseDetails, desiredAction };
+      for (const [key, value] of Object.entries(detailFields)) if (value.trim()) formData.set(key, value.trim());
       formData.set('isAnonymous', String(isAnonymous));
       if (selectedFile) {
         formData.set('file', selectedFile, selectedFile.name);
@@ -173,6 +184,8 @@ export default function PublicPortalPage() {
       setDescription('');
       setComplainantName('');
       setComplainantContact('');
+      setIncidentDate(''); setIncidentTime(''); setIncidentLocation(''); setProductName(''); setRegistrationNumber('');
+      setBusinessName(''); setBusinessAddress(''); setPurchaseDetails(''); setDesiredAction('');
       handleRemoveFile();
     } catch (err: unknown) {
       setComplaintError(err instanceof Error ? err.message : 'บันทึกคำร้องไม่สำเร็จ');
@@ -566,6 +579,42 @@ export default function PublicPortalPage() {
                       </label>
                     </div>
                   </div>
+
+                  <details className="rounded-2xl border border-teal-400/20 bg-teal-950/10 p-4 open:bg-teal-950/20">
+                    <summary className="cursor-pointer text-xs font-bold text-teal-200">
+                      เพิ่มรายละเอียดเพื่อค้นฐานข้อมูลอัตโนมัติและจัดทำรายงานให้ครบถ้วน
+                    </summary>
+                    <p className="mt-2 text-[11px] leading-5 text-slate-400">เลขทะเบียน ชื่อผลิตภัณฑ์ และชื่อกิจการจะช่วยให้ระบบเลือกฐาน อย./สบส. ได้ตรงประเภท ข้อมูลที่ไม่ทราบเว้นว่างได้</p>
+                    <div className="mt-4 grid grid-cols-1 gap-4 sm:grid-cols-2">
+                      <label className="text-xs text-slate-300">วันที่เกิดเหตุ
+                        <input type="date" value={incidentDate} onChange={(e) => setIncidentDate(e.target.value)} className="mt-1 w-full rounded-xl border border-white/[0.1] bg-slate-950 p-3 text-white" />
+                      </label>
+                      <label className="text-xs text-slate-300">เวลาเกิดเหตุ
+                        <input type="time" value={incidentTime} onChange={(e) => setIncidentTime(e.target.value)} className="mt-1 w-full rounded-xl border border-white/[0.1] bg-slate-950 p-3 text-white" />
+                      </label>
+                      <label className="text-xs text-slate-300 sm:col-span-2">สถานที่เกิดเหตุ
+                        <input value={incidentLocation} onChange={(e) => setIncidentLocation(e.target.value)} placeholder="ชื่อสถานที่ บ้านเลขที่ หมู่ ตำบล อำเภอ จังหวัด" className="mt-1 w-full rounded-xl border border-white/[0.1] bg-slate-950 p-3 text-white" />
+                      </label>
+                      <label className="text-xs text-slate-300">ชื่อผลิตภัณฑ์
+                        <input value={productName} onChange={(e) => setProductName(e.target.value)} placeholder="ชื่อบนฉลากหรือชื่อสินค้า" className="mt-1 w-full rounded-xl border border-white/[0.1] bg-slate-950 p-3 text-white" />
+                      </label>
+                      <label className="text-xs text-slate-300">เลขทะเบียน / เลขสารบบ / เลขใบอนุญาต
+                        <input value={registrationNumber} onChange={(e) => setRegistrationNumber(e.target.value)} placeholder="เช่น 2A972/29 หรือ 74-2-01859-6-0457" className="mt-1 w-full rounded-xl border border-white/[0.1] bg-slate-950 p-3 font-mono text-white" />
+                      </label>
+                      <label className="text-xs text-slate-300">ชื่อกิจการ / สถานประกอบการ
+                        <input value={businessName} onChange={(e) => setBusinessName(e.target.value)} placeholder="ชื่อร้าน โรงงาน คลินิก หรือผู้ผลิต" className="mt-1 w-full rounded-xl border border-white/[0.1] bg-slate-950 p-3 text-white" />
+                      </label>
+                      <label className="text-xs text-slate-300">ที่อยู่กิจการ / เป้าหมาย
+                        <input value={businessAddress} onChange={(e) => setBusinessAddress(e.target.value)} placeholder="ที่อยู่ที่ต้องการให้ตรวจสอบ" className="mt-1 w-full rounded-xl border border-white/[0.1] bg-slate-950 p-3 text-white" />
+                      </label>
+                      <label className="text-xs text-slate-300 sm:col-span-2">รายละเอียดการซื้อหรือการพบเหตุ
+                        <textarea rows={2} value={purchaseDetails} onChange={(e) => setPurchaseDetails(e.target.value)} placeholder="วันเวลา จำนวน ราคา ช่องทางซื้อ ผู้ขาย หรือรุ่นผลิต" className="mt-1 w-full rounded-xl border border-white/[0.1] bg-slate-950 p-3 text-white" />
+                      </label>
+                      <label className="text-xs text-slate-300 sm:col-span-2">ต้องการให้เจ้าหน้าที่ดำเนินการอย่างไร
+                        <textarea rows={2} value={desiredAction} onChange={(e) => setDesiredAction(e.target.value)} placeholder="เช่น ตรวจสถานที่ ตรวจทะเบียน เก็บตัวอย่าง หรือแจ้งผล" className="mt-1 w-full rounded-xl border border-white/[0.1] bg-slate-950 p-3 text-white" />
+                      </label>
+                    </div>
+                  </details>
 
                   {!isAnonymous && (
                     <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 pt-2 border-t border-white/[0.05]">
