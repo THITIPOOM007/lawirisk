@@ -328,46 +328,95 @@ function mapFdaProductRow(rowValue: unknown, index: number, now: () => Date): Sm
   };
 }
 
+function normalizedFdaQueryText(value: string) {
+  return value
+    .normalize('NFKC')
+    .replace(/[‐‑‒–—−]/g, '-')
+    .replace(/\s*\/\s*/g, '/')
+    .replace(/\s+/g, ' ')
+    .trim();
+}
+
+/**
+ * FDA's public form treats equivalent drug-registration spacing as different
+ * strings. Keep the expansion deliberately narrow so a formatting repair can
+ * never turn into a fuzzy search for another product.
+ */
+export function buildOfficialFdaQueryVariants(rawQuery: string): string[] {
+  const normalized = normalizedFdaQueryText(rawQuery);
+  if (!normalized) return [];
+
+  const compact = normalized.toUpperCase().replace(/\s+/g, '');
+  const registration = compact.match(/^(\d{1,2}[A-Z]{1,3})(\d{1,7}\/\d{1,4})$/);
+  if (!registration) return [normalized];
+
+  const [, prefix, serial] = registration;
+  return [`${prefix} ${serial}`, `${prefix}${serial}`];
+}
+
+function annotateFdaQueryVariant(
+  results: SmartSearchResult[],
+  originalQuery: string,
+  submittedQuery: string,
+) {
+  return results.map((result) => ({
+    ...result,
+    metadata: {
+      ...result.metadata,
+      'คำค้นที่ผู้ใช้กรอก': originalQuery.trim(),
+      'รูปแบบคำค้นที่ส่งให้ อย.': submittedQuery,
+      'ปรับรูปแบบอัตโนมัติ': normalizedFdaQueryText(originalQuery) === submittedQuery ? 'ไม่ใช่' : 'ใช่',
+    },
+  }));
+}
+
 export async function searchOfficialFdaProducts(
   query: string,
   fetchImpl: SearchFetch = fetch,
   now: () => Date = () => new Date(),
 ): Promise<SmartSearchResult[]> {
-  const model = {
-    SEARCH_VALUE: query,
-    RADIO_TYPE: 'ผลิตภัณฑ์ทั้งหมด',
-    RADIO_TYPE_ETC_FOOD: null,
-    RADIO_TYPE_ETC_DRUG: null,
-    RADIO_TYPE_ETC_HERB: null,
-    RADIO_TYPE_ETC_TXC: null,
-    RADIO_TYPE_ETC_CMT: null,
-    RADIO_TYPE_ETC_NCT: null,
-    RADIO_TYPE_ETC_MDC: null,
-    RADIO_TYPE_ETC_ADVER: null,
-    RADIO_TYPE_LOCATION: null,
-  };
-  const body = new FormData();
-  body.set('MODEL', JSON.stringify(model));
-  body.set('search_input', query);
+  const queryVariants = buildOfficialFdaQueryVariants(query);
+  if (queryVariants.length === 0) return [unverifiedGuidance(query, 'FDA', now)];
 
-  try {
-    const response = await fetchWithTimeout(fetchImpl, FDA_SEARCH_URL, {
-      method: 'POST',
-      headers: { Accept: 'application/json' },
-      body,
-      cache: 'no-store',
-    });
-    if (!response.ok) return [providerUnavailable(query, 'FDA', now)];
-    const payload: unknown = await response.json();
-    if (!Array.isArray(payload)) return [providerUnavailable(query, 'FDA', now)];
-    const results = payload
-      .slice(0, 10)
-      .map((row, index) => mapFdaProductRow(row, index, now))
-      .filter((row): row is SmartSearchResult => row !== null);
-    return results.length > 0 ? results : [unverifiedGuidance(query, 'FDA', now)];
-  } catch {
-    return [providerUnavailable(query, 'FDA', now)];
+  for (const submittedQuery of queryVariants) {
+    const model = {
+      SEARCH_VALUE: submittedQuery,
+      RADIO_TYPE: 'ผลิตภัณฑ์ทั้งหมด',
+      RADIO_TYPE_ETC_FOOD: null,
+      RADIO_TYPE_ETC_DRUG: null,
+      RADIO_TYPE_ETC_HERB: null,
+      RADIO_TYPE_ETC_TXC: null,
+      RADIO_TYPE_ETC_CMT: null,
+      RADIO_TYPE_ETC_NCT: null,
+      RADIO_TYPE_ETC_MDC: null,
+      RADIO_TYPE_ETC_ADVER: null,
+      RADIO_TYPE_LOCATION: null,
+    };
+    const body = new FormData();
+    body.set('MODEL', JSON.stringify(model));
+    body.set('search_input', submittedQuery);
+
+    try {
+      const response = await fetchWithTimeout(fetchImpl, FDA_SEARCH_URL, {
+        method: 'POST',
+        headers: { Accept: 'application/json' },
+        body,
+        cache: 'no-store',
+      });
+      if (!response.ok) return [providerUnavailable(query, 'FDA', now)];
+      const payload: unknown = await response.json();
+      if (!Array.isArray(payload)) return [providerUnavailable(query, 'FDA', now)];
+      const results = payload
+        .slice(0, 10)
+        .map((row, index) => mapFdaProductRow(row, index, now))
+        .filter((row): row is SmartSearchResult => row !== null);
+      if (results.length > 0) return annotateFdaQueryVariant(results, query, submittedQuery);
+    } catch {
+      return [providerUnavailable(query, 'FDA', now)];
+    }
   }
+
+  return [unverifiedGuidance(query, 'FDA', now)];
 }
 
 function parseHssActionPayload(raw: string) {

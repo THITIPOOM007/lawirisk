@@ -1,5 +1,6 @@
 import { describe, expect, it, vi } from 'vitest';
 import {
+  buildOfficialFdaQueryVariants,
   mapTrustedSourceRows,
   resolveMultiChannelSearch,
   searchOfficialFdaProducts,
@@ -10,6 +11,19 @@ import {
 vi.mock('server-only', () => ({}));
 
 describe('FDA public search fallback', () => {
+  it.each([
+    ['2A972/29', ['2A 972/29', '2A972/29']],
+    ['2A 972/29', ['2A 972/29', '2A972/29']],
+    ['2 A 972 / 29', ['2A 972/29', '2A972/29']],
+    ['２ａ９７２／２９', ['2A 972/29', '2A972/29']],
+  ])('normalizes equivalent FDA drug-registration spacing for %s', (query, expected) => {
+    expect(buildOfficialFdaQueryVariants(query)).toEqual(expected);
+  });
+
+  it('keeps ordinary product-name searches exact instead of widening them', () => {
+    expect(buildOfficialFdaQueryVariants('ยาแก้ไอเด็ก บี.เอ็ม.')).toEqual(['ยาแก้ไอเด็ก บี.เอ็ม.']);
+  });
+
   it('treats a plausible registration number as unverified guidance', async () => {
     const [result] = await resolveMultiChannelSearch('10-1-6500012345', false);
     expect(result.category).toBe('HEALTH_PRODUCTS');
@@ -94,6 +108,53 @@ describe('FDA public search fallback', () => {
     });
     expect(result.title).toContain('นัท วอล์คเกอร์');
     expect(result.sourceUrl).toContain('fdpdtno=7420185960457');
+  });
+
+  it('finds 2A972/29 by submitting the canonical spaced form automatically', async () => {
+    const fetchImpl = vi.fn(async (_input: string | URL | Request, init?: RequestInit) => {
+      const body = init?.body as FormData;
+      expect(body.get('search_input')).toBe('2A 972/29');
+      return new Response(JSON.stringify([{
+        IDA: 'drug-2a972', typepro: 'ยาสำเร็จรูป', lcnno: '2A972/29',
+        productha: 'ยาแก้ไอเด็ก บี.เอ็ม.', produceng: 'B.M. BABY COUGH SYRUP',
+        licen: 'บริษัท บี.เอ็ม.ฟาร์มาซี จำกัด', Newcode: 'U1DR2A1022290097211C',
+        cncnm: 'สถานะผลิตภัณฑ์(คงอยู่)', URLs_NEW: 'https://porta.fda.moph.go.th/fda_search_center_new/',
+      }]), { status: 200 });
+    });
+
+    const [result] = await searchOfficialFdaProducts('2A972/29', fetchImpl);
+
+    expect(fetchImpl).toHaveBeenCalledOnce();
+    expect(result).toMatchObject({
+      title: 'ยาแก้ไอเด็ก บี.เอ็ม.', status: 'SAFE',
+      metadata: {
+        'เลขใบสำคัญ/ใบอนุญาต': '2A972/29',
+        'คำค้นที่ผู้ใช้กรอก': '2A972/29',
+        'รูปแบบคำค้นที่ส่งให้ อย.': '2A 972/29',
+        'ปรับรูปแบบอัตโนมัติ': 'ใช่',
+      },
+    });
+  });
+
+  it('falls back to the compact equivalent when an FDA contract expects it', async () => {
+    const submitted: string[] = [];
+    const fetchImpl = vi.fn(async (_input: string | URL | Request, init?: RequestInit) => {
+      const query = String((init?.body as FormData).get('search_input'));
+      submitted.push(query);
+      if (query === '2A 972/29') return new Response('[]', { status: 200 });
+      return new Response(JSON.stringify([{
+        IDA: 'drug-compact', typepro: 'ยาสำเร็จรูป', lcnno: '2A972/29',
+        productha: 'ยาแก้ไอเด็ก บี.เอ็ม.', licen: 'บริษัท บี.เอ็ม.ฟาร์มาซี จำกัด',
+        Newcode: 'U1DR2A1022290097211C', cncnm: 'คงอยู่',
+        URLs_NEW: 'https://porta.fda.moph.go.th/fda_search_center_new/',
+      }]), { status: 200 });
+    });
+
+    const [result] = await searchOfficialFdaProducts('2 A 972 / 29', fetchImpl);
+
+    expect(submitted).toEqual(['2A 972/29', '2A972/29']);
+    expect(result.status).toBe('SAFE');
+    expect(result.metadata?.['รูปแบบคำค้นที่ส่งให้ อย.']).toBe('2A972/29');
   });
 
   it('routes massage businesses to the public HSS registry and maps status', async () => {

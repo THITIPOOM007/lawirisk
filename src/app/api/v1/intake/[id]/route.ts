@@ -13,6 +13,7 @@ import {
   getIntakeEnvelopes,
   getIntakeMessages,
   getIntakeParticipants,
+  getIntakeSourceChecks,
   saveCase,
   saveTriageDecision,
   updateIntakeEnvelopeStatus,
@@ -29,6 +30,7 @@ function demoDetail(id: string) {
       malware_scan_details: item.malware_scan_details,
     })),
     duplicates: getDuplicateCandidates().filter((item) => item.source_envelope_id === id),
+    sourceChecks: getIntakeSourceChecks().filter((item) => item.envelope_id === id),
     cases: getCases(),
   };
 }
@@ -39,21 +41,22 @@ export async function GET(request: NextRequest, context: { params: Promise<{ id:
   const { id } = await context.params;
   if (auth.identity.mode === 'demo') {
     const data = demoDetail(id);
-    return data.envelope ? NextResponse.json({ data }) : NextResponse.json({ error: { code: 'NOT_FOUND', message: 'ไม่พบคำร้อง' } }, { status: 404 });
+    return data.envelope ? NextResponse.json({ data: { ...data, capabilities: { canRefreshSourceChecks: INTAKE_WRITE_ROLES.has(auth.identity.role) } } }) : NextResponse.json({ error: { code: 'NOT_FOUND', message: 'ไม่พบคำร้อง' } }, { status: 404 });
   }
   if (!z.string().uuid().safeParse(id).success) return NextResponse.json({ error: { code: 'NOT_FOUND', message: 'ไม่พบคำร้อง' } }, { status: 404 });
 
   const supabase = await createServer();
-  const [envelope, message, participants, attachments, duplicates, cases] = await Promise.all([
+  const [envelope, message, participants, attachments, duplicates, sourceChecks, cases] = await Promise.all([
     supabase.from('intake_envelopes').select('*').eq('id', id).maybeSingle(),
     supabase.from('intake_messages').select('*').eq('envelope_id', id).order('created_at').limit(1).maybeSingle(),
     supabase.from('intake_participants').select('*').eq('envelope_id', id).order('created_at'),
     supabase.from('intake_attachments').select('id,envelope_id,filename,file_size,mime_type,sha256,malware_scan_status,malware_scan_details,created_at').eq('envelope_id', id).order('created_at'),
     supabase.from('intake_duplicate_candidates').select('*').eq('source_envelope_id', id).order('duplicate_score', { ascending: false }),
+    supabase.from('intake_source_checks').select('id,envelope_id,case_id,source_key,source_label,source_url,query_text,query_kind,source_category,routing_reason,status,classification,result_count,summary,results,checked_at,created_at,updated_at').eq('envelope_id', id).order('created_at', { ascending: false }),
     supabase.from('cases').select('*').order('created_at', { ascending: false }).limit(200),
   ]);
   if (envelope.error || !envelope.data) return NextResponse.json({ error: { code: 'NOT_FOUND', message: 'ไม่พบคำร้องหรือไม่มีสิทธิ์เข้าถึง' } }, { status: 404 });
-  const dependencyError = message.error || participants.error || attachments.error || duplicates.error || cases.error;
+  const dependencyError = message.error || participants.error || attachments.error || duplicates.error || sourceChecks.error || cases.error;
   if (dependencyError) return NextResponse.json({ error: { code: 'INTAKE_DETAIL_FAILED', message: 'โหลดรายละเอียดคำร้องไม่สำเร็จ' } }, { status: 503 });
 
   return NextResponse.json({
@@ -63,7 +66,9 @@ export async function GET(request: NextRequest, context: { params: Promise<{ id:
       participants: participants.data,
       attachments: attachments.data,
       duplicates: duplicates.data,
+      sourceChecks: sourceChecks.data,
       cases: cases.data,
+      capabilities: { canRefreshSourceChecks: INTAKE_WRITE_ROLES.has(auth.identity.role) },
     },
   });
 }

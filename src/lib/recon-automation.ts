@@ -91,6 +91,7 @@ export function buildReconAutomationPlan(input: {
   const purpose = `ตรวจสอบข้อมูลประกอบสำนวน ${compact(input.caseNumber).slice(0, 120)} ตามหน้าที่ของผู้รับผิดชอบสำนวน`;
   const sourceCategory = classifyCaseSourceScope(compact(input.caseContext || ''));
   const healthBusiness = sourceCategory === 'HEALTH_BUSINESS';
+  const healthcare = sourceCategory === 'HEALTHCARE';
   const fdaService = FDA_CATEGORY_SERVICE[sourceCategory];
   const plan: ReconAutomationPlanItem[] = [];
   const blocked: ReconBlockedAutomation[] = [];
@@ -130,6 +131,24 @@ export function buildReconAutomationPlan(input: {
 
   for (const candidate of eligible) {
     const value = compact(candidate.value);
+    if (healthcare && ['ORGANIZATION', 'LICENSE_NUMBER', 'PERSON', 'PHONE'].includes(candidate.type)) {
+      const fieldLabel = candidate.type === 'ORGANIZATION' ? 'ชื่อสถานพยาบาล'
+        : candidate.type === 'LICENSE_NUMBER' ? 'เลขใบอนุญาตสถานพยาบาล'
+          : candidate.type === 'PERSON' ? 'ชื่อผู้ประกอบกิจการ/ผู้ดำเนินการ'
+            : 'เบอร์โทรศัพท์';
+      const key = `HSS_OSS:${candidate.type}:${value.toLocaleLowerCase('th-TH')}`;
+      if (!seen.has(key)) {
+        seen.add(key);
+        blocked.push({
+          id: `${candidate.id}:HSS_OSS:${candidate.type}`,
+          source: 'HSS_OSS',
+          sourceLabel: 'OSS สบส. · ข้อมูลสถานพยาบาล',
+          fieldLabel,
+          displayValue: masked(value, candidate.type),
+          reason: 'ระบบจำแนกเป็นคดีคลินิกและเลือก OSS สบส. แล้ว แต่ปลายทางใช้ HTTP จึงต้องให้เจ้าหน้าที่ยืนยันความเสี่ยงก่อนเปิดการค้นเชิงลึก',
+        });
+      }
+    }
     if (candidate.type === 'CITIZEN_ID') {
       const id = digits(value);
       if (id.length !== 13) continue;

@@ -34,7 +34,7 @@ describe('release security regressions', () => {
     const sources = read('src/lib/external-sources.ts');
     expect(recon).toContain('credentialed_external_queries_performed: false');
     expect(recon).toContain("rpc('search_trusted_sources'");
-    expect(recon).toContain("new Set(['ORGANIZATION', 'PHONE', 'EMAIL', 'LOCATION'])");
+    expect(recon).toContain("new Set(['ORGANIZATION', 'PHONE', 'EMAIL', 'LOCATION', 'PRODUCT_NAME', 'REGISTRATION_NUMBER', 'LICENSE_NUMBER'])");
     expect(recon).not.toContain("new Set(['CITIZEN_ID'");
     expect(publicDiscovery).toContain("import 'server-only'");
     expect(publicDiscovery).toContain('tools: [{ google_search: {} }]');

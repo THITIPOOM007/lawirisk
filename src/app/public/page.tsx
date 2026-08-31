@@ -71,6 +71,7 @@ export default function PublicPortalPage() {
   const [isSubmittingComplaint, setIsSubmittingComplaint] = useState(false);
   const [complaintSuccessToken, setComplaintSuccessToken] = useState('');
   const [complaintValidationStatus, setComplaintValidationStatus] = useState<string | null>(null);
+  const [complaintPreliminarySearch, setComplaintPreliminarySearch] = useState<{ status: string; checkCount: number; foundCount: number; note: string } | null>(null);
   const [complaintError, setComplaintError] = useState('');
 
   // Tracking State
@@ -167,6 +168,7 @@ export default function PublicPortalPage() {
       if (!res.ok) throw new Error(typeof body.error === 'string' ? body.error : body.error?.message || 'บันทึกคำร้องไม่สำเร็จ');
       setComplaintSuccessToken(body.data.trackingToken);
       setComplaintValidationStatus(typeof body.data.attachmentValidationStatus === 'string' ? body.data.attachmentValidationStatus : null);
+      setComplaintPreliminarySearch(body.data.preliminarySearch && typeof body.data.preliminarySearch === 'object' ? body.data.preliminarySearch : null);
       setTopic('');
       setDescription('');
       setComplainantName('');
@@ -448,12 +450,20 @@ export default function PublicPortalPage() {
                   <span className="text-[10px] text-slate-500 uppercase block">รหัสติดตามเรื่องของคุณ (Tracking Token)</span>
                   <span className="text-xl font-mono font-black text-teal-300 select-all">{complaintSuccessToken}</span>
                 </div>
+                {complaintPreliminarySearch && (
+                  <div className="mx-auto max-w-xl rounded-2xl border border-cyan-300/20 bg-cyan-300/[0.05] p-4 text-left">
+                    <div className="flex items-center gap-2 text-xs font-bold text-cyan-200"><Sparkles className="h-4 w-4" />ระบบตรวจฐานข้อมูลเบื้องต้นให้แล้ว</div>
+                    <p className="mt-2 text-xs leading-6 text-slate-300">{complaintPreliminarySearch.note}</p>
+                    <p className="mt-2 font-mono text-[10px] text-cyan-300/70">ตรวจ {complaintPreliminarySearch.checkCount} ฐาน · พบผลที่ต้องให้เจ้าหน้าที่ตรวจทาน {complaintPreliminarySearch.foundCount} ฐาน</p>
+                  </div>
+                )}
                 <div className="pt-2">
                   <button
                     type="button"
                     onClick={() => {
                       setComplaintSuccessToken('');
                       setComplaintValidationStatus(null);
+                      setComplaintPreliminarySearch(null);
                       setActiveTab('TRACK');
                       setTrackTokenInput(complaintSuccessToken);
                     }}

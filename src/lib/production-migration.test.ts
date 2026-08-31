@@ -15,6 +15,7 @@ const promotedAttachmentsMigration = fs.readFileSync(path.join(process.cwd(), 's
 const notificationReadMigration = fs.readFileSync(path.join(process.cwd(), 'supabase/migrations/202608290001_notification_read_state.sql'), 'utf8');
 const evidenceScreeningMigration = fs.readFileSync(path.join(process.cwd(), 'supabase/migrations/202608300001_evidence_screening_and_prediction_reports.sql'), 'utf8');
 const syntheticDemoMigration = fs.readFileSync(path.join(process.cwd(), 'supabase/migrations/202608300002_synthetic_demo_cases.sql'), 'utf8');
+const complaintEnrichmentMigration = fs.readFileSync(path.join(process.cwd(), 'supabase/migrations/202608310001_public_complaint_enrichment.sql'), 'utf8');
 
 describe('production migration invariants', () => {
   it('makes evidence originals and audit history immutable', () => {
@@ -135,5 +136,16 @@ describe('production migration invariants', () => {
     expect(syntheticDemoMigration).toContain('LAWIRISK_SYNTHETIC_FIXTURE');
     expect(syntheticDemoMigration).toContain("'PREDICTION_FORM'");
     expect(syntheticDemoMigration).toContain("'synthetic_test_data', true");
+  });
+
+  it('keeps automatic complaint checks source-bound, suggested, linked, and staff-only', () => {
+    expect(complaintEnrichmentMigration).toContain('CREATE TABLE IF NOT EXISTS public.intake_source_checks');
+    expect(complaintEnrichmentMigration).toContain("classification = 'SUGGESTED'");
+    expect(complaintEnrichmentMigration).toContain('jsonb_array_length(results) <= 10');
+    expect(complaintEnrichmentMigration).toContain('octet_length(results::text) <= 131072');
+    expect(complaintEnrichmentMigration).toContain('check_intake_source_check_url_allowlist');
+    expect(complaintEnrichmentMigration).toContain('public.can_access_intake(envelope_id)');
+    expect(complaintEnrichmentMigration).toContain('link_intake_source_checks_after_triage');
+    expect(complaintEnrichmentMigration).toContain('REVOKE ALL ON public.intake_source_checks FROM PUBLIC, anon, authenticated');
   });
 });

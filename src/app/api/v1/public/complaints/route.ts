@@ -1,7 +1,8 @@
 import crypto from 'node:crypto';
 import { NextRequest, NextResponse } from 'next/server';
 import { z } from 'zod';
-import { saveIntakeEnvelope, saveIntakeMessage, saveIntakeParticipant, saveIntakeAttachment } from '@/lib/demo-data';
+import { saveIntakeEnvelope, saveIntakeMessage, saveIntakeParticipant, saveIntakeAttachment, saveIntakeSourceCheck } from '@/lib/demo-data';
+import { executeComplaintEnrichmentPlan, planComplaintEnrichment, type ComplaintEnrichmentRecord } from '@/lib/complaint-enrichment';
 import { isDemoServerEnabled, isSupabaseServiceConfigured } from '@/lib/runtime-config';
 import { createServiceClient } from '@/lib/supabase-server';
 import { UNSCANNED_EVIDENCE_STATUS } from '@/lib/evidence-file-status';
@@ -159,6 +160,8 @@ export async function POST(request: NextRequest) {
     const now = new Date().toISOString();
     const urgency = category === 'HEALTH_HAZARD' || category === 'ONLINE_FRAUD' ? 'HIGH' : 'NORMAL';
     const intakeStatus = 'TRIAGE_PENDING';
+    let preliminaryChecks: ComplaintEnrichmentRecord[] = [];
+    let enrichmentDeliveryStatus: 'COMPLETED' | 'NOT_APPLICABLE' | 'PERSISTENCE_FAILED' = 'NOT_APPLICABLE';
 
     if (!hasSupabase) {
       saveIntakeEnvelope({
@@ -347,6 +350,81 @@ export async function POST(request: NextRequest) {
       }
     }
 
+    // Preliminary checks are deliberately source-bound and non-blocking. A source outage
+    // must not discard a complaint that has already been accepted into the intake ledger.
+    try {
+      const enrichmentPlan = planComplaintEnrichment({ topic, description, category });
+      if (hasSupabase && enrichmentPlan.length > 0) {
+        const requestAudit = await service!.from('audit_logs').insert({
+          profile_id: null,
+          action: 'PUBLIC_COMPLAINT_PRELIMINARY_SEARCH_REQUESTED',
+          details: {
+            envelope_id: envelopeId,
+            source_keys: enrichmentPlan.map((item) => item.sourceKey),
+            query_kinds: enrichmentPlan.map((item) => item.queryKind),
+            classification: 'SUGGESTED',
+          },
+        });
+        if (requestAudit.error) throw new Error('PRELIMINARY_SEARCH_AUDIT_FAILED');
+      }
+      preliminaryChecks = await executeComplaintEnrichmentPlan(enrichmentPlan);
+      enrichmentDeliveryStatus = preliminaryChecks.length > 0 ? 'COMPLETED' : 'NOT_APPLICABLE';
+      if (preliminaryChecks.length > 0) {
+        if (!hasSupabase) {
+          for (const check of preliminaryChecks) {
+            saveIntakeSourceCheck({
+              id: `check-${crypto.randomUUID()}`,
+              envelope_id: envelopeId,
+              source_key: check.sourceKey,
+              source_label: check.sourceLabel,
+              source_url: check.sourceUrl,
+              query_text: check.query,
+              query_kind: check.queryKind,
+              source_category: check.category,
+              routing_reason: check.reason,
+              status: check.status,
+              classification: check.classification,
+              result_count: check.resultCount,
+              summary: check.summary,
+              results: check.results,
+              checked_at: check.checkedAt,
+              created_at: now,
+              updated_at: now,
+            });
+          }
+        } else {
+          const rows = preliminaryChecks.map((check) => ({
+            id: crypto.randomUUID(),
+            envelope_id: envelopeId,
+            source_key: check.sourceKey,
+            source_label: check.sourceLabel,
+            source_url: check.sourceUrl,
+            query_text: check.query,
+            query_kind: check.queryKind,
+            source_category: check.category,
+            routing_reason: check.reason,
+            status: check.status,
+            classification: check.classification,
+            result_count: check.resultCount,
+            summary: check.summary,
+            results: check.results,
+            checked_at: check.checkedAt,
+          }));
+          const { error: checksError } = await service!.from('intake_source_checks').insert(rows);
+          if (checksError) {
+            enrichmentDeliveryStatus = 'PERSISTENCE_FAILED';
+            console.error('Failed to persist preliminary source checks', { code: checksError.code, envelopeId });
+          }
+        }
+      }
+    } catch (enrichmentError) {
+      enrichmentDeliveryStatus = 'PERSISTENCE_FAILED';
+      console.error('Preliminary complaint enrichment failed', {
+        envelopeId,
+        message: enrichmentError instanceof Error ? enrichmentError.message : 'UNKNOWN',
+      });
+    }
+
     return NextResponse.json(
       {
         success: true,
@@ -359,6 +437,16 @@ export async function POST(request: NextRequest) {
           status: intakeStatus,
           hasAttachment: Boolean(attachedFile),
           attachmentValidationStatus: attachedFile ? 'VALIDATED' : null,
+          preliminarySearch: {
+            status: enrichmentDeliveryStatus,
+            checkCount: preliminaryChecks.length,
+            foundCount: preliminaryChecks.filter((check) => check.status === 'FOUND').length,
+            note: enrichmentDeliveryStatus === 'PERSISTENCE_FAILED'
+              ? 'รับเรื่องร้องเรียนแล้ว แต่การส่งผลตรวจเบื้องต้นให้เจ้าหน้าที่ไม่สมบูรณ์ ระบบจะให้เจ้าหน้าที่ลองตรวจซ้ำจากหน้ารับเรื่อง'
+              : preliminaryChecks.length > 0
+                ? 'ระบบตรวจฐานข้อมูลทางการเบื้องต้นแล้ว และส่งผลในสถานะข้อเสนอให้เจ้าหน้าที่ตรวจทาน'
+                : 'ยังไม่มีคำค้นที่ปลอดภัยและตรงประเภทเพียงพอสำหรับการตรวจอัตโนมัติ',
+          },
         },
       },
       { status: 201 },

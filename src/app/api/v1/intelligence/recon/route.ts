@@ -132,7 +132,7 @@ export async function POST(request: NextRequest) {
 
   if (!z.string().uuid().safeParse(parsed.data.case_id).success) return apiError('CASE_NOT_FOUND', 'ไม่พบสำนวนคดี', 404);
   const caseId = parsed.data.case_id;
-  const [caseResult, evidenceResult, entitiesResult, relationshipsResult, matchesResult, suggestionsResult] = await Promise.all([
+  const [caseResult, evidenceResult, entitiesResult, relationshipsResult, matchesResult, suggestionsResult, intakeChecksResult] = await Promise.all([
     supabase.from('cases').select('id,number,title,description').eq('id', caseId).maybeSingle(),
     supabase.from('evidence_files').select('id,filename,sha256,malware_scan_status', { count: 'exact' }).eq('case_id', caseId).eq('upload_state', 'STORED').in('malware_scan_status', ['CLEAN', 'NOT_SCANNED']),
     supabase.from('extracted_entities').select('id,type,value', { count: 'exact' }).eq('case_id', caseId).order('created_at', { ascending: false }).limit(200),
@@ -144,15 +144,22 @@ export async function POST(request: NextRequest) {
       .in('status', ['SUGGESTED', 'UNCERTAIN'])
       .order('created_at', { ascending: false })
       .limit(200),
+    supabase.from('intake_source_checks')
+      .select('id,source_label,source_url,query_text,source_category,status,summary,results,checked_at')
+      .eq('case_id', caseId)
+      .order('checked_at', { ascending: false })
+      .limit(50),
   ]);
   if (caseResult.error || !caseResult.data) return apiError('CASE_NOT_FOUND', 'ไม่พบสำนวนคดีหรือไม่มีสิทธิ์เข้าถึง', 404);
-  if (evidenceResult.error || entitiesResult.error || relationshipsResult.error || matchesResult.error || suggestionsResult.error) {
+  if (evidenceResult.error || entitiesResult.error || relationshipsResult.error || matchesResult.error || suggestionsResult.error || intakeChecksResult.error) {
     return apiError('INTELLIGENCE_WORKSPACE_FAILED', 'รวบรวมสถานะข้อมูลคดีไม่สำเร็จ', 503);
   }
 
   const evidenceRows = evidenceResult.data || [];
   const entityRows = entitiesResult.data || [];
   const relationshipRows = relationshipsResult.data || [];
+  const intakeSourceCategories = [...new Set((intakeChecksResult.data || []).map((item) => item.source_category).filter(Boolean))];
+  const caseRoutingContext = `${caseResult.data.title} ${caseResult.data.description || ''} ${intakeSourceCategories.join(' ')}`;
   const evidenceIds = evidenceRows.map((item) => item.id);
   const entityIds = entityRows.map((item) => item.id);
   const relationshipIds = relationshipRows.map((item) => item.id);
@@ -240,11 +247,11 @@ export async function POST(request: NextRequest) {
   });
   const automation = buildReconAutomationPlan({
     caseNumber: caseResult.data.number,
-    caseContext: `${caseResult.data.title} ${caseResult.data.description || ''}`,
+    caseContext: caseRoutingContext,
     candidates: [...confirmedPlanCandidates, ...suggestedPlanCandidates],
   });
 
-  const registryEligibleTypes = new Set(['ORGANIZATION', 'PHONE', 'EMAIL', 'LOCATION']);
+  const registryEligibleTypes = new Set(['ORGANIZATION', 'PHONE', 'EMAIL', 'LOCATION', 'PRODUCT_NAME', 'REGISTRATION_NUMBER', 'LICENSE_NUMBER']);
   const verifiedRegistryTerms = entityRows
     .filter((entity) => registryEligibleTypes.has(entity.type) && cleanSourcedEntityIds.has(entity.id))
     .map((entity) => entity.value.trim())
@@ -254,8 +261,8 @@ export async function POST(request: NextRequest) {
     .map((suggestion) => suggestion.candidate_value.trim())
     .filter((value) => value.length >= 2 && value.length <= 200);
   const registryTerms = [...new Set([...verifiedRegistryTerms, ...suggestedRegistryTerms])].slice(0, 8);
-  const sourceRecommendations = recommendCaseSources(`${caseResult.data.title} ${caseResult.data.description || ''}`);
-  const sourceCategory = classifyCaseSourceScope(`${caseResult.data.title} ${caseResult.data.description || ''}`);
+  const sourceRecommendations = recommendCaseSources(caseRoutingContext);
+  const sourceCategory = classifyCaseSourceScope(caseRoutingContext);
   const [registryResponses, groundedWeb] = await Promise.all([Promise.all(registryTerms.map(async (term) => {
     const result = await supabase.rpc('search_trusted_sources', { search_query: term, max_results: 5 });
     return { data: result.data, error: result.error };
@@ -273,6 +280,24 @@ export async function POST(request: NextRequest) {
     sourceUrl: item.sourceUrl,
     publishedDate: item.publishedDate,
   }));
+  for (const check of intakeChecksResult.data || []) {
+    if (check.status !== 'FOUND' || !Array.isArray(check.results)) continue;
+    for (const raw of check.results.slice(0, 10)) {
+      if (!raw || typeof raw !== 'object') continue;
+      const result = raw as Record<string, unknown>;
+      const title = typeof result.title === 'string' ? result.title : '';
+      const snippet = typeof result.snippet === 'string' ? result.snippet : check.summary;
+      if (!title || !snippet) continue;
+      trustedRegistryFindings.push({
+        id: typeof result.id === 'string' ? `intake:${check.id}:${result.id}` : `intake:${check.id}:${trustedRegistryFindings.length}`,
+        title,
+        snippet,
+        source: check.source_label,
+        sourceUrl: check.source_url,
+        publishedDate: check.checked_at,
+      });
+    }
+  }
   const groundedWebFindings = groundedWeb.findings.map((item) => ({
     id: item.id, title: item.title, snippet: item.snippet, source: item.source,
     sourceUrl: item.sourceUrl, publishedDate: item.publishedDate,

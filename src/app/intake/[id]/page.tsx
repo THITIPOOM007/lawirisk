@@ -20,7 +20,12 @@ import {
   CheckCircle2, 
   Code2,
   FolderKanban,
-  Database
+  Database,
+  ExternalLink,
+  Radar,
+  RefreshCw,
+  SearchCheck,
+  Clock3
 } from 'lucide-react';
 import {
   type Case,
@@ -29,9 +34,16 @@ import {
   type IntakeEnvelope,
   type IntakeMessage,
   type IntakeParticipant,
+  type IntakeSourceCheck,
 } from '@/lib/demo-data';
 
 import { validateFileInBrowser } from '@/lib/file-validator';
+
+const OFFICIAL_SOURCE_URLS: Record<IntakeSourceCheck['source_key'], string> = {
+  FDA_PUBLIC: 'https://porta.fda.moph.go.th/fda_search_center_new/',
+  HSS_PUBLIC_CLINIC: 'https://privatehospital.hss.moph.go.th/s_view_hospital.php',
+  HSS_PUBLIC_HEALTH_BUSINESS: 'https://spa-services.hss.moph.go.th/permit/spa/establishment',
+};
 
 export default function IntakeDetailPage() {
   const params = useParams();
@@ -43,6 +55,7 @@ export default function IntakeDetailPage() {
   const [participants, setParticipants] = useState<IntakeParticipant[]>([]);
   const [attachments, setAttachments] = useState<IntakeAttachment[]>([]);
   const [duplicates, setDuplicates] = useState<IntakeDuplicateCandidate[]>([]);
+  const [sourceChecks, setSourceChecks] = useState<IntakeSourceCheck[]>([]);
   const [casesList, setCasesList] = useState<Case[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [loadError, setLoadError] = useState('');
@@ -66,6 +79,10 @@ export default function IntakeDetailPage() {
   const [successMessage, setSuccessMessage] = useState('');
   const [submitError, setSubmitError] = useState('');
   const [showRawJson, setShowRawJson] = useState(false);
+  const [isRefreshingChecks, setIsRefreshingChecks] = useState(false);
+  const [checksMessage, setChecksMessage] = useState('');
+  const [checksError, setChecksError] = useState('');
+  const [canRefreshSourceChecks, setCanRefreshSourceChecks] = useState(false);
 
   // Parse structured payload if the message contains JSON
   const parsedData = useMemo(() => {
@@ -159,7 +176,9 @@ export default function IntakeDetailPage() {
         setParticipants(body.data.participants as IntakeParticipant[]);
         setAttachments(body.data.attachments as IntakeAttachment[]);
         setDuplicates(body.data.duplicates as IntakeDuplicateCandidate[]);
+        setSourceChecks((body.data.sourceChecks || []) as IntakeSourceCheck[]);
         setCasesList(body.data.cases as Case[]);
+        setCanRefreshSourceChecks(Boolean(body.data.capabilities?.canRefreshSourceChecks));
       })
       .catch((error: unknown) => {
         if (error instanceof DOMException && error.name === 'AbortError') return;
@@ -168,6 +187,30 @@ export default function IntakeDetailPage() {
       .finally(() => setIsLoading(false));
     return () => controller.abort();
   }, [intakeId]);
+
+  const handleRefreshChecks = async () => {
+    setIsRefreshingChecks(true);
+    setChecksError('');
+    setChecksMessage('');
+    try {
+      const response = await fetch(`/api/v1/intake/${encodeURIComponent(intakeId)}/enrichment`, {
+        method: 'POST', credentials: 'same-origin', headers: { 'Content-Type': 'application/json' }, body: '{}',
+      });
+      const body = await response.json();
+      if (!response.ok) throw new Error(body.error?.message || 'ตรวจฐานข้อมูลทางการไม่สำเร็จ');
+      const detailResponse = await fetch(`/api/v1/intake/${encodeURIComponent(intakeId)}`, { credentials: 'same-origin' });
+      const detailBody = await detailResponse.json();
+      if (!detailResponse.ok) throw new Error(detailBody.error?.message || 'โหลดผลตรวจล่าสุดไม่สำเร็จ');
+      setSourceChecks((detailBody.data.sourceChecks || []) as IntakeSourceCheck[]);
+      setChecksMessage(body.data?.checks?.length
+        ? 'ตรวจฐานข้อมูลทางการและอัปเดตผลล่าสุดให้เจ้าหน้าที่แล้ว'
+        : 'คำร้องนี้ยังไม่มีคำค้นที่ปลอดภัยและตรงประเภทเพียงพอสำหรับค้นอัตโนมัติ');
+    } catch (error: unknown) {
+      setChecksError(error instanceof Error ? error.message : 'ตรวจฐานข้อมูลทางการไม่สำเร็จ');
+    } finally {
+      setIsRefreshingChecks(false);
+    }
+  };
 
   const handleTriageSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -263,6 +306,52 @@ export default function IntakeDetailPage() {
         </div>
       )}
       {submitError && <div className="rounded-2xl border border-rose-500/20 bg-rose-500/5 p-4 text-sm text-rose-300" role="alert">{submitError}</div>}
+
+      <section className="relative overflow-hidden rounded-[30px] border border-cyan-300/15 bg-[linear-gradient(135deg,rgba(8,47,73,.42),rgba(2,6,23,.82)_52%,rgba(49,46,129,.18))] p-5 shadow-[0_24px_80px_rgba(8,145,178,.08)] sm:p-7" aria-labelledby="preliminary-search-heading">
+        <div className="pointer-events-none absolute -right-24 -top-24 h-64 w-64 rounded-full border border-cyan-300/10 bg-cyan-300/[0.03]" />
+        <div className="relative flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
+          <div className="flex items-start gap-3">
+            <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl border border-cyan-300/20 bg-cyan-300/[0.08] text-cyan-200"><Radar className="h-6 w-6" /></div>
+            <div>
+              <p className="font-mono text-[10px] font-bold uppercase tracking-[0.22em] text-cyan-300/70">Automatic preliminary intelligence</p>
+              <h2 id="preliminary-search-heading" className="mt-1 text-lg font-black text-white sm:text-xl">ผลสืบค้นเบื้องต้นจากฐานข้อมูลทางการ</h2>
+              <p className="mt-1 max-w-3xl text-xs leading-6 text-slate-400">ระบบแยกเลขหรือคำค้นจากเรื่องร้องเรียน แล้วส่งไปยังฐานที่ตรงประเภทเท่านั้น ผลทั้งหมดเป็น “ข้อเสนอ” พร้อมแหล่งอ้างอิง ยังไม่ถือเป็นข้อเท็จจริงที่เจ้าหน้าที่รับรอง</p>
+            </div>
+          </div>
+          {canRefreshSourceChecks ? <button type="button" onClick={handleRefreshChecks} disabled={isRefreshingChecks} className="inline-flex min-h-11 shrink-0 items-center justify-center rounded-2xl border border-cyan-200/20 bg-cyan-300 px-4 text-xs font-black text-slate-950 transition hover:bg-cyan-200 disabled:cursor-wait disabled:opacity-60">
+            <RefreshCw className={`mr-2 h-4 w-4 ${isRefreshingChecks ? 'animate-spin' : ''}`} />{isRefreshingChecks ? 'กำลังตรวจต้นทาง…' : 'ตรวจฐานทางการอีกครั้ง'}
+          </button> : <span className="inline-flex min-h-10 items-center rounded-full border border-white/[0.08] bg-white/[0.03] px-3 text-[10px] font-bold text-slate-500">สิทธิ์ดูผลเท่านั้น</span>}
+        </div>
+        {checksMessage && <p role="status" aria-live="polite" className="relative mt-4 rounded-xl border border-emerald-300/15 bg-emerald-300/[0.05] px-4 py-3 text-xs text-emerald-200">{checksMessage}</p>}
+        {checksError && <p role="alert" className="relative mt-4 rounded-xl border border-rose-300/15 bg-rose-300/[0.05] px-4 py-3 text-xs text-rose-200">{checksError}</p>}
+        <div className="relative mt-5 grid gap-4 xl:grid-cols-2">
+          {sourceChecks.length > 0 ? sourceChecks.map((check) => (
+            <article key={check.id} className="rounded-3xl border border-white/[0.08] bg-slate-950/55 p-4 sm:p-5">
+              <div className="flex flex-wrap items-center justify-between gap-2">
+                <div className="flex flex-wrap items-center gap-2">
+                  <span className={`rounded-full border px-2.5 py-1 text-[10px] font-black ${check.status === 'FOUND' ? 'border-emerald-300/25 bg-emerald-300/[0.08] text-emerald-300' : check.status === 'UNAVAILABLE' ? 'border-amber-300/25 bg-amber-300/[0.08] text-amber-200' : 'border-slate-300/15 bg-slate-300/[0.05] text-slate-300'}`}>{check.status === 'FOUND' ? `พบ ${check.result_count} รายการ` : check.status === 'UNAVAILABLE' ? 'ต้นทางไม่พร้อม' : 'ยังไม่พบรายการตรงกัน'}</span>
+                  <span className="rounded-full border border-indigo-300/20 bg-indigo-300/[0.06] px-2.5 py-1 text-[10px] font-bold text-indigo-200">SUGGESTED · รอตรวจทาน</span>
+                </div>
+                <span className="inline-flex items-center text-[10px] text-slate-500"><Clock3 className="mr-1 h-3 w-3" />{new Date(check.checked_at).toLocaleString('th-TH')}</span>
+              </div>
+              <h3 className="mt-4 text-sm font-black text-white">{check.source_label}</h3>
+              <div className="mt-2 rounded-xl border border-cyan-300/10 bg-cyan-300/[0.035] px-3 py-2 text-xs text-cyan-100"><span className="text-cyan-300/60">คำค้นที่ส่ง:</span> <span className="font-mono font-bold">{check.query_text}</span></div>
+              <p className="mt-3 text-xs leading-6 text-slate-300">{check.summary}</p>
+              <p className="mt-2 text-[10px] leading-5 text-slate-500">เหตุผลเลือกฐาน: {check.routing_reason}</p>
+              {check.results.filter((result) => ['SAFE', 'WARNING', 'REVOKED'].includes(result.status)).slice(0, 3).map((result) => (
+                <div key={result.id} className="mt-3 rounded-2xl border border-white/[0.06] bg-white/[0.025] p-3">
+                  <div className="flex items-start gap-2"><SearchCheck className="mt-0.5 h-4 w-4 shrink-0 text-emerald-300" /><div><p className="text-xs font-bold text-white">{result.title}</p><p className="mt-1 text-[10px] leading-5 text-slate-400">{result.snippet}</p></div></div>
+                </div>
+              ))}
+              <a href={OFFICIAL_SOURCE_URLS[check.source_key]} target="_blank" rel="noreferrer" className="mt-4 inline-flex min-h-9 items-center text-xs font-bold text-cyan-300 hover:text-cyan-200">เปิดฐานข้อมูลต้นฉบับ <ExternalLink className="ml-1.5 h-3.5 w-3.5" /></a>
+            </article>
+          )) : (
+            <div className="xl:col-span-2 rounded-3xl border border-dashed border-white/[0.1] bg-slate-950/35 p-6 text-center">
+              <Database className="mx-auto h-7 w-7 text-slate-600" /><p className="mt-3 text-sm font-bold text-slate-300">ยังไม่มีผลสืบค้นเบื้องต้นสำหรับคำร้องนี้</p><p className="mt-1 text-xs text-slate-500">กด “ตรวจฐานทางการอีกครั้ง” เพื่อให้ระบบจำแนกเรื่องและเลือกฐานข้อมูลที่ตรงประเภท</p>
+            </div>
+          )}
+        </div>
+      </section>
 
       <div className="grid grid-cols-1 lg:grid-cols-5 gap-8">
         

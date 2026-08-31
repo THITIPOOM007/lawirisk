@@ -176,6 +176,35 @@ export interface IntakeDuplicateCandidate {
   };
 }
 
+export interface IntakeSourceCheck {
+  id: string;
+  envelope_id: string;
+  case_id?: string;
+  source_key: 'FDA_PUBLIC' | 'HSS_PUBLIC_CLINIC' | 'HSS_PUBLIC_HEALTH_BUSINESS';
+  source_label: string;
+  source_url: string;
+  query_text: string;
+  query_kind: 'PRODUCT_OR_LICENSE' | 'CLINIC_OR_LICENSE' | 'HEALTH_BUSINESS_OR_LICENSE';
+  source_category: string;
+  routing_reason: string;
+  status: 'FOUND' | 'NOT_FOUND' | 'UNAVAILABLE';
+  classification: 'SUGGESTED';
+  result_count: number;
+  summary: string;
+  results: Array<{
+    id: string;
+    title: string;
+    snippet: string;
+    source: string;
+    sourceUrl: string;
+    status: string;
+    metadata?: Record<string, string>;
+  }>;
+  checked_at: string;
+  created_at: string;
+  updated_at: string;
+}
+
 export interface TriageDecision {
   id: string;
   envelope_id: string;
@@ -534,6 +563,7 @@ const intakeMessagesStore: IntakeMessage[] = [...INITIAL_INTAKE_MESSAGES];
 const intakeAttachmentsStore: IntakeAttachment[] = [...INITIAL_INTAKE_ATTACHMENTS];
 const intakeParticipantsStore: IntakeParticipant[] = [...INITIAL_INTAKE_PARTICIPANTS];
 const duplicateCandidatesStore: IntakeDuplicateCandidate[] = [...INITIAL_DUPLICATE_CANDIDATES];
+const intakeSourceChecksStore: IntakeSourceCheck[] = [];
 
 // Getters and Setters
 export function getCases(): Case[] { return casesStore; }
@@ -685,5 +715,16 @@ export function saveDuplicateCandidate(item: IntakeDuplicateCandidate): IntakeDu
   const idx = duplicateCandidatesStore.findIndex((d) => d.id === item.id);
   if (idx >= 0) duplicateCandidatesStore[idx] = item;
   else duplicateCandidatesStore.unshift(item);
+  return item;
+}
+
+export function getIntakeSourceChecks(): IntakeSourceCheck[] { return intakeSourceChecksStore; }
+export function saveIntakeSourceCheck(item: IntakeSourceCheck): IntakeSourceCheck {
+  const idx = intakeSourceChecksStore.findIndex((check) =>
+    check.envelope_id === item.envelope_id
+    && check.source_key === item.source_key
+    && check.query_text.toLocaleLowerCase('th-TH') === item.query_text.toLocaleLowerCase('th-TH'));
+  if (idx >= 0) intakeSourceChecksStore[idx] = item;
+  else intakeSourceChecksStore.unshift(item);
   return item;
 }

@@ -9,9 +9,18 @@ describe('case-scoped official source routing', () => {
     ['ครีมเครื่องสำอางไม่มีเลขจดแจ้ง', 'COSMETIC', 'cosmetica.fda.moph.go.th'],
     ['สถานที่ผลิตสมุนไพร', 'HERBAL', 'meshlog.fda.moph.go.th'],
     ['สถานที่เครื่องมือแพทย์', 'MEDICAL_DEVICE', 'medeva.fda.moph.go.th'],
+    ['คลินิกเวชกรรมเอกชน', 'HEALTHCARE', 'privatehospital.hss.moph.go.th'],
+    ['ร้านนวดเพื่อสุขภาพ', 'HEALTH_BUSINESS', 'spa-services.hss.moph.go.th'],
   ])('routes %s to the matching FDA category', (context, category, host) => {
     expect(classifyCaseSourceScope(context)).toBe(category);
     expect(recommendCaseSources(context).every((item) => new URL(item.url).hostname === host)).toBe(true);
+  });
+
+  it('routes a clinic case to HSS and never to the massage registry', () => {
+    const sources = recommendCaseSources('ตรวจสอบใบอนุญาตคลินิกเวชกรรม');
+    expect(sources[0]?.category).toBe('HEALTHCARE');
+    expect(sources[0]?.url).toContain('privatehospital.hss.moph.go.th');
+    expect(JSON.stringify(sources)).not.toMatch(/spa-services|ร้านนวด/i);
   });
 
   it('does not suggest massage sources for a drug-store case', () => {

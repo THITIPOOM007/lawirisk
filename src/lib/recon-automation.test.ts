@@ -67,6 +67,17 @@ describe('recon automation plan', () => {
     ]));
   });
 
+  it('classifies clinic entities for HSS OSS without silently sending credentials over HTTP', () => {
+    const result = buildReconAutomationPlan({
+      caseNumber: 'CLINIC-1',
+      caseContext: 'ตรวจสอบคลินิกเวชกรรมและใบอนุญาตสถานพยาบาล',
+      candidates: [{ ...base, id: 'clinic', type: 'ORGANIZATION', value: 'คลินิกเวชกรรมตัวอย่าง', confidence: 0.95 }],
+    });
+    expect(result.plan.some((item) => item.source === 'HSS_ESTA2')).toBe(false);
+    expect(result.blocked[0]).toMatchObject({ source: 'HSS_OSS', fieldLabel: 'ชื่อสถานพยาบาล' });
+    expect(result.blocked[0].reason).toContain('HTTP');
+  });
+
   it.each([
     ['ผลิตภัณฑ์อาหารผิดกฎหมาย', 'FDA_FOOD_REGISTRY'],
     ['วัตถุอันตรายไม่มีทะเบียน', 'FDA_HAZARDOUS_REGISTRY'],
