@@ -72,6 +72,18 @@ describe('release security regressions', () => {
     expect(migration).not.toContain("SET malware_scan_status = 'CLEAN'");
   });
 
+  it('atomically finalizes public complaint attachments through a service-only RPC', () => {
+    const publicRoute = source('src/app/api/v1/public/complaints/route.ts');
+    const migration = source('supabase/migrations/202608310002_public_attachment_finalization.sql');
+    expect(publicRoute).toContain("supabase.rpc('finalize_public_complaint_attachment'");
+    expect(publicRoute).not.toContain("from('intake_attachments').insert");
+    expect(publicRoute).toContain('supabase.storage.from(bucketName).remove([storagePath])');
+    expect(migration).toContain("upload_state, malware_scan_status");
+    expect(migration).toContain("'STORED', 'NOT_SCANNED'");
+    expect(migration).toContain('GRANT EXECUTE ON FUNCTION public.finalize_public_complaint_attachment');
+    expect(migration).not.toContain("malware_scan_status = 'CLEAN'");
+  });
+
   it('does not mutate malware verdicts from an intake GET or triage fallback', () => {
     const route = source('src/app/api/v1/intake/[id]/route.ts');
     expect(route).not.toContain('Auto-heal scan status');

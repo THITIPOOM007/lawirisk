@@ -527,7 +527,12 @@ export default function IntakeDetailPage() {
                         <span className="text-[10px] text-slate-500 block truncate">ขนาด: {(att.file_size / (1024 * 1024)).toFixed(2)} MB | SHA-256: {att.sha256.substring(0, 16)}...</span>
                       </div>
                       <div className="shrink-0 flex items-center gap-2">
-                        {att.malware_scan_status === 'INFECTED' ? (
+                        {att.upload_state && att.upload_state !== 'STORED' ? (
+                          <span className="inline-flex items-center px-2.5 py-1 border border-amber-500/35 bg-amber-500/10 text-amber-300 rounded-xl text-[10px] font-semibold">
+                            <Loader2 className="h-3.5 w-3.5 mr-1 animate-spin" />
+                            ไฟล์ยังบันทึกไม่สมบูรณ์
+                          </span>
+                        ) : att.malware_scan_status === 'INFECTED' ? (
                           <span className="inline-flex items-center px-2.5 py-1 border border-rose-500/35 bg-rose-500/10 text-rose-400 rounded-xl text-[10px] font-semibold animate-pulse">
                             <ShieldAlert className="h-3.5 w-3.5 mr-1" />
                             ไฟล์ไม่ปลอดภัย

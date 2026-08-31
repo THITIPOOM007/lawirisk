@@ -145,8 +145,11 @@ export interface IntakeAttachment {
   mime_type: string;
   sha256: string;
   storage_path: string;
+  upload_state?: 'RESERVED' | 'UPLOADING' | 'STORED' | 'CANCELLED' | 'FAILED';
   malware_scan_status: 'PENDING' | 'CLEAN' | 'NOT_SCANNED' | 'INFECTED' | 'UNAVAILABLE' | 'ERROR';
   malware_scan_details?: string;
+  file_validation_details?: Record<string, unknown>;
+  file_validated_at?: string;
 }
 
 export interface IntakeParticipant {

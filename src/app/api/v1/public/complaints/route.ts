@@ -307,8 +307,7 @@ export async function POST(request: NextRequest) {
         }
       }
 
-      let uploadedStoragePath: string | null = null;
-      let uploadedBucketName: string | null = null;
+      let complaintAuditPersisted = false;
       if (attachedFile && fileBuffer) {
         const attachmentId = crypto.randomUUID();
         const bucketName = process.env.PRIVATE_EVIDENCE_BUCKET || 'evidence-vault';
@@ -327,19 +326,16 @@ export async function POST(request: NextRequest) {
             { status: 503 },
           );
         } else {
-          uploadedStoragePath = storagePath;
-          uploadedBucketName = bucketName;
-          const { error: attachmentError } = await supabase.from('intake_attachments').insert({
-            id: attachmentId,
-            envelope_id: envelopeId,
-            filename: attachedFile.name,
-            file_size: attachedFile.size,
-            mime_type: fileMime,
-            sha256: fileSha256,
-            storage_path: storagePath,
-            malware_scan_status: UNSCANNED_EVIDENCE_STATUS,
-            file_validation_details: { mode: 'FILE_VALIDATION_ONLY', signature_verified: true, sha256_source: 'SERVER_COMPUTED' },
-            file_validated_at: new Date().toISOString(),
+          const { error: attachmentError } = await supabase.rpc('finalize_public_complaint_attachment', {
+            p_attachment_id: attachmentId,
+            p_envelope_id: envelopeId,
+            p_bucket_name: bucketName,
+            p_filename: attachedFile.name,
+            p_file_size: attachedFile.size,
+            p_mime_type: fileMime,
+            p_sha256: fileSha256,
+            p_storage_path: storagePath,
+            p_tracking_token: trackingToken,
           });
           if (attachmentError) {
             await supabase.storage.from(bucketName).remove([storagePath]);
@@ -349,28 +345,28 @@ export async function POST(request: NextRequest) {
               { status: 503 },
             );
           }
+          complaintAuditPersisted = true;
         }
       }
 
-      const { error: auditError } = await supabase.from('audit_logs').insert({
-        profile_id: null,
-        action: 'PUBLIC_COMPLAINT_RECEIVED',
-        details: {
-          envelope_id: envelopeId,
-          tracking_token: trackingToken,
-          has_attachment: Boolean(attachedFile),
-          file_validation_status: attachedFile ? 'VALIDATED' : 'NOT_APPLICABLE',
-        },
-      });
-      if (auditError) {
-        if (uploadedStoragePath && uploadedBucketName) {
-          await supabase.storage.from(uploadedBucketName).remove([uploadedStoragePath]);
+      if (!complaintAuditPersisted) {
+        const { error: auditError } = await supabase.from('audit_logs').insert({
+          profile_id: null,
+          action: 'PUBLIC_COMPLAINT_RECEIVED',
+          details: {
+            envelope_id: envelopeId,
+            tracking_token: trackingToken,
+            has_attachment: false,
+            file_validation_status: 'NOT_APPLICABLE',
+          },
+        });
+        if (auditError) {
+          await supabase.from('intake_envelopes').delete().eq('id', envelopeId);
+          return NextResponse.json(
+            { success: false, error: { code: 'AUDIT_WRITE_FAILED', message: 'บันทึกเหตุการณ์ตรวจสอบไม่สำเร็จ จึงยกเลิกการรับเรื่องอย่างปลอดภัย' } },
+            { status: 503 },
+          );
         }
-        await supabase.from('intake_envelopes').delete().eq('id', envelopeId);
-        return NextResponse.json(
-          { success: false, error: { code: 'AUDIT_WRITE_FAILED', message: 'บันทึกเหตุการณ์ตรวจสอบไม่สำเร็จ จึงยกเลิกการรับเรื่องอย่างปลอดภัย' } },
-          { status: 503 },
-        );
       }
     }
 

@@ -50,7 +50,7 @@ export async function GET(request: NextRequest, context: { params: Promise<{ id:
     supabase.from('intake_envelopes').select('*').eq('id', id).maybeSingle(),
     supabase.from('intake_messages').select('*').eq('envelope_id', id).order('created_at').limit(1).maybeSingle(),
     supabase.from('intake_participants').select('*').eq('envelope_id', id).order('created_at'),
-    supabase.from('intake_attachments').select('id,envelope_id,filename,file_size,mime_type,sha256,malware_scan_status,malware_scan_details,created_at').eq('envelope_id', id).order('created_at'),
+    supabase.from('intake_attachments').select('id,envelope_id,filename,file_size,mime_type,sha256,upload_state,malware_scan_status,malware_scan_details,file_validation_details,file_validated_at,created_at').eq('envelope_id', id).order('created_at'),
     supabase.from('intake_duplicate_candidates').select('*').eq('source_envelope_id', id).order('duplicate_score', { ascending: false }),
     supabase.from('intake_source_checks').select('id,envelope_id,case_id,source_key,source_label,source_url,query_text,query_kind,source_category,routing_reason,status,classification,result_count,summary,results,checked_at,created_at,updated_at').eq('envelope_id', id).order('created_at', { ascending: false }),
     supabase.from('cases').select('*').order('created_at', { ascending: false }).limit(200),

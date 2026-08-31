@@ -16,6 +16,7 @@ const notificationReadMigration = fs.readFileSync(path.join(process.cwd(), 'supa
 const evidenceScreeningMigration = fs.readFileSync(path.join(process.cwd(), 'supabase/migrations/202608300001_evidence_screening_and_prediction_reports.sql'), 'utf8');
 const syntheticDemoMigration = fs.readFileSync(path.join(process.cwd(), 'supabase/migrations/202608300002_synthetic_demo_cases.sql'), 'utf8');
 const complaintEnrichmentMigration = fs.readFileSync(path.join(process.cwd(), 'supabase/migrations/202608310001_public_complaint_enrichment.sql'), 'utf8');
+const publicAttachmentFinalizationMigration = fs.readFileSync(path.join(process.cwd(), 'supabase/migrations/202608310002_public_attachment_finalization.sql'), 'utf8');
 
 describe('production migration invariants', () => {
   it('makes evidence originals and audit history immutable', () => {
@@ -147,5 +148,18 @@ describe('production migration invariants', () => {
     expect(complaintEnrichmentMigration).toContain('public.can_access_intake(envelope_id)');
     expect(complaintEnrichmentMigration).toContain('link_intake_source_checks_after_triage');
     expect(complaintEnrichmentMigration).toContain('REVOKE ALL ON public.intake_source_checks FROM PUBLIC, anon, authenticated');
+  });
+
+  it('finalizes validated public attachments atomically without inventing a malware verdict', () => {
+    expect(publicAttachmentFinalizationMigration).toContain('CREATE OR REPLACE FUNCTION public.finalize_public_complaint_attachment');
+    expect(publicAttachmentFinalizationMigration).toContain("auth.role() <> 'service_role'");
+    expect(publicAttachmentFinalizationMigration).toContain('FROM storage.objects object');
+    expect(publicAttachmentFinalizationMigration).toContain("p_storage_path NOT LIKE expected_prefix || '%'");
+    expect(publicAttachmentFinalizationMigration).toContain("p_sha256 !~ '^[0-9a-f]{64}$'");
+    expect(publicAttachmentFinalizationMigration).toContain("p_sha256, p_storage_path, 'STORED', 'NOT_SCANNED'");
+    expect(publicAttachmentFinalizationMigration).toContain("attachment.file_validation_details->>'signature_verified' = 'true'");
+    expect(publicAttachmentFinalizationMigration).toContain('PUBLIC_ATTACHMENT_UPLOAD_STATE_RECOVERED');
+    expect(publicAttachmentFinalizationMigration).toContain('REVOKE ALL ON FUNCTION public.finalize_public_complaint_attachment');
+    expect(publicAttachmentFinalizationMigration).not.toContain("SET malware_scan_status = 'CLEAN'");
   });
 });
