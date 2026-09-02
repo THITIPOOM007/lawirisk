@@ -100,6 +100,10 @@ export default function SourcesPage() {
 
   const checkCompanion = useCallback(async () => {
     setCompanionState('CHECKING');
+    if (process.env.NEXT_PUBLIC_DEMO_MODE === 'true') {
+      setCompanionState('MISSING');
+      return;
+    }
     const response = await fetch(LOCAL_RECON_HEALTH_URL, {
       cache: 'no-store',
       signal: AbortSignal.timeout(3_500),
@@ -284,10 +288,17 @@ export default function SourcesPage() {
           </div>
           <div className="flex shrink-0 flex-wrap gap-2">
             <button type="button" onClick={() => void checkCompanion()} disabled={companionState === 'CHECKING'} className="secondary-action inline-flex min-h-10 items-center justify-center gap-2 rounded-xl border border-white/[0.08] px-4 text-xs font-semibold disabled:opacity-50"><RefreshCw className={`h-4 w-4 ${companionState === 'CHECKING' ? 'animate-spin' : ''}`} />ตรวจอีกครั้ง</button>
-            {companionState !== 'READY' && <a href="/recon/install.ps1" download="LAW-i-RISK-Recon-Installer.ps1" className="primary-action inline-flex min-h-10 items-center justify-center gap-2 rounded-xl px-4 text-xs font-bold"><Download className="h-4 w-4" />ดาวน์โหลดตัวติดตั้งเครื่องนี้</a>}
+            {companionState !== 'READY' && <a href="/recon/install.cmd" download="LAW-i-RISK-Recon-Setup.cmd" className="primary-action inline-flex min-h-10 items-center justify-center gap-2 rounded-xl px-4 text-xs font-bold"><Download className="h-4 w-4" />ดาวน์โหลดตัวติดตั้ง 1 คลิก</a>}
           </div>
         </div>
-        {companionState === 'MISSING' && <p className="mt-3 rounded-xl border border-amber-300/15 bg-slate-950/30 p-3 text-[10px] leading-5 text-amber-100/80">หลังดาวน์โหลด ให้คลิกขวาไฟล์แล้วเลือก Run with PowerShell (ต้องมี Node.js 20 LTS) ตัวติดตั้งจะลง Chromium และลงทะเบียน <code>lawirisk-recon://</code> ให้ Windows user ปัจจุบัน จากนั้นกลับมาหน้านี้และกด “ตรวจอีกครั้ง”</p>}
+        {companionState === 'MISSING' && (
+          <div className="mt-4 grid gap-2 rounded-2xl border border-amber-300/15 bg-slate-950/35 p-4 text-[10px] leading-5 text-amber-100/85 sm:grid-cols-3">
+            <p><span className="mr-2 inline-grid h-5 w-5 place-items-center rounded-full bg-amber-300/15 font-mono font-black text-amber-200">1</span>ดาวน์โหลดไฟล์ <code>.cmd</code></p>
+            <p><span className="mr-2 inline-grid h-5 w-5 place-items-center rounded-full bg-amber-300/15 font-mono font-black text-amber-200">2</span>ดับเบิลคลิกเพื่อติดตั้ง Chromium และ protocol สำหรับ Windows user นี้</p>
+            <p><span className="mr-2 inline-grid h-5 w-5 place-items-center rounded-full bg-amber-300/15 font-mono font-black text-amber-200">3</span>กลับมาหน้านี้แล้วกด “ตรวจอีกครั้ง”</p>
+            <p className="sm:col-span-3 text-slate-500">ต้องมี Node.js 20 หรือใหม่กว่า · หากต้องการใช้ PowerShell โดยตรง <a href="/recon/install.ps1" download="LAW-i-RISK-Recon-Installer.ps1" className="font-semibold text-cyan-300 underline decoration-cyan-300/30 underline-offset-4">ดาวน์โหลดสคริปต์ขั้นสูง</a> ซึ่งจะแสดงตำแหน่ง install.log เมื่อเกิดข้อผิดพลาด</p>
+          </div>
+        )}
       </section>
 
       <section className="rounded-[26px] border border-sky-300/15 bg-[linear-gradient(120deg,rgba(14,165,233,0.08),rgba(15,23,42,0.45))] p-5 sm:p-6" aria-label="คำอธิบายความพร้อมของแหล่งข้อมูล">

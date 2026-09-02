@@ -20,6 +20,8 @@
     "staging:users:plan": "node --env-file-if-exists=.env.staging.local scripts/provision-staging-users.mjs",
     "staging:users:apply": "node --env-file-if-exists=.env.staging.local scripts/provision-staging-users.mjs --apply",
     "staging:anonymous:verify": "node --env-file-if-exists=.env.staging.local scripts/verify-staging-anonymous.mjs",
+    "staging:satisfaction:verify": "node --env-file-if-exists=.env.staging.local scripts/verify-staging-satisfaction.mjs",
+    "staging:satisfaction:staff:verify": "node --env-file-if-exists=.env.staging.local scripts/verify-staging-satisfaction-staff.mjs",
     "recon:install": "C:\\Windows\\System32\\WindowsPowerShell\\v1.0\\powershell.exe -NoProfile -ExecutionPolicy Bypass -File scripts/recon/install-protocol.ps1",
     "recon:package": "node scripts/build-recon-distribution.mjs",
     "recon:bridge": "node scripts/recon/local-bridge.mjs",

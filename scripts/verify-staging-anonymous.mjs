@@ -47,9 +47,45 @@ async function main() {
   const publicReadDenied = !publicObjectResponse.ok;
   await publicObjectResponse.body?.cancel();
 
+  const satisfactionRowsResponse = await fetch(`${baseUrl}/rest/v1/satisfaction_responses?select=id&limit=1`, {
+    headers,
+    cache: 'no-store',
+  });
+  const satisfactionRowsDenied = !satisfactionRowsResponse.ok;
+  await satisfactionRowsResponse.body?.cancel();
+
+  const directSatisfactionWriteResponse = await fetch(`${baseUrl}/rest/v1/satisfaction_responses`, {
+    method: 'POST',
+    headers: { ...headers, 'Content-Type': 'application/json', Prefer: 'return=minimal' },
+    body: JSON.stringify({
+      audience: 'PUBLIC',
+      response_context: 'PUBLIC_SEARCH',
+      interaction_id: crypto.randomUUID(),
+      convenience_rating: 5,
+      speed_rating: 5,
+      accuracy_rating: 5,
+      overall_rating: 5,
+    }),
+  });
+  const directSatisfactionWriteDenied = !directSatisfactionWriteResponse.ok;
+  await directSatisfactionWriteResponse.body?.cancel();
+
+  const satisfactionSummaryResponse = await fetch(`${baseUrl}/rest/v1/rpc/get_satisfaction_summary`, {
+    method: 'POST',
+    headers: { ...headers, 'Content-Type': 'application/json' },
+    body: '{}',
+  });
+  const satisfactionSummaryDenied = !satisfactionSummaryResponse.ok;
+  await satisfactionSummaryResponse.body?.cancel();
+
   console.log(`${casesHidden ? 'PASS' : 'FAIL'}  anonymous case rows are hidden by RLS (HTTP ${casesResponse.status})`);
   console.log(`${publicReadDenied ? 'PASS' : 'FAIL'}  evidence-vault does not allow anonymous public-object reads (HTTP ${publicObjectResponse.status})`);
-  if (!casesHidden || !publicReadDenied) process.exitCode = 1;
+  console.log(`${satisfactionRowsDenied ? 'PASS' : 'FAIL'}  raw satisfaction rows deny anonymous reads (HTTP ${satisfactionRowsResponse.status})`);
+  console.log(`${directSatisfactionWriteDenied ? 'PASS' : 'FAIL'}  satisfaction writes require the application API (HTTP ${directSatisfactionWriteResponse.status})`);
+  console.log(`${satisfactionSummaryDenied ? 'PASS' : 'FAIL'}  satisfaction summary RPC denies anonymous access (HTTP ${satisfactionSummaryResponse.status})`);
+  if (!casesHidden || !publicReadDenied || !satisfactionRowsDenied || !directSatisfactionWriteDenied || !satisfactionSummaryDenied) {
+    process.exitCode = 1;
+  }
 }
 
 main().catch((error) => {

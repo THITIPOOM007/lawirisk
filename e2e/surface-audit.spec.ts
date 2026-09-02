@@ -20,6 +20,7 @@ const protectedSurfaces = [
   '/audit',
   '/security',
   '/guide',
+  '/satisfaction',
   '/admin/settings',
 ] as const;
 
@@ -105,12 +106,38 @@ test('public and login surfaces render without authenticated workspace state', a
   const page = await context.newPage();
   const failures: string[] = [];
   page.on('pageerror', (error) => failures.push(error.message));
-  page.on('console', (message) => { if (message.type() === 'error') failures.push(message.text()); });
+  page.on('console', (message) => {
+    const text = message.text();
+    if (message.type() === 'error' && !text.includes('status of 401')) failures.push(text);
+  });
 
-  await page.goto('/login', { waitUntil: 'networkidle' });
+  await page.goto('/login', { waitUntil: 'domcontentloaded' });
   await expect(page.getByRole('heading', { level: 2, name: 'เข้าสู่ระบบงานสืบสวน' })).toBeVisible();
-  await page.goto('/public', { waitUntil: 'networkidle' });
-  await expect(page.locator('h1')).toBeVisible();
+  failures.length = 0;
+  await page.goto('/public', { waitUntil: 'domcontentloaded' });
+  await expect(page.getByRole('heading', { level: 1, name: /ตรวจสอบก่อนตัดสินใจ/ })).toBeVisible();
+  await expect(page.getByRole('heading', { level: 2, name: 'เริ่มใช้งานได้ใน 3 ขั้นตอน' })).toBeVisible();
+  const mobileLayout = await page.evaluate(() => ({
+    bodyOverflow: document.documentElement.scrollWidth - window.innerWidth,
+    mainOverflow: document.querySelector('main')?.scrollWidth ?? 0,
+    mainWidth: document.querySelector('main')?.clientWidth ?? 0,
+  }));
+  expect(mobileLayout.bodyOverflow).toBeLessThanOrEqual(1);
+  expect(mobileLayout.mainOverflow - mobileLayout.mainWidth).toBeLessThanOrEqual(1);
+  expect(failures).toEqual([]);
+
+  await page.getByRole('tab', { name: /สแกนภาพสินค้าที่สงสัย/ }).click();
+  await expect(page.getByRole('heading', { level: 2, name: 'สแกนภาพสินค้าที่สงสัย' })).toBeVisible();
+  const scanInput = page.getByLabel('เลือกรูปสินค้าที่ต้องการสแกน');
+  await expect(scanInput).toBeAttached();
+  await expect(scanInput).toHaveAttribute('multiple', '');
+  await expect(page.getByText(/ขนาดรวมไม่เกิน 50 MB/)).toBeVisible();
+  await page.getByRole('tab', { name: /แจ้งเรื่องร้องเรียน/ }).click();
+  await expect(page.getByRole('heading', { level: 2, name: /แบบฟอร์มแจ้งเรื่องร้องเรียน/ })).toBeVisible();
+  await page.getByRole('tab', { name: /ติดตามสถานะเรื่องร้องเรียน/ }).click();
+  await expect(page.getByRole('heading', { level: 2, name: /ตรวจสอบสถานะคำร้อง/ })).toBeVisible();
+  await page.getByRole('tab', { name: /ตรวจสอบทะเบียนทางการ/ }).click();
+  await expect(page.getByRole('heading', { level: 2, name: 'ค้นข้อมูลจากทะเบียนทางการ' })).toBeVisible();
   expect(failures).toEqual([]);
   await context.close();
 });

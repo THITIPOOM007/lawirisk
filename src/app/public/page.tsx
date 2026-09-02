@@ -17,7 +17,18 @@ import {
   Paperclip,
   Upload,
   X,
+  ArrowRight,
+  BadgeCheck,
+  Database,
+  Fingerprint,
+  MousePointerClick,
+  Radio,
+  ScanLine,
+  Camera,
+  Waypoints,
 } from 'lucide-react';
+import SatisfactionSurvey from '@/components/SatisfactionSurvey';
+import PublicProductScanner from '@/components/PublicProductScanner';
 
 interface SearchResultItem {
   id: string;
@@ -45,8 +56,66 @@ interface TrackingResult {
 
 type SearchCategory = 'ALL' | 'HEALTH_PRODUCTS' | 'HEALTH_SERVICES' | 'FRAUD_ALERTS' | 'COMPANIES' | 'LICENSES';
 
+const publicServices = [
+  {
+    id: 'SEARCH' as const,
+    label: 'ตรวจสอบข้อมูล',
+    fullLabel: 'ตรวจสอบทะเบียนทางการ',
+    description: 'ค้นผลิตภัณฑ์ คลินิก และใบอนุญาตจากแหล่งข้อมูลต้นทาง',
+    icon: Search,
+  },
+  {
+    id: 'SCAN' as const,
+    label: 'สแกนสินค้า',
+    fullLabel: 'สแกนภาพสินค้าที่สงสัย',
+    description: 'อ่านฉลาก จุดผิดสังเกต และข้อมูลที่ควรนำไปตรวจสอบต่อ',
+    icon: ScanLine,
+  },
+  {
+    id: 'COMPLAINT' as const,
+    label: 'แจ้งเบาะแส',
+    fullLabel: 'แจ้งเรื่องร้องเรียน / เบาะแส',
+    description: 'ส่งรายละเอียดและหลักฐานเข้าสู่กระบวนการตรวจสอบอย่างปลอดภัย',
+    icon: FileText,
+  },
+  {
+    id: 'TRACK' as const,
+    label: 'ติดตามเรื่อง',
+    fullLabel: 'ติดตามสถานะเรื่องร้องเรียน',
+    description: 'ใช้รหัสที่ได้รับเพื่อตรวจความคืบหน้าได้ทุกเวลา',
+    icon: Compass,
+  },
+];
+
+const quickStartSteps = [
+  {
+    step: '01',
+    title: 'เลือกบริการที่ต้องการ',
+    description: 'ค้นทะเบียน สแกนภาพ แจ้งเบาะแส หรือติดตามเรื่องได้จากหน้าเดียว',
+    icon: MousePointerClick,
+    color: 'text-cyan-200',
+    surface: 'border-cyan-300/20 bg-cyan-300/[0.07]',
+  },
+  {
+    step: '02',
+    title: 'กรอกข้อมูลเท่าที่มี',
+    description: 'ใช้ชื่อ เลขทะเบียน รายละเอียดเหตุการณ์ หรือรหัสติดตาม',
+    icon: Fingerprint,
+    color: 'text-violet-200',
+    surface: 'border-violet-300/20 bg-violet-300/[0.07]',
+  },
+  {
+    step: '03',
+    title: 'รับผลที่ตรวจสอบต่อได้',
+    description: 'เปิดแหล่งข้อมูลต้นฉบับ หรือเก็บรหัสไว้ติดตามความคืบหน้า',
+    icon: BadgeCheck,
+    color: 'text-amber-200',
+    surface: 'border-amber-300/20 bg-amber-300/[0.07]',
+  },
+];
+
 export default function PublicPortalPage() {
-  const [activeTab, setActiveTab] = useState<'SEARCH' | 'COMPLAINT' | 'TRACK'>('SEARCH');
+  const [activeTab, setActiveTab] = useState<'SEARCH' | 'SCAN' | 'COMPLAINT' | 'TRACK'>('SEARCH');
 
   // Search State
   const [searchQuery, setSearchQuery] = useState('');
@@ -55,6 +124,7 @@ export default function PublicPortalPage() {
   const [searchError, setSearchError] = useState('');
   const [searchResults, setSearchResults] = useState<SearchResultItem[]>([]);
   const [aiSummary, setAiSummary] = useState('');
+  const [searchSurveyId, setSearchSurveyId] = useState('');
 
   // Complaint Form State
   const [topic, setTopic] = useState('');
@@ -80,6 +150,7 @@ export default function PublicPortalPage() {
   const [complaintValidationStatus, setComplaintValidationStatus] = useState<string | null>(null);
   const [complaintPreliminarySearch, setComplaintPreliminarySearch] = useState<{ status: string; checkCount: number; foundCount: number; note: string } | null>(null);
   const [complaintError, setComplaintError] = useState('');
+  const [complaintSurveyId, setComplaintSurveyId] = useState('');
 
   // Tracking State
   const [trackTokenInput, setTrackTokenInput] = useState('');
@@ -108,6 +179,7 @@ export default function PublicPortalPage() {
       }
       setSearchResults(Array.isArray(body.data?.results) ? body.data.results : []);
       setAiSummary(typeof body.data?.aiSummary === 'string' ? body.data.aiSummary : '');
+      setSearchSurveyId(crypto.randomUUID());
     } catch (err: unknown) {
       setSearchError(err instanceof Error ? err.message : 'ค้นหาข้อมูลไม่สำเร็จ');
     } finally {
@@ -172,6 +244,7 @@ export default function PublicPortalPage() {
       const body = await res.json();
       if (!res.ok) throw new Error(typeof body.error === 'string' ? body.error : body.error?.message || 'บันทึกคำร้องไม่สำเร็จ');
       setComplaintSuccessToken(body.data.trackingToken);
+      setComplaintSurveyId(crypto.randomUUID());
       setComplaintValidationStatus(typeof body.data.attachmentValidationStatus === 'string' ? body.data.attachmentValidationStatus : null);
       setComplaintPreliminarySearch(body.data.preliminarySearch && typeof body.data.preliminarySearch === 'object' ? body.data.preliminarySearch : null);
       setTopic('');
@@ -209,100 +282,186 @@ export default function PublicPortalPage() {
     }
   };
 
+  const activateService = (service: 'SEARCH' | 'SCAN' | 'COMPLAINT' | 'TRACK', shouldScroll = false) => {
+    setActiveTab(service);
+    if (shouldScroll) {
+      window.requestAnimationFrame(() => {
+        document.getElementById('public-service-workspace')?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+      });
+    }
+  };
+
   return (
-    <div className="min-h-screen bg-slate-950 text-slate-100 font-sans selection:bg-teal-400/30">
+    <div className="relative min-h-screen overflow-hidden bg-[#020817] font-sans text-slate-100 selection:bg-cyan-300/30">
+      <div className="pointer-events-none fixed inset-0 z-0" aria-hidden="true">
+        <div className="absolute -left-36 top-16 h-[430px] w-[430px] rounded-full bg-cyan-500/[0.12] blur-[110px]" />
+        <div className="absolute -right-40 top-[28rem] h-[520px] w-[520px] rounded-full bg-violet-500/[0.11] blur-[130px]" />
+        <div className="absolute bottom-[-12rem] left-1/3 h-[480px] w-[480px] rounded-full bg-amber-400/[0.07] blur-[120px]" />
+        <div className="absolute inset-0 opacity-[0.16] [background-image:linear-gradient(rgba(103,232,249,0.12)_1px,transparent_1px),linear-gradient(90deg,rgba(103,232,249,0.12)_1px,transparent_1px)] [background-size:64px_64px] [mask-image:linear-gradient(to_bottom,black,transparent_68%)]" />
+      </div>
+
       {/* Top Navbar */}
-      <header className="border-b border-white/[0.08] bg-slate-950/80 backdrop-blur-xl sticky top-0 z-40">
-        <div className="max-w-6xl mx-auto px-4 sm:px-6 h-16 flex items-center justify-between">
+      <header className="sticky top-0 z-40 border-b border-white/[0.08] bg-[#020817]/75 backdrop-blur-2xl">
+        <div className="mx-auto flex h-16 max-w-6xl items-center justify-between px-4 sm:h-[72px] sm:px-6">
           <div className="flex items-center gap-3">
-            <div className="w-9 h-9 rounded-xl bg-gradient-to-tr from-teal-500 to-cyan-400 p-0.5 shadow-[0_0_15px_rgba(45,212,191,0.3)]">
-              <div className="w-full h-full bg-slate-950 rounded-[10px] flex items-center justify-center">
-                <ShieldCheck className="w-5 h-5 text-teal-300" />
+            <div className="relative h-10 w-10 rounded-2xl bg-gradient-to-br from-cyan-300 via-teal-300 to-violet-400 p-px shadow-[0_0_26px_rgba(34,211,238,0.26)]">
+              <div className="flex h-full w-full items-center justify-center rounded-[15px] bg-[#05101f]">
+                <ShieldCheck className="h-5 w-5 text-cyan-200" />
               </div>
+              <span className="absolute -right-0.5 -top-0.5 h-2.5 w-2.5 rounded-full border-2 border-[#020817] bg-emerald-300" />
             </div>
             <div>
-              <span className="text-base font-black tracking-tight text-white">
-                LAWiRISK <span className="text-teal-300 font-medium text-xs ml-1">CITIZEN PORTAL</span>
+              <span className="text-sm font-black tracking-tight text-white sm:text-base">
+                LAWiRISK <span className="ml-1 text-[10px] font-bold tracking-[0.12em] text-cyan-300 sm:text-xs">CITIZEN</span>
               </span>
-              <p className="text-[10px] text-slate-400 -mt-0.5">ศูนย์ตรวจสอบและแจ้งเบาะแสดิจิทัลสาธารณะ</p>
+              <p className="-mt-0.5 hidden text-[10px] text-slate-500 sm:block">บริการตรวจสอบและแจ้งเบาะแสสำหรับประชาชน</p>
             </div>
           </div>
 
           <div className="flex items-center gap-3">
             <Link
               href="/login"
-              className="inline-flex items-center gap-1.5 px-3.5 py-1.5 rounded-xl border border-white/[0.1] bg-white/[0.04] text-xs font-semibold text-slate-300 hover:text-white hover:border-teal-400/40 transition"
+              className="inline-flex min-h-10 items-center gap-2 rounded-xl border border-white/[0.1] bg-white/[0.04] px-3 text-[11px] font-bold text-slate-300 transition hover:border-cyan-300/35 hover:bg-cyan-300/[0.06] hover:text-white focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-cyan-300 sm:px-4 sm:text-xs"
             >
-              <Lock className="w-3.5 h-3.5 text-teal-300" />
-              <span>เข้าสู่ระบบเจ้าหน้าที่ (Staff)</span>
+              <Lock className="h-3.5 w-3.5 text-cyan-300" />
+              <span className="sm:hidden">เจ้าหน้าที่</span>
+              <span className="hidden sm:inline">เข้าสู่ระบบเจ้าหน้าที่</span>
             </Link>
           </div>
         </div>
       </header>
 
       {/* Hero Banner */}
-      <section className="relative overflow-hidden pt-12 pb-8 border-b border-white/[0.05]">
-        <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-96 h-96 bg-teal-500/10 rounded-full blur-3xl pointer-events-none" />
-        <div className="max-w-4xl mx-auto px-4 text-center space-y-4 relative z-10">
-          <div className="inline-flex items-center gap-2 rounded-full border border-teal-300/30 bg-teal-400/10 px-3.5 py-1 text-xs font-bold text-teal-200">
-            <Sparkles className="w-3.5 h-3.5 text-teal-300" />
-            <span>ระบบบริการข้อมูลและรับแจ้งเบาะแสประชาชน (Public Service Portal)</span>
+      <section className="relative z-10 overflow-hidden pb-10 pt-9 sm:pb-12 sm:pt-11 lg:pb-14 lg:pt-12">
+        <div className="mx-auto grid max-w-7xl items-center gap-9 px-4 sm:px-6 lg:grid-cols-[1.12fr_0.88fr] lg:gap-12">
+          <div>
+            <div className="inline-flex items-center gap-2 rounded-full border border-cyan-300/25 bg-cyan-300/[0.08] px-3.5 py-1.5 text-[10px] font-black tracking-[0.12em] text-cyan-100 shadow-[0_0_24px_rgba(34,211,238,0.08)] sm:text-xs">
+              <Radio className="h-3.5 w-3.5 text-emerald-300" />
+              เชื่อมต่อข้อมูลต้นทาง · พร้อมให้บริการ
+            </div>
+            <h1 className="mt-5 text-balance text-[2.15rem] font-black leading-[1.12] tracking-[-0.04em] text-white sm:text-[2.75rem] lg:text-[3.15rem]">
+              ตรวจสอบก่อนตัดสินใจ
+              <span className="mt-1 block bg-gradient-to-r from-cyan-200 via-emerald-200 to-violet-300 bg-clip-text text-transparent">ค้นทะเบียน · สแกนสินค้า</span>
+            </h1>
+            <p className="mt-5 max-w-2xl text-sm leading-7 text-slate-400 sm:text-[15px]">
+              ค้นข้อมูลจากแหล่งทางการหรือถ่ายภาพสินค้าที่สงสัย เพื่ออ่านฉลาก ชี้จุดที่ควรตรวจเพิ่ม แจ้งเบาะแสพร้อมหลักฐาน และติดตามเรื่องได้ในหน้าเดียว
+            </p>
+            <div className="mt-6 flex flex-col gap-3 sm:flex-row">
+              <button
+                type="button"
+                onClick={() => activateService('SEARCH', true)}
+                className="group inline-flex min-h-12 items-center justify-center gap-2 rounded-2xl bg-gradient-to-r from-cyan-300 to-emerald-300 px-6 text-sm font-black text-slate-950 shadow-[0_12px_40px_rgba(34,211,238,0.2)] transition hover:-translate-y-0.5 hover:shadow-[0_16px_48px_rgba(34,211,238,0.3)] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-cyan-200 motion-reduce:transform-none"
+              >
+                ค้นข้อมูลทางการ <ArrowRight className="h-4 w-4 transition group-hover:translate-x-0.5 motion-reduce:transform-none" />
+              </button>
+              <button
+                type="button"
+                onClick={() => activateService('SCAN', true)}
+                className="inline-flex min-h-12 items-center justify-center gap-2 rounded-2xl border border-fuchsia-300/25 bg-fuchsia-300/[0.08] px-5 text-sm font-black text-fuchsia-100 transition hover:-translate-y-0.5 hover:border-fuchsia-200/50 hover:bg-fuchsia-300/[0.13] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-fuchsia-300 motion-reduce:transform-none"
+              >
+                <ScanLine className="h-4 w-4" /> สแกนภาพสินค้า
+              </button>
+              <button
+                type="button"
+                onClick={() => document.getElementById('quick-start')?.scrollIntoView({ behavior: 'smooth', block: 'center' })}
+                className="inline-flex min-h-12 items-center justify-center gap-2 rounded-2xl border border-white/[0.1] bg-white/[0.045] px-5 text-sm font-bold text-slate-200 backdrop-blur-xl transition hover:border-violet-300/30 hover:bg-violet-300/[0.07] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-violet-300"
+              >
+                <Waypoints className="h-4 w-4 text-violet-300" /> วิธีใช้งานอย่างง่าย
+              </button>
+            </div>
+            <div className="mt-6 flex flex-wrap gap-x-5 gap-y-2 text-[11px] font-semibold text-slate-500">
+              <span className="inline-flex items-center gap-1.5"><CheckCircle2 className="h-3.5 w-3.5 text-emerald-300" />ไม่ต้องสมัครบัญชี</span>
+              <span className="inline-flex items-center gap-1.5"><CheckCircle2 className="h-3.5 w-3.5 text-emerald-300" />อ้างอิงแหล่งต้นฉบับ</span>
+              <span className="inline-flex items-center gap-1.5"><CheckCircle2 className="h-3.5 w-3.5 text-emerald-300" />รองรับการแจ้งแบบไม่ออกนาม</span>
+            </div>
           </div>
-          <h1 className="text-3xl sm:text-4xl font-black text-white tracking-tight">
-            ตรวจสอบข้อมูลความปลอดภัยและแจ้งเบาะแสดิจิทัล
-          </h1>
-          <p className="text-sm text-slate-400 max-w-2xl mx-auto leading-relaxed">
-            ค้นทะเบียนผลิตภัณฑ์จาก อย. และตรวจสถานประกอบการเพื่อสุขภาพจาก สบส. พร้อมรายละเอียดสถานะจากต้นทาง
-          </p>
 
-          {/* Navigation Tabs */}
-          <div className="flex justify-center gap-2 pt-4">
-            <button
-              type="button"
-              onClick={() => setActiveTab('SEARCH')}
-              className={`flex items-center gap-2 px-5 py-2.5 rounded-2xl text-xs font-bold transition cursor-pointer ${
-                activeTab === 'SEARCH'
-                  ? 'bg-teal-400 text-slate-950 shadow-[0_0_20px_rgba(45,212,191,0.3)]'
-                  : 'border border-white/[0.08] bg-slate-900/50 text-slate-400 hover:text-white'
-              }`}
-            >
-              <Search className="w-4 h-4" />
-              ตรวจสอบทะเบียนทางการ
-            </button>
-            <button
-              type="button"
-              onClick={() => setActiveTab('COMPLAINT')}
-              className={`flex items-center gap-2 px-5 py-2.5 rounded-2xl text-xs font-bold transition cursor-pointer ${
-                activeTab === 'COMPLAINT'
-                  ? 'bg-teal-400 text-slate-950 shadow-[0_0_20px_rgba(45,212,191,0.3)]'
-                  : 'border border-white/[0.08] bg-slate-900/50 text-slate-400 hover:text-white'
-              }`}
-            >
-              <FileText className="w-4 h-4" />
-              แจ้งเรื่องร้องเรียน / เบาะแส
-            </button>
-            <button
-              type="button"
-              onClick={() => setActiveTab('TRACK')}
-              className={`flex items-center gap-2 px-5 py-2.5 rounded-2xl text-xs font-bold transition cursor-pointer ${
-                activeTab === 'TRACK'
-                  ? 'bg-teal-400 text-slate-950 shadow-[0_0_20px_rgba(45,212,191,0.3)]'
-                  : 'border border-white/[0.08] bg-slate-900/50 text-slate-400 hover:text-white'
-              }`}
-            >
-              <Compass className="w-4 h-4" />
-              ติดตามสถานะเรื่องร้องเรียน
-            </button>
+          <div className="relative mx-auto w-full max-w-[500px]" aria-label="ภาพรวมบริการประชาชน">
+            <div className="absolute -inset-6 rounded-[40px] bg-gradient-to-br from-cyan-300/15 via-violet-400/10 to-amber-300/10 blur-3xl" />
+            <div className="relative overflow-hidden rounded-[30px] border border-white/[0.12] bg-gradient-to-br from-[#0a1a2e]/95 via-[#081526]/95 to-[#160f31]/90 p-4 shadow-2xl backdrop-blur-2xl sm:p-5">
+              <div className="flex items-center justify-between border-b border-white/[0.07] pb-3">
+                <div className="flex items-center gap-2"><span className="h-2 w-2 rounded-full bg-rose-400/70" /><span className="h-2 w-2 rounded-full bg-amber-300/70" /><span className="h-2 w-2 rounded-full bg-emerald-300/70" /></div>
+                <span className="font-mono text-[9px] font-bold tracking-[0.15em] text-slate-400">SMART PUBLIC CHECK</span>
+              </div>
+              <div className="relative my-4 flex min-h-40 items-center justify-center overflow-hidden rounded-2xl border border-fuchsia-300/15 bg-[radial-gradient(circle_at_center,rgba(217,70,239,0.16),rgba(34,211,238,0.06)_38%,transparent_68%)]">
+                <div className="absolute h-36 w-36 rounded-full border border-cyan-300/10" />
+                <div className="absolute h-24 w-24 rounded-full border border-violet-300/20" />
+                <div className="absolute h-44 w-44 rounded-full border border-dashed border-emerald-300/10 motion-safe:animate-[spin_18s_linear_infinite]" />
+                <div className="relative grid h-16 w-16 place-items-center rounded-3xl border border-cyan-200/30 bg-cyan-300/[0.12] shadow-[0_0_45px_rgba(34,211,238,0.2)]">
+                  <Camera className="h-7 w-7 text-cyan-100" />
+                </div>
+                <span className="absolute left-4 top-4 rounded-full border border-fuchsia-300/25 bg-fuchsia-300/[0.1] px-2.5 py-1 text-[9px] font-bold text-fuchsia-100">IMAGE READY</span>
+                <span className="absolute bottom-4 right-4 rounded-full border border-cyan-300/25 bg-cyan-300/[0.08] px-2.5 py-1 text-[9px] font-bold text-cyan-100">AI ASSISTED</span>
+              </div>
+              <div className="grid grid-cols-4 gap-2">
+                <div className="rounded-2xl border border-cyan-300/15 bg-cyan-300/[0.06] p-3"><Database className="h-4 w-4 text-cyan-300" /><p className="mt-2 text-[10px] font-black text-white">ค้นทะเบียน</p></div>
+                <div className="rounded-2xl border border-fuchsia-300/15 bg-fuchsia-300/[0.06] p-3"><ScanLine className="h-4 w-4 text-fuchsia-300" /><p className="mt-2 text-[10px] font-black text-white">สแกนภาพ</p></div>
+                <div className="rounded-2xl border border-violet-300/15 bg-violet-300/[0.06] p-3"><ShieldCheck className="h-4 w-4 text-violet-300" /><p className="mt-2 text-[10px] font-black text-white">แจ้งเบาะแส</p></div>
+                <div className="rounded-2xl border border-amber-300/15 bg-amber-300/[0.06] p-3"><Compass className="h-4 w-4 text-amber-300" /><p className="mt-2 text-[10px] font-black text-white">ติดตามเรื่อง</p></div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <section id="quick-start" className="relative z-10 pb-5" aria-labelledby="quick-start-heading">
+        <div className="mx-auto max-w-7xl px-4 sm:px-6">
+          <div className="overflow-hidden rounded-[26px] border border-white/[0.09] bg-white/[0.04] p-4 shadow-[0_18px_70px_rgba(0,0,0,0.24)] backdrop-blur-xl sm:p-5">
+            <div className="flex flex-col justify-between gap-3 sm:flex-row sm:items-end">
+              <div><p className="text-[10px] font-black uppercase tracking-[0.2em] text-cyan-300">Quick start</p><h2 id="quick-start-heading" className="mt-1 text-xl font-black text-white sm:text-2xl">เริ่มใช้งานได้ใน 3 ขั้นตอน</h2></div>
+              <p className="max-w-md text-xs leading-5 text-slate-500">ไม่ต้องรู้ชื่อหน่วยงานหรือขั้นตอนราชการ ระบบช่วยพาไปยังบริการที่เหมาะสม</p>
+            </div>
+            <ol className="mt-4 grid gap-3 md:grid-cols-3">
+              {quickStartSteps.map((item, index) => {
+                const StepIcon = item.icon;
+                return (
+                  <li key={item.step} className="relative rounded-2xl border border-white/[0.07] bg-[#061222]/70 p-4">
+                    <div className="flex items-start gap-4">
+                      <span className={`grid h-11 w-11 shrink-0 place-items-center rounded-2xl border ${item.surface} ${item.color}`}><StepIcon className="h-5 w-5" /></span>
+                      <div><span className="font-mono text-[9px] font-black tracking-[0.15em] text-slate-600">STEP {item.step}</span><h3 className="mt-1 text-sm font-black text-white">{item.title}</h3><p className="mt-1.5 text-[11px] leading-5 text-slate-500">{item.description}</p></div>
+                    </div>
+                    {index < quickStartSteps.length - 1 && <ArrowRight className="absolute -right-2.5 top-1/2 z-10 hidden h-5 w-5 -translate-y-1/2 rounded-full bg-[#071525] p-1 text-slate-600 md:block" aria-hidden="true" />}
+                  </li>
+                );
+              })}
+            </ol>
           </div>
         </div>
       </section>
 
       {/* Main Content Area */}
-      <main className="max-w-4xl mx-auto px-4 py-8">
+      <main id="public-service-workspace" className="relative z-10 mx-auto max-w-7xl scroll-mt-24 px-4 py-6 sm:px-6 sm:py-8">
+        <div className="mb-5 grid grid-cols-2 gap-2 rounded-[24px] border border-white/[0.09] bg-[#071525]/90 p-2 shadow-xl backdrop-blur-xl sm:gap-3 sm:p-3 lg:grid-cols-4" role="tablist" aria-label="เลือกบริการประชาชน">
+          {publicServices.map((service) => {
+            const ServiceIcon = service.icon;
+            const isActive = activeTab === service.id;
+            return (
+              <button
+                key={service.id}
+                type="button"
+                role="tab"
+                id={`public-service-tab-${service.id.toLowerCase()}`}
+                aria-label={service.fullLabel}
+                aria-selected={isActive}
+                aria-controls={`public-service-panel-${service.id.toLowerCase()}`}
+                onClick={() => setActiveTab(service.id)}
+                className={`group min-h-[76px] rounded-[18px] border px-2 py-3 text-left transition focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-cyan-300 sm:min-h-[92px] sm:px-4 ${isActive ? 'border-cyan-300/30 bg-gradient-to-br from-cyan-300/[0.14] to-violet-300/[0.08] shadow-[0_8px_30px_rgba(34,211,238,0.09)]' : 'border-transparent text-slate-500 hover:border-white/[0.08] hover:bg-white/[0.035] hover:text-slate-300'}`}
+              >
+                <span className="flex items-center gap-2"><span className={`grid h-8 w-8 shrink-0 place-items-center rounded-xl ${isActive ? 'bg-cyan-300 text-slate-950' : 'bg-white/[0.05] text-slate-500 group-hover:text-slate-300'}`}><ServiceIcon className="h-4 w-4" /></span><span className={`text-[11px] font-black sm:text-xs ${isActive ? 'text-white' : ''}`}>{service.label}</span></span>
+                <span className="mt-2 hidden text-[10px] leading-4 text-slate-500 sm:block">{service.description}</span>
+              </button>
+            );
+          })}
+        </div>
+
         {/* TAB 1: OPEN DATA SEARCH */}
         {activeTab === 'SEARCH' && (
-          <div className="space-y-6">
-            <form onSubmit={handleSearch} className="hud-panel rounded-3xl p-6 sm:p-8 space-y-4 border border-white/[0.08]">
+          <div id="public-service-panel-search" role="tabpanel" aria-labelledby="public-service-tab-search" className="space-y-6">
+            <form onSubmit={handleSearch} className="hud-panel space-y-5 rounded-[28px] border border-cyan-300/12 p-5 shadow-[0_20px_70px_rgba(0,0,0,0.22)] sm:p-8">
+              <div className="flex items-start gap-3 border-b border-white/[0.07] pb-5">
+                <span className="grid h-11 w-11 shrink-0 place-items-center rounded-2xl border border-cyan-300/20 bg-cyan-300/[0.08] text-cyan-200"><Search className="h-5 w-5" /></span>
+                <div><p className="text-[9px] font-black uppercase tracking-[0.18em] text-cyan-300">Official registry search</p><h2 className="mt-1 text-lg font-black text-white sm:text-xl">ค้นข้อมูลจากทะเบียนทางการ</h2><p className="mt-1 text-[11px] leading-5 text-slate-500">กรอกอย่างใดอย่างหนึ่ง เช่น ชื่อผลิตภัณฑ์ เลข อย. ชื่อคลินิก ร้านนวด หรือสปา</p></div>
+              </div>
               <div className="flex flex-col sm:flex-row gap-3">
                 <div className="relative flex-1">
                   <Search className="absolute left-4 top-3.5 h-4 w-4 text-slate-500" />
@@ -312,13 +471,14 @@ export default function PublicPortalPage() {
                     value={searchQuery}
                     onChange={(e) => setSearchQuery(e.target.value)}
                     placeholder="เลข อย./ชื่อผลิตภัณฑ์ หรือชื่อคลินิก/ร้านนวด/สปา..."
-                    className="w-full pl-10 pr-4 py-3 bg-slate-950 border border-white/[0.1] rounded-2xl text-sm text-white placeholder:text-slate-600 focus:outline-none focus:border-teal-400"
+                    className="min-h-12 w-full rounded-2xl border border-white/[0.1] bg-slate-950/80 py-3 pl-10 pr-4 text-sm text-white placeholder:text-slate-600 focus:border-cyan-300 focus:outline-none focus:ring-2 focus:ring-cyan-300/10"
                   />
                 </div>
                 <select
                   value={category}
                   onChange={(e) => setCategory(e.target.value as SearchCategory)}
-                  className="bg-slate-950 border border-white/[0.1] rounded-2xl px-4 py-3 text-xs text-white"
+                  aria-label="เลือกประเภทข้อมูลที่ต้องการค้นหา"
+                  className="min-h-12 rounded-2xl border border-white/[0.1] bg-slate-950/80 px-4 py-3 text-xs text-white focus:border-cyan-300 focus:outline-none"
                 >
                   <option value="ALL">เลือกแหล่งให้อัตโนมัติ</option>
                   <option value="HEALTH_PRODUCTS">ผลิตภัณฑ์สุขภาพ — อย.</option>
@@ -330,12 +490,14 @@ export default function PublicPortalPage() {
                 <button
                   type="submit"
                   disabled={isSearching}
-                  className="primary-action px-6 py-3 rounded-2xl text-xs font-bold shadow-md cursor-pointer flex items-center justify-center gap-2 shrink-0"
+                  className="primary-action flex min-h-12 shrink-0 cursor-pointer items-center justify-center gap-2 rounded-2xl px-6 py-3 text-xs font-black shadow-md focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-cyan-300"
                 >
                   {isSearching ? <Loader2 className="w-4 h-4 animate-spin" /> : <Search className="w-4 h-4" />}
                   ค้นหาข้อมูล
                 </button>
               </div>
+
+              <div className="flex flex-wrap gap-2 text-[10px] text-slate-500"><span className="font-bold text-slate-400">ตัวอย่างคำค้น:</span><span className="rounded-full border border-white/[0.07] px-2.5 py-1">เลขสารบบอาหาร</span><span className="rounded-full border border-white/[0.07] px-2.5 py-1">ชื่อผลิตภัณฑ์</span><span className="rounded-full border border-white/[0.07] px-2.5 py-1">ชื่อคลินิกหรือสถานประกอบการ</span></div>
 
               {searchError && (
                 <div className="p-3 bg-rose-950/40 border border-rose-500/30 rounded-xl text-xs text-rose-300">
@@ -434,13 +596,34 @@ export default function PublicPortalPage() {
                 ))}
               </div>
             )}
+            {searchSurveyId && (
+              <SatisfactionSurvey
+                key={searchSurveyId}
+                audience="PUBLIC"
+                context="PUBLIC_SEARCH"
+                interactionId={searchSurveyId}
+              />
+            )}
           </div>
         )}
 
-        {/* TAB 2: CITIZEN COMPLAINT FORM */}
+        {/* TAB 2: PRODUCT IMAGE SCANNER */}
+        {activeTab === 'SCAN' && (
+          <PublicProductScanner
+            onSearch={(query) => {
+              setSearchQuery(query);
+              setCategory('HEALTH_PRODUCTS');
+              setActiveTab('SEARCH');
+            }}
+            onComplaint={() => setActiveTab('COMPLAINT')}
+          />
+        )}
+
+        {/* TAB 3: CITIZEN COMPLAINT FORM */}
         {activeTab === 'COMPLAINT' && (
-          <div className="space-y-6">
+          <div id="public-service-panel-complaint" role="tabpanel" aria-labelledby="public-service-tab-complaint" className="space-y-6">
             {complaintSuccessToken ? (
+              <>
               <div className="hud-panel rounded-3xl p-8 border border-emerald-500/40 bg-emerald-950/20 text-center space-y-4">
                 <div className="w-16 h-16 bg-emerald-500/20 border border-emerald-400/50 rounded-full flex items-center justify-center mx-auto">
                   <CheckCircle2 className="w-8 h-8 text-emerald-300" />
@@ -480,6 +663,15 @@ export default function PublicPortalPage() {
                   </button>
                 </div>
               </div>
+              {complaintSurveyId && (
+                <SatisfactionSurvey
+                  key={complaintSurveyId}
+                  audience="PUBLIC"
+                  context="PUBLIC_COMPLAINT"
+                  interactionId={complaintSurveyId}
+                />
+              )}
+              </>
             ) : (
               <form onSubmit={handleComplaintSubmit} className="hud-panel rounded-3xl p-6 sm:p-8 space-y-5 border border-white/[0.08]">
                 <div className="border-b border-white/[0.08] pb-4">
@@ -706,9 +898,9 @@ export default function PublicPortalPage() {
           </div>
         )}
 
-        {/* TAB 3: TRACK STATUS */}
+        {/* TAB 4: TRACK STATUS */}
         {activeTab === 'TRACK' && (
-          <div className="space-y-6">
+          <div id="public-service-panel-track" role="tabpanel" aria-labelledby="public-service-tab-track" className="space-y-6">
             <form onSubmit={handleTrack} className="hud-panel rounded-3xl p-6 sm:p-8 space-y-4 border border-white/[0.08]">
               <div className="border-b border-white/[0.08] pb-4">
                 <h2 className="text-lg font-bold text-white flex items-center gap-2">

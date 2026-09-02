@@ -478,7 +478,7 @@ test('checks report prerequisites before generating and hides invalid actions fr
   const generateButton = page.getByRole('button', { name: 'สร้างเอกสารรายงาน' });
   await expect(generateButton).toBeEnabled();
   await generateButton.click();
-  await expect(page.getByText('หลักฐานต้นฉบับที่อยู่ในขอบเขต')).toBeVisible();
+  await expect(page.getByText('หลักฐานต้นฉบับใน snapshot', { exact: false })).toBeVisible();
 
   await page.context().clearCookies();
   await page.context().addCookies([
@@ -498,7 +498,7 @@ test('lets a citizen search, submit an anonymous complaint, and track it', async
   await page.getByRole('button', { name: 'ค้นหาข้อมูล' }).click();
   await expect(page.getByText(/ผลการค้นหาจากฐานข้อมูลทางการ/)).toBeVisible();
 
-  await page.getByRole('button', { name: 'แจ้งเรื่องร้องเรียน / เบาะแส' }).click();
+  await page.getByRole('tab', { name: 'แจ้งเรื่องร้องเรียน / เบาะแส' }).click();
   await page.getByPlaceholder(/ถูกเพจหลอกขายสินค้า/).fill('แจ้งเบาะแสทดสอบระบบสาธารณะ');
   await page.getByPlaceholder(/ระบุข้อความแชต/).fill('ข้อมูลสังเคราะห์สำหรับทดสอบเส้นทางรับเรื่องและติดตามสถานะเท่านั้น');
   await page.getByRole('checkbox', { name: /ไม่ประสงค์ออกนาม/ }).check();
@@ -508,6 +508,76 @@ test('lets a citizen search, submit an anonymous complaint, and track it', async
   const token = (await page.locator('text=/TRK-\\d{4}-[A-F0-9]{12}/').last().textContent())?.trim();
   expect(token).toMatch(/^TRK-\d{4}-[A-F0-9]{12}$/);
   await page.getByRole('button', { name: 'ไปที่หน้าติดตามสถานะ' }).click();
-  await page.getByRole('button', { name: 'ตรวจสอบ' }).click();
+  await page.getByRole('button', { name: 'ตรวจสอบ', exact: true }).click();
   await expect(page.getByText('รอดำเนินการคัดกรอง')).toBeVisible();
+});
+
+test('collects public satisfaction feedback and exposes only protected aggregate statistics', async ({ page }) => {
+  await page.setViewportSize({ width: 390, height: 844 });
+  await page.goto('/public');
+  await page.getByLabel('คำค้นหาข้อมูลสาธารณะ').fill('2A36/61');
+  await page.getByRole('button', { name: 'ค้นหาข้อมูล' }).click();
+  await expect(page.getByRole('heading', { name: 'แบบประเมินเพื่อพัฒนางานประจำ' })).toBeVisible();
+  expect(await page.evaluate(() => document.documentElement.scrollWidth - window.innerWidth)).toBeLessThanOrEqual(1);
+
+  for (const score of [5, 4, 5, 4]) {
+    await page.getByRole('button', { name: new RegExp(`^${score} ดาว`) }).click();
+    await page.getByRole('button', { name: 'คำถามถัดไป' }).click();
+  }
+  await page.getByLabel('ข้อเสนอแนะ').fill('แบบประเมินสั้น กระชับ และใช้งานบนมือถือได้ง่าย');
+  await page.getByRole('button', { name: 'ส่งแบบประเมิน' }).click();
+  await expect(page.getByRole('heading', { name: 'ขอบคุณสำหรับคะแนนและข้อเสนอแนะ' })).toBeVisible();
+
+  const idempotencyResult = await page.evaluate(async () => {
+    const payload = {
+      audience: 'PUBLIC', context: 'PUBLIC_SEARCH', interactionId: crypto.randomUUID(),
+      convenience: 4, speed: 4, accuracy: 4, overall: 4, suggestion: '',
+    };
+    const first = await fetch('/api/v1/satisfaction', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload) });
+    const second = await fetch('/api/v1/satisfaction', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload) });
+    return { firstStatus: first.status, secondStatus: second.status, secondBody: await second.json() };
+  });
+  expect(idempotencyResult).toMatchObject({ firstStatus: 201, secondStatus: 200, secondBody: { data: { duplicate: true } } });
+
+  const anonymousSummary = await page.request.get('/api/v1/satisfaction');
+  expect(anonymousSummary.status()).toBe(401);
+
+  await loginAsInvestigator(page);
+  const protectedSummary = await page.request.get('/api/v1/satisfaction');
+  expect(protectedSummary.status()).toBe(200);
+  await expect(protectedSummary.json()).resolves.toMatchObject({
+    data: {
+      totalResponses: expect.any(Number),
+      satisfactionPercent: expect.any(Number),
+      audiences: { PUBLIC: { totalResponses: expect.any(Number) }, STAFF: { totalResponses: expect.any(Number) } },
+    },
+  });
+  await page.setViewportSize({ width: 820, height: 1180 });
+  await page.goto('/satisfaction');
+  await expect(page.getByRole('heading', { level: 1, name: 'ภาพรวมความพึงพอใจของผู้ใช้งาน' })).toBeVisible();
+  await expect(page.getByText('คะแนนรายมิติ')).toBeVisible();
+  await expect(page.getByText('ประชาชน · หลังค้นหาข้อมูล').first()).toBeVisible();
+  expect(await page.evaluate(() => document.documentElement.scrollWidth - window.innerWidth)).toBeLessThanOrEqual(1);
+});
+
+test('invites staff to rate the tool after two minutes of session use', async ({ page }) => {
+  await loginAsInvestigator(page);
+  await page.evaluate(() => {
+    sessionStorage.setItem('lawirisk-satisfaction-session-started-at', String(Date.now() - 121_000));
+    sessionStorage.removeItem('lawirisk-satisfaction-session-completed');
+  });
+  await page.reload();
+  const evaluationButton = page.getByRole('button', { name: 'เปิดแบบประเมินความพึงพอใจหลังใช้งาน 2 นาที' });
+  await expect(evaluationButton).toBeVisible();
+  await evaluationButton.click();
+  const survey = page.getByRole('dialog', { name: 'แบบประเมินความพึงพอใจสำหรับเจ้าหน้าที่' });
+  await expect(survey).toBeVisible();
+  for (const score of [4, 4, 5, 4]) {
+    await survey.getByRole('button', { name: new RegExp(`^${score} ดาว`) }).click();
+    await survey.getByRole('button', { name: 'คำถามถัดไป' }).click();
+  }
+  await survey.getByLabel('ข้อเสนอแนะ').fill('ควรจำค่าตัวกรองล่าสุดของเจ้าหน้าที่');
+  await survey.getByRole('button', { name: 'ส่งแบบประเมิน' }).click();
+  await expect(survey).toBeHidden();
+  await expect.poll(() => page.evaluate(() => sessionStorage.getItem('lawirisk-satisfaction-session-completed'))).toBe('true');
 });

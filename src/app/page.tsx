@@ -68,16 +68,16 @@ export default function NationalCommandCenter() {
   ];
 
   return (
-    <div className="space-y-6 lg:space-y-8">
+    <div className="space-y-5 sm:space-y-6 lg:space-y-8">
       {/* Live System Broadcast Ticker */}
-      <div className="hud-panel flex flex-wrap items-center justify-between gap-3 rounded-2xl px-4 py-2.5 text-xs">
-        <div className="flex items-center gap-3">
-          <span className="flex h-2 w-2 rounded-full bg-emerald-400 shadow-[0_0_10px_rgba(52,211,153,0.8)] animate-pulse" />
-          <span className="font-mono font-bold tracking-wider text-emerald-300">SYSTEM STATUS: ONLINE</span>
+      <div className="hud-panel flex flex-wrap items-center justify-between gap-2.5 rounded-2xl px-4 py-3 text-xs sm:gap-3 sm:py-2.5">
+        <div className="flex min-w-0 items-center gap-2.5 sm:gap-3">
+          <span className="flex h-2 w-2 shrink-0 rounded-full bg-emerald-400 shadow-[0_0_10px_rgba(52,211,153,0.8)] animate-pulse" />
+          <span className="shrink-0 font-mono text-[10px] font-bold tracking-wider text-emerald-300 sm:text-xs">SYSTEM: ONLINE</span>
           <span className="hidden h-3 w-px bg-slate-700 sm:inline-block" />
-          <span className="text-slate-400">ระบบรักษาความมั่นคงปลอดภัยและตรวจสอบความถูกต้องของหลักฐานดิจิทัลพร้อมใช้งาน</span>
+          <span className="truncate text-[11px] text-slate-400 sm:text-xs">ระบบรักษาความมั่นคงปลอดภัยพร้อมใช้งาน</span>
         </div>
-        <div className="flex items-center gap-2 font-mono text-[11px] text-slate-500">
+        <div className="flex w-full items-center justify-between gap-2 border-t border-white/[0.05] pt-2 font-mono text-[9px] text-slate-500 sm:w-auto sm:justify-start sm:border-0 sm:pt-0 sm:text-[11px]">
           <Activity className="h-3.5 w-3.5 text-teal-400" />
           <span>LATENCY: 18ms</span>
           <span className="text-slate-700">|</span>
@@ -88,7 +88,7 @@ export default function NationalCommandCenter() {
       {loadError && <div role="alert" className="rounded-2xl border border-rose-500/20 bg-rose-500/5 p-4 text-sm text-rose-300">{loadError}</div>}
 
       {/* Main Mission Control Hero */}
-      <section className="glass-panel relative isolate min-h-[380px] overflow-hidden rounded-[32px] p-6 sm:p-8 lg:flex lg:items-center lg:p-12 border border-white/[0.08]">
+      <section className="glass-panel relative isolate overflow-hidden rounded-[28px] border border-white/[0.08] p-5 sm:min-h-[380px] sm:rounded-[32px] sm:p-8 lg:flex lg:items-center lg:p-12">
         <div className="scan-line absolute inset-y-0 left-0 w-px bg-gradient-to-b from-transparent via-teal-200/50 to-transparent" aria-hidden="true" />
         <div className="absolute -left-24 -top-28 h-80 w-80 rounded-full bg-sky-400/[0.06] blur-3xl" aria-hidden="true" />
         <div className="absolute -bottom-40 right-20 h-96 w-96 rounded-full bg-teal-300/[0.07] blur-3xl" aria-hidden="true" />
@@ -113,25 +113,25 @@ export default function NationalCommandCenter() {
         </div>
 
         <div className="relative z-10 max-w-3xl lg:max-w-[60%]">
-          <div className="mb-6 inline-flex items-center gap-2.5 rounded-full border border-teal-300/20 bg-teal-300/[0.08] px-4 py-1.5 text-[10px] font-bold uppercase tracking-[0.2em] text-teal-200 shadow-[0_0_20px_rgba(66,232,206,0.1),inset_0_1px_rgba(255,255,255,0.1)]">
-            <ShieldCheck className="h-4 w-4 text-teal-300" />
+          <div className="mb-5 inline-flex max-w-full items-center gap-2 rounded-full border border-teal-300/20 bg-teal-300/[0.08] px-3 py-1.5 text-[9px] font-bold uppercase tracking-[0.13em] text-teal-200 shadow-[0_0_20px_rgba(66,232,206,0.1),inset_0_1px_rgba(255,255,255,0.1)] sm:mb-6 sm:gap-2.5 sm:px-4 sm:text-[10px] sm:tracking-[0.2em]">
+            <ShieldCheck className="h-4 w-4 shrink-0 text-teal-300" />
             <span>ความสมบูรณ์ของหลักฐานดิจิทัล (Evidence Integrity)</span>
           </div>
-          <h1 className="text-balance text-3xl font-black leading-[1.15] tracking-[-0.04em] text-white sm:text-4xl lg:text-[46px] xl:text-[50px]">
-            ระบบสืบสวนและเชื่อมโยง<br />
+          <h1 className="text-balance text-[28px] font-black leading-[1.2] tracking-[-0.035em] text-white sm:text-4xl sm:leading-[1.15] lg:text-[46px] xl:text-[50px]">
+            ระบบสืบสวนและเชื่อมโยง<br className="hidden sm:block" />
             <span className="bg-gradient-to-r from-teal-200 via-cyan-100 to-amber-200 bg-clip-text text-transparent">พยานหลักฐานดิจิทัลคดีความมั่นคง</span>
           </h1>
-          <p className="mt-5 max-w-2xl text-sm leading-7 text-slate-400 sm:text-[15px]">
+          <p className="mt-4 max-w-2xl text-[13px] leading-6 text-slate-400 sm:mt-5 sm:text-[15px] sm:leading-7">
             ระบบช่วยจัดระเบียบสำนวนคดี ตรวจจับความซ้ำซ้อน สกัดข้อมูลความสัมพันธ์ และตรวจสอบความเชื่อมโยงข้ามพื้นที่ โดยข้อสรุปทุกรายการต้องสามารถตรวจสอบย้อนกลับถึงหลักฐานต้นฉบับได้
           </p>
-          <div className="mt-8 flex flex-wrap gap-3">
-            <Link href="/intake" className="primary-action inline-flex min-h-12 items-center justify-center gap-2 rounded-2xl px-6 text-sm font-bold shadow-[0_0_25px_rgba(66,232,206,0.25)]">
+          <div className="mt-6 flex flex-col gap-2.5 sm:mt-8 sm:flex-row sm:flex-wrap sm:gap-3">
+            <Link href="/intake" className="primary-action inline-flex min-h-12 w-full items-center justify-center gap-2 rounded-2xl px-5 text-sm font-bold shadow-[0_0_25px_rgba(66,232,206,0.25)] sm:w-auto sm:px-6">
               <Zap className="h-4 w-4" /> รายการรับเรื่องและคัดกรอง <ArrowUpRight className="h-4 w-4" />
             </Link>
-            <Link href="/review" className="secondary-action inline-flex min-h-12 items-center justify-center gap-2 rounded-2xl px-6 text-sm font-semibold border border-white/[0.1] hover:border-amber-400/30">
+            <Link href="/review" className="secondary-action inline-flex min-h-12 w-full items-center justify-center gap-2 rounded-2xl border border-white/[0.1] px-5 text-sm font-semibold hover:border-amber-400/30 sm:w-auto sm:px-6">
               <Sparkles className="h-4 w-4 text-amber-300" /> ผลการวิเคราะห์และตรวจทาน
             </Link>
-            <Link href="/matches" className="secondary-action inline-flex min-h-12 items-center justify-center gap-2 rounded-2xl px-5 text-sm font-semibold border border-white/[0.08] hover:border-indigo-400/30">
+            <Link href="/matches" className="secondary-action inline-flex min-h-12 w-full items-center justify-center gap-2 rounded-2xl border border-white/[0.08] px-5 text-sm font-semibold hover:border-indigo-400/30 sm:w-auto">
               <Cpu className="h-4 w-4 text-indigo-300" /> การวิเคราะห์ความเชื่อมโยง
             </Link>
           </div>
@@ -139,29 +139,29 @@ export default function NationalCommandCenter() {
       </section>
 
       {/* Cyber Metric Tiles */}
-      <section aria-label="ตัวชี้วัดสำคัญ" className="grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-4">
+      <section aria-label="ตัวชี้วัดสำคัญ" className="grid grid-cols-2 gap-2.5 sm:gap-3 xl:grid-cols-4">
         {stats.map((stat) => {
           const Icon = stat.icon;
           return (
-            <Link key={stat.label} href={stat.href} className="soft-panel interactive-card group rounded-[24px] p-5 border border-white/[0.06] hover:border-teal-300/30">
-              <div className="flex items-start justify-between gap-4">
-                <span className={`grid h-12 w-12 place-items-center rounded-[16px] border ${stat.surface} ${stat.tone} shadow-[0_0_15px_rgba(0,0,0,0.2)]`}>
+            <Link key={stat.label} href={stat.href} className="soft-panel interactive-card group rounded-[20px] border border-white/[0.06] p-4 hover:border-teal-300/30 sm:rounded-[24px] sm:p-5">
+              <div className="flex items-start justify-between gap-3 sm:gap-4">
+                <span className={`grid h-10 w-10 place-items-center rounded-[14px] border sm:h-12 sm:w-12 sm:rounded-[16px] ${stat.surface} ${stat.tone} shadow-[0_0_15px_rgba(0,0,0,0.2)]`}>
                   <Icon className="h-5 w-5 transition-transform duration-500 group-hover:scale-115" />
                 </span>
                 <ArrowUpRight className="h-4 w-4 text-slate-600 transition-all duration-300 group-hover:translate-x-0.5 group-hover:-translate-y-0.5 group-hover:text-teal-200" />
               </div>
-              <p className="mt-5 text-xs font-semibold text-slate-400 uppercase tracking-wider">{stat.label}</p>
+              <p className="mt-4 min-h-10 text-[11px] font-semibold leading-5 text-slate-400 sm:mt-5 sm:min-h-0 sm:text-xs sm:uppercase sm:tracking-wider">{stat.label}</p>
               <p className="mt-1 flex min-h-9 items-baseline gap-2">
                 {isLoading ? (
                   <span className="skeleton-shimmer h-8 w-20 rounded-lg" />
                 ) : (
                   <>
-                    <span key={stat.value} className="metric-value text-3xl font-extrabold tracking-tight text-white">{stat.value}</span>
+                    <span key={stat.value} className="metric-value text-2xl font-extrabold tracking-tight text-white sm:text-3xl">{stat.value}</span>
                     <span className="text-xs font-medium text-slate-500">{stat.unit}</span>
                   </>
                 )}
               </p>
-              <p className="mt-3 text-[11px] text-slate-500 flex items-center justify-between border-t border-white/[0.04] pt-2">
+              <p className="mt-2 hidden items-center justify-between border-t border-white/[0.04] pt-2 text-[11px] text-slate-500 sm:mt-3 sm:flex">
                 <span>{stat.hint}</span>
                 <span className="font-mono text-[9px] text-teal-400/70 group-hover:text-teal-300">EXPLORE →</span>
               </p>
@@ -173,7 +173,7 @@ export default function NationalCommandCenter() {
       {/* Priority Queue & System Governance */}
       <section className="grid grid-cols-1 gap-6 xl:grid-cols-[minmax(0,1.55fr)_minmax(340px,0.8fr)]">
         <div className="glass-panel overflow-hidden rounded-[28px] border border-white/[0.06]">
-          <div className="flex flex-col gap-3 border-b border-white/[0.07] px-6 py-5 sm:flex-row sm:items-center sm:justify-between">
+          <div className="flex flex-col gap-3 border-b border-white/[0.07] px-5 py-4 sm:flex-row sm:items-center sm:justify-between sm:px-6 sm:py-5">
             <div>
               <div className="flex items-center gap-2">
                 <Clock3 className="h-4 w-4 text-amber-300" />
@@ -188,7 +188,7 @@ export default function NationalCommandCenter() {
           <div className="divide-y divide-white/[0.06]">
             {isLoading ? (
               [0, 1, 2].map((item) => (
-                <div key={item} className="grid gap-4 px-6 py-5 sm:grid-cols-[40px_minmax(0,1fr)_80px] sm:items-center">
+                <div key={item} className="grid grid-cols-[40px_minmax(0,1fr)] gap-3 px-5 py-4 sm:grid-cols-[40px_minmax(0,1fr)_80px] sm:items-center sm:px-6 sm:py-5">
                   <span className="skeleton-shimmer h-10 w-10 rounded-xl" />
                   <span className="space-y-2">
                     <span className="skeleton-shimmer block h-3 w-24 rounded" />
@@ -202,7 +202,7 @@ export default function NationalCommandCenter() {
                 <Link
                   key={item.id}
                   href={`/intake/${item.id}`}
-                  className="group relative grid gap-4 px-6 py-5 transition duration-300 hover:bg-white/[0.03] sm:grid-cols-[44px_minmax(0,1fr)_auto] sm:items-center"
+                  className="group relative grid grid-cols-[40px_minmax(0,1fr)] gap-x-3 gap-y-3 px-5 py-4 transition duration-300 hover:bg-white/[0.03] sm:grid-cols-[44px_minmax(0,1fr)_auto] sm:items-center sm:gap-4 sm:px-6 sm:py-5"
                 >
                   <span className="absolute inset-y-3 left-0 w-1 scale-y-0 rounded-r bg-teal-400 shadow-[0_0_12px_rgba(45,212,191,0.8)] transition-transform duration-300 group-hover:scale-y-100" aria-hidden="true" />
                   <span className="grid h-11 w-11 place-items-center rounded-2xl border border-white/[0.08] bg-slate-900/60 font-mono text-xs font-bold text-slate-400 group-hover:border-teal-300/30 group-hover:text-teal-300">
@@ -222,19 +222,19 @@ export default function NationalCommandCenter() {
                       ID: {item.id} · รับเมื่อ {new Date(item.created_at).toLocaleString('th-TH', { dateStyle: 'medium', timeStyle: 'short' })}
                     </span>
                   </span>
-                  <span className="inline-flex items-center gap-1.5 rounded-xl border border-slate-800 bg-slate-900/40 px-3 py-2 text-xs font-bold text-slate-300 transition group-hover:border-teal-400/30 group-hover:bg-teal-400/10 group-hover:text-teal-200">
+                  <span className="col-start-2 inline-flex w-fit items-center gap-1.5 rounded-xl border border-slate-800 bg-slate-900/40 px-3 py-2 text-xs font-bold text-slate-300 transition group-hover:border-teal-400/30 group-hover:bg-teal-400/10 group-hover:text-teal-200 sm:col-auto sm:w-auto">
                     ตรวจสอบ <ChevronRight className="h-3.5 w-3.5 transition-transform group-hover:translate-x-1" />
                   </span>
                 </Link>
               ))
             ) : (
-              <div className="px-6 py-14 text-center text-sm text-slate-500">ไม่มีรายการรอคัดกรองที่เข้าถึงได้ในขณะนี้</div>
+              <div className="px-5 py-12 text-center text-sm text-slate-500 sm:px-6 sm:py-14">ไม่มีรายการรอคัดกรองที่เข้าถึงได้ในขณะนี้</div>
             )}
           </div>
         </div>
 
         {/* Chain of Custody & Assurance Box */}
-        <div className="hud-panel rounded-[28px] p-6 space-y-6">
+        <div className="hud-panel space-y-5 rounded-[24px] p-5 sm:space-y-6 sm:rounded-[28px] sm:p-6">
           <div className="flex items-start justify-between gap-4">
             <div>
               <h2 className="text-base font-bold text-white flex items-center">
@@ -261,8 +261,9 @@ export default function NationalCommandCenter() {
                 <span className="min-w-0 flex-1">
                   <span className="block text-xs font-bold text-slate-200">{label}</span>
                   <span className="mt-0.5 block text-[11px] leading-relaxed text-slate-400">{detail}</span>
+                  <span className="mt-2 inline-flex rounded-md border border-white/[0.08] bg-white/[0.02] px-2 py-0.5 font-mono text-[9px] font-bold text-slate-400 sm:hidden">{state}</span>
                 </span>
-                <span className="rounded-md border border-white/[0.08] bg-white/[0.02] px-2 py-0.5 font-mono text-[9px] font-bold text-slate-400">
+                <span className="hidden rounded-md border border-white/[0.08] bg-white/[0.02] px-2 py-0.5 font-mono text-[9px] font-bold text-slate-400 sm:inline-flex">
                   {state}
                 </span>
               </div>
