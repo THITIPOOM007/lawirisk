@@ -588,7 +588,7 @@ export async function searchOfficialHssClinics(
       },
       body: body.toString(),
       cache: 'no-store',
-    });
+    }, 30_000);
     if (!response.ok) {
       console.warn(JSON.stringify({ event: 'HSS_CLINIC_REGISTRY_NON_SUCCESS', status: response.status }));
       return [clinicProviderState(query, 'UNAVAILABLE', now)];
