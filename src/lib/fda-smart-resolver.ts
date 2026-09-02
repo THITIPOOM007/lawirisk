@@ -54,6 +54,7 @@ const HSS_SPA_SEARCH_URL = 'https://spa-services.hss.moph.go.th/permit/spa/estab
 const HSS_SPA_ACTION_ID = '601acbd1bcff0922b9334e2874b456922f1f6977bd';
 const HSS_CLINIC_SEARCH_ENDPOINT = 'https://hosp.hss.moph.go.th/key-searchs';
 const HSS_CLINIC_SOURCE_URL = 'https://hosp.hss.moph.go.th';
+const HSS_CLINIC_USER_AGENT = 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36';
 
 const categories = new Set<SmartSearchResult['category']>([
   'HEALTH_PRODUCTS',
@@ -580,6 +581,9 @@ export async function searchOfficialHssClinics(
       headers: {
         Accept: 'application/json, text/javascript, */*; q=0.01',
         'Content-Type': 'application/x-www-form-urlencoded; charset=UTF-8',
+        Origin: HSS_CLINIC_SOURCE_URL,
+        Referer: `${HSS_CLINIC_SOURCE_URL}/`,
+        'User-Agent': HSS_CLINIC_USER_AGENT,
         'X-Requested-With': 'XMLHttpRequest',
       },
       body: body.toString(),

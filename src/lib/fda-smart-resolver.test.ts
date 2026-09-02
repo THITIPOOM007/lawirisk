@@ -199,6 +199,9 @@ describe('FDA public search fallback', () => {
         expect(init?.method).toBe('POST');
         expect(init?.headers).toMatchObject({
           'Content-Type': 'application/x-www-form-urlencoded; charset=UTF-8',
+          Origin: 'https://hosp.hss.moph.go.th',
+          Referer: 'https://hosp.hss.moph.go.th/',
+          'User-Agent': expect.stringContaining('Mozilla/5.0'),
           'X-Requested-With': 'XMLHttpRequest',
         });
         expect(String(init?.body)).toContain('keyword=%E0%B9%81%E0%B8%A7%E0%B8%84%E0%B8%97%E0%B8%B9%E0%B9%82%E0%B8%AE%E0%B8%A1%E0%B8%84%E0%B8%A5%E0%B8%B4%E0%B8%99%E0%B8%B4%E0%B8%81%E0%B9%80%E0%B8%A7%E0%B8%8A%E0%B8%81%E0%B8%A3%E0%B8%A3%E0%B8%A1');
