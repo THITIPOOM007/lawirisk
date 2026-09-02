@@ -52,10 +52,8 @@ const FDA_SEARCH_URL = 'https://porta.fda.moph.go.th/FDA_SEARCH_CENTER_BACKEND/S
 const FDA_SOURCE_URL = 'https://porta.fda.moph.go.th/fda_search_center_new/';
 const HSS_SPA_SEARCH_URL = 'https://spa-services.hss.moph.go.th/permit/spa/establishment';
 const HSS_SPA_ACTION_ID = '601acbd1bcff0922b9334e2874b456922f1f6977bd';
-const HSS_CLINIC_BASE_URL = 'https://hosp.hss.moph.go.th';
 const HSS_CLINIC_SEARCH_ENDPOINT = 'https://hosp.hss.moph.go.th/key-searchs';
 const HSS_CLINIC_SOURCE_URL = 'https://hosp.hss.moph.go.th';
-const HSS_CLINIC_USER_AGENT = 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36';
 
 const categories = new Set<SmartSearchResult['category']>([
   'HEALTH_PRODUCTS',
@@ -560,58 +558,29 @@ function parseHssClinicCard(cardHtml: string, index: number, query: string, now:
   };
 }
 
-async function acquireHssClinicSession(
-  fetchImpl: SearchFetch,
-): Promise<{ cookie: string; token: string } | null> {
-  try {
-    const response = await fetchWithTimeout(fetchImpl, HSS_CLINIC_BASE_URL, {
-      method: 'GET',
-      headers: {
-        'User-Agent': HSS_CLINIC_USER_AGENT,
-        Accept: 'text/html',
-      },
-      cache: 'no-store',
-    });
-    if (!response.ok) return null;
-
-    const setCookieHeader = response.headers.get('set-cookie') || '';
-    const cookieMatch = setCookieHeader.match(/ci_session=([^;]+)/);
-    const cookie = cookieMatch ? `ci_session=${cookieMatch[1]}` : '';
-
-    const html = await response.text();
-    const tokenMatch = html.match(/id="token"\s+value="([^"]+)"/);
-    const token = tokenMatch ? tokenMatch[1] : '';
-
-    if (!cookie || !token) return null;
-    return { cookie, token };
-  } catch {
-    return null;
-  }
-}
-
 export async function searchOfficialHssClinics(
   query: string,
   fetchImpl: SearchFetch = fetch,
   now: () => Date = () => new Date(),
 ): Promise<SmartSearchResult[]> {
   try {
-    const session = await acquireHssClinicSession(fetchImpl);
-    if (!session) return [clinicProviderState(query, 'UNAVAILABLE', now)];
-
     const searchType = /^\d+$/.test(query.trim()) ? 'code' : 'name';
     const body = new URLSearchParams({
       keyword: query,
       type: searchType,
-      token: session.token,
+      // The public HSS form exposes this value empty and accepts a direct
+      // same-origin-style search. Do not manufacture a session/token: Workers
+      // cannot reliably read Set-Cookie, which previously made every clinic
+      // lookup fail before the actual registry request was sent.
+      token: '',
     });
 
     const response = await fetchWithTimeout(fetchImpl, HSS_CLINIC_SEARCH_ENDPOINT, {
       method: 'POST',
       headers: {
-        'User-Agent': HSS_CLINIC_USER_AGENT,
-        'Content-Type': 'application/x-www-form-urlencoded',
-        Cookie: session.cookie,
-        Referer: HSS_CLINIC_BASE_URL,
+        Accept: 'application/json, text/javascript, */*; q=0.01',
+        'Content-Type': 'application/x-www-form-urlencoded; charset=UTF-8',
+        'X-Requested-With': 'XMLHttpRequest',
       },
       body: body.toString(),
       cache: 'no-store',

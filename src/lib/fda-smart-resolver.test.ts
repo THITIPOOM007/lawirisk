@@ -181,7 +181,7 @@ describe('FDA public search fallback', () => {
     });
   });
 
-  it('maps clinic names from the new hosp.hss.moph.go.th registry', async () => {
+  it('sends a direct public POST to the clinic registry and maps its records', async () => {
     const cardHtml = `
       <div class="testimonial-card11-text1-12">ชื่อสถานพยาบาล :</div>
       <div class="testimonial-card11-text1-13"> แวคทูโฮมคลินิกเวชกรรม</div>
@@ -193,15 +193,17 @@ describe('FDA public search fallback', () => {
       <div class="testimonial-card11-text1-15"> 31 ธันวาคม 2577</div>
     `;
 
-    const fetchImpl = vi.fn(async (input: string | URL | Request) => {
+    const fetchImpl = vi.fn(async (input: string | URL | Request, init?: RequestInit) => {
       const url = String(input);
-      if (url === 'https://hosp.hss.moph.go.th') {
-        return new Response('<input type="hidden" id="token" value="fake-token">', {
-          status: 200,
-          headers: { 'set-cookie': 'ci_session=fake-session-cookie; path=/' },
-        });
-      }
       if (url === 'https://hosp.hss.moph.go.th/key-searchs') {
+        expect(init?.method).toBe('POST');
+        expect(init?.headers).toMatchObject({
+          'Content-Type': 'application/x-www-form-urlencoded; charset=UTF-8',
+          'X-Requested-With': 'XMLHttpRequest',
+        });
+        expect(String(init?.body)).toContain('keyword=%E0%B9%81%E0%B8%A7%E0%B8%84%E0%B8%97%E0%B8%B9%E0%B9%82%E0%B8%AE%E0%B8%A1%E0%B8%84%E0%B8%A5%E0%B8%B4%E0%B8%99%E0%B8%B4%E0%B8%81%E0%B9%80%E0%B8%A7%E0%B8%8A%E0%B8%81%E0%B8%A3%E0%B8%A3%E0%B8%A1');
+        expect(String(init?.body)).toContain('type=name');
+        expect(String(init?.body)).toContain('token=');
         return new Response(JSON.stringify({
           code: 200,
           data: [cardHtml],
@@ -228,6 +230,30 @@ describe('FDA public search fallback', () => {
         'ใช้ได้ถึง': '31 ธันวาคม 2577',
       },
     });
+    expect(fetchImpl).toHaveBeenCalledOnce();
+  });
+
+  it('keeps an explicit clinic search on the clinic registry for a short name', async () => {
+    const cardHtml = `
+      <span>ชื่อสถานพยาบาล :</span><span>คลินิกเวชกรรมนายแพทย์ศรีไพร</span>
+      <span>สถานที่ตั้ง :</span><span>เลขที่ 163 หมู่ 1 ตำบลพยุห์ อำเภอพยุห์ จังหวัดศรีสะเกษ</span>
+      <span>เลขที่ใบอนุญาตประกอบกิจการ :</span><span>33101001165</span>
+      <span>ใช้ได้ถึงวันที่ :</span><span>31 ธันวาคม 2574</span>`;
+    const fetchImpl = vi.fn(async (input: string | URL | Request) => {
+      expect(String(input)).toBe('https://hosp.hss.moph.go.th/key-searchs');
+      return new Response(JSON.stringify({ code: 200, data: [cardHtml] }), { status: 200 });
+    });
+
+    const [result] = await resolveMultiChannelSearch('ศรีไพร', {
+      category: 'CLINICS', searchDb: false, searchOfficial: true, fetchImpl,
+    });
+
+    expect(result).toMatchObject({
+      title: 'คลินิกเวชกรรมนายแพทย์ศรีไพร',
+      category: 'CLINICS',
+      metadata: { 'เลขที่ใบอนุญาต': '33101001165' },
+    });
+    expect(fetchImpl).toHaveBeenCalledOnce();
   });
 
   it('selects FDA for products and HSS for massage queries without cross-searching', async () => {
