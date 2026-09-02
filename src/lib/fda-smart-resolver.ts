@@ -55,6 +55,8 @@ const HSS_SPA_SEARCH_URL = 'https://spa-services.hss.moph.go.th/permit/spa/estab
 const HSS_SPA_ACTION_ID = '601acbd1bcff0922b9334e2874b456922f1f6977bd';
 const HSS_CLINIC_SEARCH_ENDPOINT = 'https://hosp.hss.moph.go.th/key-searchs';
 const HSS_CLINIC_SOURCE_URL = 'https://hosp.hss.moph.go.th';
+const HSS_CLINIC_DIRECTORY_ENDPOINT = 'https://privatehospital.hss.moph.go.th/view_hospital.php';
+const HSS_CLINIC_DIRECTORY_URL = 'https://privatehospital.hss.moph.go.th/s_view_hospital.php';
 const HSS_CLINIC_USER_AGENT = 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36';
 
 const categories = new Set<SmartSearchResult['category']>([
@@ -193,7 +195,7 @@ function isSpaQuery(query: string) {
   return /ร้าน\s*นวด|นวดเพื่อสุขภาพ|นวดเพื่อเสริมความงาม|สปา|massage|spa/i.test(query);
 }
 
-function selectOfficialSource(query: string, category: PublicSearchCategory): 'FDA' | 'HSS_CLINIC' | 'HSS_SPA' | 'HSS_BOTH' | 'NONE' {
+function selectOfficialSource(query: string, category: PublicSearchCategory): 'FDA' | 'HSS_CLINIC' | 'HSS_SPA' | 'HSS_BOTH' | 'ALL_REGISTRIES' | 'NONE' {
   if (category === 'HEALTH_PRODUCTS' || category === 'LICENSES') return 'FDA';
   if (category === 'CLINICS') return 'HSS_CLINIC';
   if (category === 'MASSAGE_SPA') return 'HSS_SPA';
@@ -203,7 +205,8 @@ function selectOfficialSource(query: string, category: PublicSearchCategory): 'F
   if (isSpaQuery(query)) return 'HSS_SPA';
   if (isHealthServiceQuery(query)) return 'HSS_BOTH';
   if (/บริษัท|ห้างหุ้นส่วน|นิติบุคคล|หลอก|โกง|เตือนภัย/.test(query)) return 'NONE';
-  return 'FDA';
+  if (/\d/.test(query)) return 'FDA';
+  return 'ALL_REGISTRIES';
 }
 
 function checkedDate(now: () => Date) {
@@ -569,7 +572,75 @@ function parseHssClinicCard(cardHtml: string, index: number, query: string, now:
   };
 }
 
-export async function searchOfficialHssClinics(
+function plainHtmlFragment(value: string) {
+  return decodeHtml(value)
+    .replace(/<[^>]+>/g, ' ')
+    .replace(/\s+/g, ' ')
+    .trim();
+}
+
+function parseHssClinicDirectory(html: string, now: () => Date): SmartSearchResult[] {
+  const names = Array.from(html.matchAll(/dot7\.jpg[^>]*>[\s\S]*?<b>\s*([^<]+?)\s*<\/b>/gi))
+    .map((match) => plainHtmlFragment(match[1] || ''));
+  const addresses = Array.from(html.matchAll(/<b>\s*ที่อยู่\s*:\s*<\/b>\s*([\s\S]*?)<br\s*\/?>\s*<b>\s*เบอ/gi))
+    .map((match) => plainHtmlFragment(match[1] || ''));
+  const inspectedAt = checkedDate(now);
+
+  return names.slice(0, 10).map((name, index) => {
+    const address = addresses[index] || '';
+    return {
+      id: `hss-clinic-directory-${encodeURIComponent(`${name}-${address}`).slice(0, 100)}`,
+      title: name,
+      category: 'CLINICS' as const,
+      productCategoryLabel: 'ผลสดจากรายชื่อโรงพยาบาลและคลินิก สบส.',
+      snippet: `พบชื่อในฐานรายชื่อโรงพยาบาลและคลินิกของ สบส.${address ? ` — ${address}` : ''} — ต้นทางนี้ไม่แสดงเลขที่ใบอนุญาต โปรดเปิดต้นฉบับเพื่อตรวจรายละเอียดล่าสุด`,
+      source: 'รายชื่อโรงพยาบาลและคลินิก กรมสนับสนุนบริการสุขภาพ (สบส.)',
+      sourceUrl: HSS_CLINIC_DIRECTORY_URL,
+      publishedDate: inspectedAt,
+      confidenceScore: 1,
+      status: 'WARNING' as const,
+      metadata: {
+        'ชื่อสถานพยาบาล': name,
+        'เลขที่ใบอนุญาต': 'ต้นทางนี้ไม่แสดงในรายการค้นหา',
+        'ที่ตั้ง': address || '-',
+        'สถานะการตีความ': 'พบในรายชื่อสดของ สบส. — ไม่ใช่การรับรองสถานะใบอนุญาต',
+        'ตรวจสอบเมื่อ': inspectedAt,
+      },
+    };
+  });
+}
+
+async function searchHssClinicDirectory(
+  query: string,
+  fetchImpl: SearchFetch,
+  now: () => Date,
+): Promise<SmartSearchResult[]> {
+  try {
+    const response = await fetchWithTimeout(fetchImpl, HSS_CLINIC_DIRECTORY_ENDPOINT, {
+      method: 'POST',
+      headers: {
+        Accept: 'text/html, */*; q=0.01',
+        'Content-Type': 'application/x-www-form-urlencoded; charset=UTF-8',
+        Referer: HSS_CLINIC_DIRECTORY_URL,
+        'User-Agent': HSS_CLINIC_USER_AGENT,
+        'X-Requested-With': 'XMLHttpRequest',
+      },
+      body: new URLSearchParams({ s_data: 'MedicalName', q: query, post: '', type: '' }).toString(),
+      cache: 'no-store',
+    }, 8_000);
+    if (!response.ok) return [clinicProviderState(query, 'UNAVAILABLE', now)];
+
+    const html = await response.text();
+    const results = parseHssClinicDirectory(html, now);
+    if (results.length > 0) return results;
+    if (/พบจำนวน\s*:\s*0\s*แห่ง/.test(html)) return [clinicProviderState(query, 'UNREGISTERED', now)];
+    return [clinicProviderState(query, 'UNAVAILABLE', now)];
+  } catch {
+    return [clinicProviderState(query, 'UNAVAILABLE', now)];
+  }
+}
+
+async function searchModernHssClinics(
   query: string,
   fetchImpl: SearchFetch = fetch,
   now: () => Date = () => new Date(),
@@ -628,6 +699,23 @@ export async function searchOfficialHssClinics(
     }));
     return [clinicProviderState(query, 'UNAVAILABLE', now)];
   }
+}
+
+export async function searchOfficialHssClinics(
+  query: string,
+  fetchImpl: SearchFetch = fetch,
+  now: () => Date = () => new Date(),
+): Promise<SmartSearchResult[]> {
+  const directoryResults = await searchHssClinicDirectory(query, fetchImpl, now);
+  if (directoryResults.some((item) => item.status === 'WARNING')) return directoryResults;
+
+  const modernResults = await searchModernHssClinics(query, fetchImpl, now);
+  if (modernResults.some((item) => item.status === 'WARNING' || item.status === 'REVOKED')) return modernResults;
+  if (directoryResults.some((item) => item.status === 'UNREGISTERED')
+    || modernResults.some((item) => item.status === 'UNREGISTERED')) {
+    return [clinicProviderState(query, 'UNREGISTERED', now)];
+  }
+  return [clinicProviderState(query, 'UNAVAILABLE', now)];
 }
 
 export async function searchOfficialHssSpaBusinesses(
@@ -725,14 +813,6 @@ export async function resolveMultiChannelSearch(
   const officialSource = selectOfficialSource(query, options.category);
   let officialFallback: SmartSearchResult[] = [];
 
-  // HSS currently does not answer requests from common serverless/datacenter IPs.
-  // Prefer a dated, source-linked snapshot for known clinic records so public
-  // searches remain fast; uncached terms still continue to the live provider.
-  if (options.searchDb && (options.category === 'CLINICS' || options.category === 'HEALTH_SERVICES')) {
-    const verifiedSnapshot = await searchTrustedRegistry(query, options.category);
-    if (verifiedSnapshot.length > 0) return verifiedSnapshot;
-  }
-
   if (options.searchOfficial && officialSource !== 'NONE') {
     let officialResults: SmartSearchResult[];
     if (officialSource === 'HSS_CLINIC') {
@@ -748,6 +828,16 @@ export async function resolveMultiChannelSearch(
         .filter((item) => item.status === 'SAFE' || item.status === 'WARNING' || item.status === 'REVOKED');
       if (confirmed.length > 0) return confirmed;
       officialResults = [...clinicResults, ...spaResults];
+    } else if (officialSource === 'ALL_REGISTRIES') {
+      const [fdaResults, clinicResults, spaResults] = await Promise.all([
+        searchOfficialFdaProducts(query, fetchImpl, now),
+        searchOfficialHssClinics(query, fetchImpl, now),
+        searchOfficialHssSpaBusinesses(query, fetchImpl, now),
+      ]);
+      const confirmed = [...fdaResults, ...clinicResults, ...spaResults]
+        .filter((item) => item.status === 'SAFE' || item.status === 'WARNING' || item.status === 'REVOKED');
+      if (confirmed.length > 0) return confirmed;
+      officialResults = [...fdaResults, ...clinicResults, ...spaResults];
     } else {
       officialResults = await searchOfficialFdaProducts(query, fetchImpl, now);
     }

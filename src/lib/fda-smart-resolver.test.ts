@@ -239,7 +239,63 @@ describe('FDA public search fallback', () => {
         'ใช้ได้ถึง': '31 ธันวาคม 2577',
       },
     });
+    expect(fetchImpl).toHaveBeenCalledTimes(2);
+  });
+
+  it('uses the live HSS hospital directory when the modern clinic endpoint is blocked', async () => {
+    const directoryHtml = `
+      ผลลัพธ์จากการค้าหา 'ยิ่งรัก' พบจำนวน : 1 แห่ง
+      <table>
+        <tr><td><img src="image/dot7.jpg"><B>คลินิกเฉพาะทางด้านเวชกรรมกุมารเวชศาสตร์แพทย์ยิ่งรัก</B></td></tr>
+        <tr><td></td><td><B>ที่อยู่ :</B>174 5 ด่านขุนทด นครราชสีมา 30210 <br><B>เบอโทรศัพท์ :</B></td></tr>
+      </table>`;
+    const fetchImpl = vi.fn(async (input: string | URL | Request, init?: RequestInit) => {
+      expect(String(input)).toBe('https://privatehospital.hss.moph.go.th/view_hospital.php');
+      expect(init?.method).toBe('POST');
+      expect(String(init?.body)).toContain('s_data=MedicalName');
+      expect(String(init?.body)).toContain('q=%E0%B8%A2%E0%B8%B4%E0%B9%88%E0%B8%87%E0%B8%A3%E0%B8%B1%E0%B8%81');
+      return new Response(directoryHtml, { status: 200 });
+    });
+
+    const [result] = await searchOfficialHssClinics('ยิ่งรัก', fetchImpl, () => new Date('2026-09-02T15:20:00.000Z'));
+
+    expect(result).toMatchObject({
+      title: 'คลินิกเฉพาะทางด้านเวชกรรมกุมารเวชศาสตร์แพทย์ยิ่งรัก',
+      category: 'CLINICS',
+      status: 'WARNING',
+      productCategoryLabel: 'ผลสดจากรายชื่อโรงพยาบาลและคลินิก สบส.',
+      metadata: { 'ที่ตั้ง': '174 5 ด่านขุนทด นครราชสีมา 30210' },
+    });
     expect(fetchImpl).toHaveBeenCalledOnce();
+  });
+
+  it('searches every official registry for an ambiguous text query in automatic mode', async () => {
+    const directoryHtml = `
+      ผลลัพธ์จากการค้าหา 'ยิ่งรัก' พบจำนวน : 1 แห่ง
+      <table>
+        <tr><td><img src="image/dot7.jpg"><B>คลินิกเฉพาะทางด้านเวชกรรมกุมารเวชศาสตร์แพทย์ยิ่งรัก</B></td></tr>
+        <tr><td></td><td><B>ที่อยู่ :</B>174 5 ด่านขุนทด นครราชสีมา 30210 <br><B>เบอโทรศัพท์ :</B></td></tr>
+      </table>`;
+    const fetchImpl = vi.fn(async (input: string | URL | Request) => {
+      const url = String(input);
+      if (url.includes('FDA_SEARCH_CENTER_BACKEND')) return new Response('[]', { status: 200 });
+      if (url.includes('privatehospital.hss.moph.go.th')) return new Response(directoryHtml, { status: 200 });
+      if (url.includes('spa-services.hss.moph.go.th')) {
+        return new Response('1:{"found":false,"results":[]}', { status: 200 });
+      }
+      return new Response('Not found', { status: 404 });
+    });
+
+    const results = await resolveMultiChannelSearch('ยิ่งรัก', {
+      category: 'ALL', searchDb: false, searchOfficial: true, fetchImpl,
+    });
+
+    expect(results).toHaveLength(1);
+    expect(results[0]).toMatchObject({
+      title: 'คลินิกเฉพาะทางด้านเวชกรรมกุมารเวชศาสตร์แพทย์ยิ่งรัก',
+      category: 'CLINICS',
+    });
+    expect(fetchImpl).toHaveBeenCalledTimes(3);
   });
 
   it('keeps an explicit clinic search on the clinic registry for a short name', async () => {
@@ -262,7 +318,7 @@ describe('FDA public search fallback', () => {
       category: 'CLINICS',
       metadata: { 'เลขที่ใบอนุญาต': '33101001165' },
     });
-    expect(fetchImpl).toHaveBeenCalledOnce();
+    expect(fetchImpl).toHaveBeenCalledTimes(2);
   });
 
   it('selects FDA for products and HSS for massage queries without cross-searching', async () => {
