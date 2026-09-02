@@ -52,7 +52,7 @@ export async function GET(request: NextRequest) {
     } else if (confirmedSources.length > 1) {
       aiSummary = `พบ ${results.length} รายการสำหรับ "${rawQuery}" จากทะเบียนทางการ ${confirmedSources.length} แหล่ง ได้แก่ ${confirmedSources.join(' และ ')}`;
     } else {
-      aiSummary = `พบ ${results.length} รายการตรงจาก ${topItem.source} สำหรับ "${rawQuery}" โดยแสดงเลขทะเบียน ผู้รับอนุญาต และสถานะตามคำตอบล่าสุดของต้นทาง`;
+      aiSummary = `พบ ${results.length} รายการตรงจาก ${topItem.source} สำหรับ "${rawQuery}" ตามคำตอบล่าสุดของต้นทาง โปรดเปิดข้อมูลต้นฉบับเพื่อตรวจรายละเอียดและสถานะใบอนุญาตล่าสุด`;
     }
   } else {
     aiSummary = `ไม่พบข้อมูลที่ตรงกับ "${rawQuery}" ในแหล่งข้อมูลทางการที่เลือก กรุณาตรวจสอบการสะกดหรือรูปแบบเลขแล้วลองใหม่`;
