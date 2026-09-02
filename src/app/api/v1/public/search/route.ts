@@ -38,12 +38,19 @@ export async function GET(request: NextRequest) {
   let aiSummary = '';
   if (results.length > 0) {
     const topItem = results[0];
+    const confirmedSources = Array.from(new Set(
+      results
+        .filter((item) => !['UNREGISTERED', 'UNAVAILABLE'].includes(item.status))
+        .map((item) => item.source),
+    ));
     if (topItem.status === 'UNAVAILABLE') {
       aiSummary = `ยังสรุปผลสำหรับ "${rawQuery}" ไม่ได้ เนื่องจาก ${topItem.source} ไม่ตอบกลับ ระบบไม่ได้ตีความว่าไม่พบทะเบียน กรุณาลองค้นอีกครั้ง`;
     } else if (topItem.status === 'UNREGISTERED') {
       aiSummary = `ไม่พบรายการที่ตรงกับ "${rawQuery}" จาก ${topItem.source} ณ เวลาตรวจสอบ การไม่พบข้อมูลไม่ใช่การรับรองว่าไม่มีทะเบียนหรือไม่มีใบอนุญาต`;
     } else if (topItem.productCategoryLabel.includes('สำเนาทะเบียน')) {
       aiSummary = `พบ ${results.length} รายการสำหรับ "${rawQuery}" ในสำเนาผลค้นหาจาก ${topItem.source} ที่บันทึกตามวันที่ตรวจสอบ โปรดเปิดต้นฉบับเพื่อตรวจสถานะใบอนุญาตล่าสุด`;
+    } else if (confirmedSources.length > 1) {
+      aiSummary = `พบ ${results.length} รายการสำหรับ "${rawQuery}" จากทะเบียนทางการ ${confirmedSources.length} แหล่ง ได้แก่ ${confirmedSources.join(' และ ')}`;
     } else {
       aiSummary = `พบ ${results.length} รายการตรงจาก ${topItem.source} สำหรับ "${rawQuery}" โดยแสดงเลขทะเบียน ผู้รับอนุญาต และสถานะตามคำตอบล่าสุดของต้นทาง`;
     }
