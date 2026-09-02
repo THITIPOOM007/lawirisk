@@ -44,7 +44,7 @@ type EnrichmentDependencies = {
 };
 
 const FDA_URL = 'https://porta.fda.moph.go.th/fda_search_center_new/';
-const HSS_CLINIC_URL = 'https://privatehospital.hss.moph.go.th/s_view_hospital.php';
+const HSS_CLINIC_URL = 'https://hosp.hss.moph.go.th/';
 const HSS_HEALTH_BUSINESS_URL = 'https://spa-services.hss.moph.go.th/permit/spa/establishment';
 
 function compact(value: string) {

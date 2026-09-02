@@ -54,7 +54,7 @@ interface TrackingResult {
   jurisdiction: string;
 }
 
-type SearchCategory = 'ALL' | 'HEALTH_PRODUCTS' | 'HEALTH_SERVICES' | 'FRAUD_ALERTS' | 'COMPANIES' | 'LICENSES';
+type SearchCategory = 'ALL' | 'HEALTH_PRODUCTS' | 'HEALTH_SERVICES' | 'CLINICS' | 'MASSAGE_SPA' | 'FRAUD_ALERTS' | 'COMPANIES' | 'LICENSES';
 
 const publicServices = [
   {
@@ -482,7 +482,9 @@ export default function PublicPortalPage() {
                 >
                   <option value="ALL">เลือกแหล่งให้อัตโนมัติ</option>
                   <option value="HEALTH_PRODUCTS">ผลิตภัณฑ์สุขภาพ — อย.</option>
-                  <option value="HEALTH_SERVICES">คลินิก / ร้านนวด / สปา — สบส.</option>
+                  <option value="HEALTH_SERVICES">คลินิก / ร้านนวด / สปา — สบส. (ทั้งหมด)</option>
+                  <option value="CLINICS">คลินิก / สถานพยาบาล — สบส.</option>
+                  <option value="MASSAGE_SPA">ร้านนวด / สปา — สบส.</option>
                   <option value="FRAUD_ALERTS">เตือนภัยออนไลน์ / บัญชีม้า</option>
                   <option value="COMPANIES">นิติบุคคล / บริษัท</option>
                   <option value="LICENSES">เลขทะเบียน / ใบอนุญาต — อย.</option>

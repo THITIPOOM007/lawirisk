@@ -20,7 +20,7 @@ const SOURCE_BY_CATEGORY: Partial<Record<CaseSourceCategory, CaseSourceRecommend
   ],
   MEDICAL_DEVICE: [{ category: 'MEDICAL_DEVICE', label: 'ระบบสถานที่เครื่องมือแพทย์', authority: 'สำนักงานคณะกรรมการอาหารและยา', url: 'https://medeva.fda.moph.go.th/FDA_MDC_LCN_FRONTEND/STAFF/STATION_NEW', purpose: 'ตรวจสถานที่และใบอนุญาตด้านเครื่องมือแพทย์' }],
   HEALTHCARE: [
-    { category: 'HEALTHCARE', label: 'ทะเบียนสถานพยาบาล สบส.', authority: 'กรมสนับสนุนบริการสุขภาพ กระทรวงสาธารณสุข', url: 'https://privatehospital.hss.moph.go.th/s_view_hospital.php', purpose: 'ตรวจชื่อคลินิก สถานพยาบาล ผู้ประกอบกิจการ และสถานะใบอนุญาตจากฐาน สบส.' },
+    { category: 'HEALTHCARE', label: 'ทะเบียนสถานพยาบาล สบส.', authority: 'กรมสนับสนุนบริการสุขภาพ กระทรวงสาธารณสุข', url: 'https://hosp.hss.moph.go.th/', purpose: 'ตรวจชื่อคลินิก สถานพยาบาล ผู้ประกอบกิจการ และสถานะใบอนุญาตจากฐาน สบส.' },
   ],
   HEALTH_BUSINESS: [
     { category: 'HEALTH_BUSINESS', label: 'ทะเบียนสถานประกอบการเพื่อสุขภาพ สบส.', authority: 'กรมสนับสนุนบริการสุขภาพ กระทรวงสาธารณสุข', url: 'https://spa-services.hss.moph.go.th/permit/spa/establishment', purpose: 'ตรวจร้านนวด สปา และสถานประกอบการเพื่อสุขภาพที่ได้รับอนุญาต' },

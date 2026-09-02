@@ -41,7 +41,7 @@ import { validateFileInBrowser } from '@/lib/file-validator';
 
 const OFFICIAL_SOURCE_URLS: Record<IntakeSourceCheck['source_key'], string> = {
   FDA_PUBLIC: 'https://porta.fda.moph.go.th/fda_search_center_new/',
-  HSS_PUBLIC_CLINIC: 'https://privatehospital.hss.moph.go.th/s_view_hospital.php',
+  HSS_PUBLIC_CLINIC: 'https://hosp.hss.moph.go.th/',
   HSS_PUBLIC_HEALTH_BUSINESS: 'https://spa-services.hss.moph.go.th/permit/spa/establishment',
 };
 

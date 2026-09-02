@@ -5,7 +5,7 @@ import { consumeRateLimit } from '@/lib/rate-limit';
 
 const searchQuerySchema = z.object({
   q: z.string().trim().min(2).max(200),
-  category: z.enum(['ALL', 'HEALTH_PRODUCTS', 'HEALTH_SERVICES', 'FRAUD_ALERTS', 'COMPANIES', 'LICENSES']).default('ALL'),
+  category: z.enum(['ALL', 'HEALTH_PRODUCTS', 'HEALTH_SERVICES', 'CLINICS', 'MASSAGE_SPA', 'FRAUD_ALERTS', 'COMPANIES', 'LICENSES']).default('ALL'),
 });
 
 export async function GET(request: NextRequest) {

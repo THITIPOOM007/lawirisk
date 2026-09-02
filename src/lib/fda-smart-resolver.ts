@@ -6,6 +6,8 @@ export type PublicSearchCategory =
   | 'ALL'
   | 'HEALTH_PRODUCTS'
   | 'HEALTH_SERVICES'
+  | 'CLINICS'
+  | 'MASSAGE_SPA'
   | 'FRAUD_ALERTS'
   | 'COMPANIES'
   | 'LICENSES';
@@ -50,12 +52,16 @@ const FDA_SEARCH_URL = 'https://porta.fda.moph.go.th/FDA_SEARCH_CENTER_BACKEND/S
 const FDA_SOURCE_URL = 'https://porta.fda.moph.go.th/fda_search_center_new/';
 const HSS_SPA_SEARCH_URL = 'https://spa-services.hss.moph.go.th/permit/spa/establishment';
 const HSS_SPA_ACTION_ID = '601acbd1bcff0922b9334e2874b456922f1f6977bd';
-const HSS_CLINIC_SOURCE_URL = 'https://privatehospital.hss.moph.go.th/s_view_hospital.php';
-const HSS_CLINIC_SEARCH_URL = 'https://privatehospital.hss.moph.go.th/Search_View.php';
+const HSS_CLINIC_BASE_URL = 'https://hosp.hss.moph.go.th';
+const HSS_CLINIC_SEARCH_ENDPOINT = 'https://hosp.hss.moph.go.th/key-searchs';
+const HSS_CLINIC_SOURCE_URL = 'https://hosp.hss.moph.go.th';
+const HSS_CLINIC_USER_AGENT = 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36';
 
 const categories = new Set<SmartSearchResult['category']>([
   'HEALTH_PRODUCTS',
   'HEALTH_SERVICES',
+  'CLINICS',
+  'MASSAGE_SPA',
   'FRAUD_ALERTS',
   'COMPANIES',
   'LICENSES',
@@ -158,7 +164,8 @@ export function mapTrustedSourceRows(value: unknown): SmartSearchResult[] {
 }
 
 function inferCategory(query: string): SmartSearchResult['category'] {
-  if (/คลินิก|สถานพยาบาล|ร้าน\s*นวด|นวดเพื่อสุขภาพ|สปา|massage|spa/i.test(query)) return 'HEALTH_SERVICES';
+  if (/คลินิก|สถานพยาบาล/i.test(query)) return 'CLINICS';
+  if (/ร้าน\s*นวด|นวดเพื่อสุขภาพ|นวดเพื่อเสริมความงาม|สปา|massage|spa/i.test(query)) return 'MASSAGE_SPA';
   if (/บริษัท|ห้างหุ้นส่วน|นิติบุคคล/.test(query)) return 'COMPANIES';
   if (/ฆพ\.|ใบอนุญาต|ทะเบียน/.test(query)) return 'LICENSES';
   if (/หลอก|โกง|เตือนภัย/.test(query)) return 'FRAUD_ALERTS';
@@ -173,11 +180,19 @@ function isClinicQuery(query: string) {
   return /คลินิก|สถานพยาบาล/i.test(query) && !/ร้าน\s*นวด|นวดเพื่อสุขภาพ|นวดเพื่อเสริมความงาม|สปา|massage|spa/i.test(query);
 }
 
-function selectOfficialSource(query: string, category: PublicSearchCategory): 'FDA' | 'HSS' | 'NONE' {
+function isSpaQuery(query: string) {
+  return /ร้าน\s*นวด|นวดเพื่อสุขภาพ|นวดเพื่อเสริมความงาม|สปา|massage|spa/i.test(query);
+}
+
+function selectOfficialSource(query: string, category: PublicSearchCategory): 'FDA' | 'HSS_CLINIC' | 'HSS_SPA' | 'HSS_BOTH' | 'NONE' {
   if (category === 'HEALTH_PRODUCTS' || category === 'LICENSES') return 'FDA';
-  if (category === 'HEALTH_SERVICES') return 'HSS';
+  if (category === 'CLINICS') return 'HSS_CLINIC';
+  if (category === 'MASSAGE_SPA') return 'HSS_SPA';
+  if (category === 'HEALTH_SERVICES') return 'HSS_BOTH';
   if (category !== 'ALL') return 'NONE';
-  if (isHealthServiceQuery(query)) return 'HSS';
+  if (isClinicQuery(query)) return 'HSS_CLINIC';
+  if (isSpaQuery(query)) return 'HSS_SPA';
+  if (isHealthServiceQuery(query)) return 'HSS_BOTH';
   if (/บริษัท|ห้างหุ้นส่วน|นิติบุคคล|หลอก|โกง|เตือนภัย/.test(query)) return 'NONE';
   return 'FDA';
 }
@@ -216,23 +231,24 @@ function htmlToLines(html: string) {
 
 function unverifiedGuidance(
   query: string,
-  source: 'FDA' | 'HSS' | 'INTERNAL' = 'FDA',
+  source: 'FDA' | 'HSS' | 'HSS_CLINIC' | 'HSS_SPA' | 'INTERNAL' = 'FDA',
   now: () => Date = () => new Date(),
 ): SmartSearchResult {
   const cleanDigits = query.replace(/\D/g, '');
   const looksLikeRegistration = cleanDigits.length >= 10 || /^[1-3][A-N]\s*\d+/i.test(query);
-  const isHss = source === 'HSS';
+  const isHss = source === 'HSS' || source === 'HSS_CLINIC' || source === 'HSS_SPA';
+  const isClinic = source === 'HSS_CLINIC';
   const inspectedAt = checkedDate(now);
   return {
     id: `unverified-${source.toLowerCase()}-${encodeURIComponent(query).slice(0, 100)}`,
     title: looksLikeRegistration ? 'ไม่พบรายการทะเบียนที่ตรงกัน' : 'ยังไม่พบรายการที่ยืนยันได้',
-    category: isHss ? 'HEALTH_SERVICES' : inferCategory(query),
+    category: isClinic ? 'CLINICS' : isHss ? 'MASSAGE_SPA' : inferCategory(query),
     productCategoryLabel: 'ผลการตรวจสอบจากต้นทาง — ไม่ใช่ผลรับรอง',
     snippet: isHss
-      ? `ไม่พบรายการที่ตรงกับ “${query}” ในผลค้นหาที่ระบบเข้าถึงได้จาก สบส. ณ เวลาตรวจสอบ การไม่พบข้อมูลไม่ใช่ข้อยืนยันว่าไม่มีใบอนุญาต`
-      : `ยังไม่ได้ยืนยันรายการที่ตรงกับ “${query}” จากคำตอบล่าสุดของฐานข้อมูล อย. ณ เวลาตรวจสอบ โปรดตรวจรูปแบบเลขหรือชื่อผลิตภัณฑ์อีกครั้ง`,
+      ? `ไม่พบรายการที่ตรงกับ "${query}" ในผลค้นหาที่ระบบเข้าถึงได้จาก สบส. ณ เวลาตรวจสอบ การไม่พบข้อมูลไม่ใช่ข้อยืนยันว่าไม่มีใบอนุญาต`
+      : `ยังไม่ได้ยืนยันรายการที่ตรงกับ "${query}" จากคำตอบล่าสุดของฐานข้อมูล อย. ณ เวลาตรวจสอบ โปรดตรวจรูปแบบเลขหรือชื่อผลิตภัณฑ์อีกครั้ง`,
     source: isHss ? 'กรมสนับสนุนบริการสุขภาพ (สบส.)' : 'ศูนย์ตรวจสอบการอนุญาต อย.',
-    sourceUrl: isHss ? HSS_SPA_SEARCH_URL : FDA_SOURCE_URL,
+    sourceUrl: isClinic ? HSS_CLINIC_SOURCE_URL : isHss ? HSS_SPA_SEARCH_URL : FDA_SOURCE_URL,
     publishedDate: inspectedAt,
     confidenceScore: 0,
     status: 'UNREGISTERED',
@@ -243,17 +259,18 @@ function unverifiedGuidance(
   };
 }
 
-function providerUnavailable(query: string, source: 'FDA' | 'HSS', now: () => Date): SmartSearchResult {
-  const isHss = source === 'HSS';
+function providerUnavailable(query: string, source: 'FDA' | 'HSS' | 'HSS_CLINIC' | 'HSS_SPA', now: () => Date): SmartSearchResult {
+  const isHss = source === 'HSS' || source === 'HSS_CLINIC' || source === 'HSS_SPA';
+  const isClinic = source === 'HSS_CLINIC';
   const inspectedAt = checkedDate(now);
   return {
     id: `unavailable-${source.toLowerCase()}-${encodeURIComponent(query).slice(0, 100)}`,
     title: `เชื่อมต่อฐานข้อมูล ${isHss ? 'สบส.' : 'อย.'} ไม่สำเร็จ`,
-    category: isHss ? 'HEALTH_SERVICES' : 'HEALTH_PRODUCTS',
+    category: isClinic ? 'CLINICS' : isHss ? 'MASSAGE_SPA' : 'HEALTH_PRODUCTS',
     productCategoryLabel: 'แหล่งข้อมูลทางการไม่พร้อมใช้งานชั่วคราว',
     snippet: `ระบบไม่ได้รับคำตอบที่ตรวจสอบได้จากต้นทาง จึงไม่สรุปว่า “พบ” หรือ “ไม่พบ” สำหรับ “${query}” กรุณาลองอีกครั้ง`,
     source: isHss ? 'กรมสนับสนุนบริการสุขภาพ (สบส.)' : 'ศูนย์ตรวจสอบการอนุญาต อย.',
-    sourceUrl: isHss ? HSS_SPA_SEARCH_URL : FDA_SOURCE_URL,
+    sourceUrl: isClinic ? HSS_CLINIC_SOURCE_URL : isHss ? HSS_SPA_SEARCH_URL : FDA_SOURCE_URL,
     publishedDate: inspectedAt,
     confidenceScore: 0,
     status: 'UNAVAILABLE',
@@ -450,7 +467,7 @@ function mapHssSpaResult(value: HssSpaResultRow, index: number, now: () => Date)
   return {
     id: `hss-spa-${licenseNumber || index}`,
     title: nameThai,
-    category: 'HEALTH_SERVICES',
+    category: 'MASSAGE_SPA',
     productCategoryLabel: text(shop.shopType) || 'สถานประกอบการเพื่อสุขภาพ',
     snippet: `เลขที่ใบอนุญาต ${licenseNumber} — สถานะ ${officialStatus || 'ไม่ระบุ'} — ${text(shop.addressText) || 'ไม่ระบุที่อยู่'}`,
     source: 'กรมสนับสนุนบริการสุขภาพ (สบส.)',
@@ -482,7 +499,7 @@ function clinicProviderState(
   return {
     id: `${unavailable ? 'unavailable' : 'unverified'}-hss-clinic-${encodeURIComponent(query).slice(0, 80)}`,
     title: unavailable ? 'เชื่อมต่อทะเบียนสถานพยาบาล สบส. ไม่สำเร็จ' : 'ไม่พบสถานพยาบาลที่ตรงกัน',
-    category: 'HEALTH_SERVICES',
+    category: 'CLINICS',
     productCategoryLabel: unavailable ? 'ทะเบียนสถานพยาบาลไม่พร้อมใช้งานชั่วคราว' : 'ผลค้นทะเบียนสถานพยาบาล — ไม่ใช่ผลรับรอง',
     snippet: unavailable
       ? `ระบบไม่ได้รับคำตอบที่ตรวจสอบได้จากฐานรายชื่อโรงพยาบาลและคลินิก สบส. จึงไม่สรุปว่า “พบ” หรือ “ไม่พบ” สำหรับ “${query}”`
@@ -496,54 +513,80 @@ function clinicProviderState(
   };
 }
 
-function parseHssClinicHtml(html: string, query: string, now: () => Date): SmartSearchResult[] {
-  const lines = htmlToLines(html);
-  const totalLine = lines.find((line) => /ค้นพบทั้งหมด|ผลลัพธ์จากการ.*หา/.test(line));
-  const totalMatch = totalLine?.match(/([\d,]+)\s*(?:รายการ|แห่ง)/);
-  const inspectedAt = checkedDate(now);
-  const results: SmartSearchResult[] = [];
+function parseHssClinicCard(cardHtml: string, index: number, query: string, now: () => Date): SmartSearchResult | null {
+  const lines = htmlToLines(cardHtml);
 
-  for (let index = 0; index < lines.length; index += 1) {
-    const line = lines[index];
-    if (!/เลขที่ใบอนุญาต\s*:/.test(line)) continue;
+  let name = '';
+  let licenseNumber = '';
+  let address = '';
+  let validUntil = '';
 
-    const licenseNumber = line.split(':').slice(1).join(':').trim();
-    const name = [...lines.slice(Math.max(0, index - 4), index)].reverse().find((candidate) => (
-      !/ค้นพบทั้งหมด|ผลลัพธ์|Hospital List|รายชื่อโรงพยาบาล|คำค้นหา/.test(candidate)
-      && candidate.length >= 3
-    ));
-    if (!name) continue;
-
-    const addressLine = lines.slice(index + 1, index + 5).find((candidate) => /(?:ที่ตั้ง|ที่อยู่)\s*:/.test(candidate));
-    const phoneLine = lines.slice(index + 1, index + 7).find((candidate) => /(?:เบอร์โทรศัพท์|โทรศัพท์)\s*:/.test(candidate));
-    const address = addressLine?.split(':').slice(1).join(':').trim() || '-';
-    const phone = phoneLine?.split(':').slice(1).join(':').trim() || '-';
-    const idSeed = licenseNumber || `${name}-${index}`;
-    results.push({
-      id: `hss-clinic-${encodeURIComponent(idSeed).slice(0, 100)}`,
-      title: name,
-      category: 'HEALTH_SERVICES',
-      productCategoryLabel: 'สถานพยาบาล/คลินิก',
-      snippet: `${licenseNumber ? `เลขที่ใบอนุญาต ${licenseNumber} — ` : ''}พบชื่อในบัญชีสาธารณะ สบส.${address !== '-' ? ` — ${address}` : ''}`,
-      source: 'ทะเบียนสถานพยาบาลเอกชน กรมสนับสนุนบริการสุขภาพ (สบส.)',
-      sourceUrl: `${HSS_CLINIC_SEARCH_URL}?q=${encodeURIComponent(query)}&s_data=MedicalName`,
-      publishedDate: inspectedAt,
-      confidenceScore: 1,
-      status: 'WARNING',
-      metadata: {
-        'ชื่อสถานพยาบาล': name,
-        'เลขที่ใบอนุญาต': licenseNumber || 'ต้นทางไม่แสดงในรายการนี้',
-        'ที่ตั้ง': address,
-        'โทรศัพท์': phone,
-        'จำนวนผลจากต้นทาง': totalMatch?.[1] || '-',
-        'สถานะการตีความ': 'พบในบัญชีสาธารณะ สบส. — โปรดเปิดต้นฉบับเพื่อตรวจสถานะใบอนุญาตล่าสุด',
-        'ตรวจสอบเมื่อ': inspectedAt,
-      },
-    });
-    if (results.length >= 10) break;
+  for (let i = 0; i < lines.length; i += 1) {
+    const line = lines[i];
+    if (/ชื่อสถานพยาบาล\s*:/.test(line)) {
+      name = lines[i + 1]?.trim() || line.split(':').slice(1).join(':').trim();
+    } else if (/เลขที่ใบอนุญาต(?:ประกอบกิจการ)?\s*:/.test(line)) {
+      licenseNumber = lines[i + 1]?.trim() || line.split(':').slice(1).join(':').trim();
+    } else if (/สถานที่ตั้ง\s*:/.test(line)) {
+      address = lines[i + 1]?.trim() || line.split(':').slice(1).join(':').trim();
+    } else if (/ใช้ได้ถึงวันที่\s*:/.test(line)) {
+      validUntil = lines[i + 1]?.trim() || line.split(':').slice(1).join(':').trim();
+    }
   }
 
-  return results;
+  if (!name && !licenseNumber) return null;
+
+  const inspectedAt = checkedDate(now);
+  const idSeed = licenseNumber || `${name}-${index}`;
+  return {
+    id: `hss-clinic-${encodeURIComponent(idSeed).slice(0, 100)}`,
+    title: name || 'ไม่ระบุชื่อ',
+    category: 'CLINICS',
+    productCategoryLabel: 'สถานพยาบาล/คลินิก',
+    snippet: `${licenseNumber ? `เลขที่ใบอนุญาต ${licenseNumber} — ` : ''}พบชื่อในบัญชีสาธารณะ สบส.${address ? ` — ${address}` : ''}${validUntil ? ` — ใช้ได้ถึง ${validUntil}` : ''}`,
+    source: 'ทะเบียนสถานพยาบาลเอกชน กรมสนับสนุนบริการสุขภาพ (สบส.)',
+    sourceUrl: HSS_CLINIC_SOURCE_URL,
+    publishedDate: inspectedAt,
+    confidenceScore: 1,
+    status: 'WARNING',
+    metadata: {
+      'ชื่อสถานพยาบาล': name || '-',
+      'เลขที่ใบอนุญาต': licenseNumber || 'ต้นทางไม่แสดงในรายการนี้',
+      'ที่ตั้ง': address || '-',
+      'ใช้ได้ถึง': validUntil || '-',
+      'สถานะการตีความ': 'พบในบัญชีสาธารณะ สบส. — โปรดเปิดต้นฉบับเพื่อตรวจสถานะใบอนุญาตล่าสุด',
+      'ตรวจสอบเมื่อ': inspectedAt,
+    },
+  };
+}
+
+async function acquireHssClinicSession(
+  fetchImpl: SearchFetch,
+): Promise<{ cookie: string; token: string } | null> {
+  try {
+    const response = await fetchWithTimeout(fetchImpl, HSS_CLINIC_BASE_URL, {
+      method: 'GET',
+      headers: {
+        'User-Agent': HSS_CLINIC_USER_AGENT,
+        Accept: 'text/html',
+      },
+      cache: 'no-store',
+    });
+    if (!response.ok) return null;
+
+    const setCookieHeader = response.headers.get('set-cookie') || '';
+    const cookieMatch = setCookieHeader.match(/ci_session=([^;]+)/);
+    const cookie = cookieMatch ? `ci_session=${cookieMatch[1]}` : '';
+
+    const html = await response.text();
+    const tokenMatch = html.match(/id="token"\s+value="([^"]+)"/);
+    const token = tokenMatch ? tokenMatch[1] : '';
+
+    if (!cookie || !token) return null;
+    return { cookie, token };
+  } catch {
+    return null;
+  }
 }
 
 export async function searchOfficialHssClinics(
@@ -551,23 +594,47 @@ export async function searchOfficialHssClinics(
   fetchImpl: SearchFetch = fetch,
   now: () => Date = () => new Date(),
 ): Promise<SmartSearchResult[]> {
-  const url = new URL(HSS_CLINIC_SEARCH_URL);
-  url.searchParams.set('q', query);
-  url.searchParams.set('s_data', 'MedicalName');
   try {
-    const response = await fetchWithTimeout(fetchImpl, url.toString(), {
-      method: 'GET',
-      headers: { Accept: 'text/html;charset=UTF-8' },
+    const session = await acquireHssClinicSession(fetchImpl);
+    if (!session) return [clinicProviderState(query, 'UNAVAILABLE', now)];
+
+    const searchType = /^\d+$/.test(query.trim()) ? 'code' : 'name';
+    const body = new URLSearchParams({
+      keyword: query,
+      type: searchType,
+      token: session.token,
+    });
+
+    const response = await fetchWithTimeout(fetchImpl, HSS_CLINIC_SEARCH_ENDPOINT, {
+      method: 'POST',
+      headers: {
+        'User-Agent': HSS_CLINIC_USER_AGENT,
+        'Content-Type': 'application/x-www-form-urlencoded',
+        Cookie: session.cookie,
+        Referer: HSS_CLINIC_BASE_URL,
+      },
+      body: body.toString(),
       cache: 'no-store',
     });
     if (!response.ok) return [clinicProviderState(query, 'UNAVAILABLE', now)];
-    const html = await response.text();
-    const results = parseHssClinicHtml(html, query, now);
-    if (results.length > 0) return results;
-    if (/ค้นพบทั้งหมด\s*:\s*0|ไม่พบข้อมูล|ไม่พบรายการ/.test(decodeHtml(html))) {
-      return [clinicProviderState(query, 'UNREGISTERED', now)];
+
+    const payload: unknown = await response.json();
+    if (typeof payload !== 'object' || payload === null) {
+      return [clinicProviderState(query, 'UNAVAILABLE', now)];
     }
-    return [clinicProviderState(query, 'UNAVAILABLE', now)];
+
+    const { code, data } = payload as { code?: number; data?: unknown; numRow?: string };
+
+    if (code === 404) return [clinicProviderState(query, 'UNREGISTERED', now)];
+    if (code !== 200 || !Array.isArray(data)) return [clinicProviderState(query, 'UNAVAILABLE', now)];
+
+    const results = data
+      .slice(0, 10)
+      .map((cardHtml, index) => parseHssClinicCard(String(cardHtml), index, query, now))
+      .filter((row): row is SmartSearchResult => row !== null);
+
+    if (results.length > 0) return results;
+    return [clinicProviderState(query, 'UNREGISTERED', now)];
   } catch {
     return [clinicProviderState(query, 'UNAVAILABLE', now)];
   }
@@ -578,7 +645,6 @@ export async function searchOfficialHssSpaBusinesses(
   fetchImpl: SearchFetch = fetch,
   now: () => Date = () => new Date(),
 ): Promise<SmartSearchResult[]> {
-  if (isClinicQuery(query)) return searchOfficialHssClinics(query, fetchImpl, now);
   const mode = /^\d{9}-\d{2}$/.test(query) ? 'license' : 'name';
   try {
     const response = await fetchWithTimeout(fetchImpl, HSS_SPA_SEARCH_URL, {
@@ -593,16 +659,16 @@ export async function searchOfficialHssSpaBusinesses(
       body: JSON.stringify([mode, query]),
       cache: 'no-store',
     });
-    if (!response.ok) return [providerUnavailable(query, 'HSS', now)];
+    if (!response.ok) return [providerUnavailable(query, 'HSS_SPA', now)];
     const payload = parseHssActionPayload(await response.text());
-    if (!payload) return [providerUnavailable(query, 'HSS', now)];
+    if (!payload) return [providerUnavailable(query, 'HSS_SPA', now)];
     const results = (payload.results || [])
       .slice(0, 10)
       .map((row, index) => mapHssSpaResult(row, index, now))
       .filter((row): row is SmartSearchResult => row !== null);
-    return payload.found && results.length > 0 ? results : [unverifiedGuidance(query, 'HSS', now)];
+    return payload.found && results.length > 0 ? results : [unverifiedGuidance(query, 'HSS_SPA', now)];
   } catch {
-    return [providerUnavailable(query, 'HSS', now)];
+    return [providerUnavailable(query, 'HSS_SPA', now)];
   }
 }
 
@@ -637,9 +703,23 @@ export async function resolveMultiChannelSearch(
   let officialFallback: SmartSearchResult[] = [];
 
   if (options.searchOfficial && officialSource !== 'NONE') {
-    const officialResults = officialSource === 'HSS'
-      ? await searchOfficialHssSpaBusinesses(query, fetchImpl, now)
-      : await searchOfficialFdaProducts(query, fetchImpl, now);
+    let officialResults: SmartSearchResult[];
+    if (officialSource === 'HSS_CLINIC') {
+      officialResults = await searchOfficialHssClinics(query, fetchImpl, now);
+    } else if (officialSource === 'HSS_SPA') {
+      officialResults = await searchOfficialHssSpaBusinesses(query, fetchImpl, now);
+    } else if (officialSource === 'HSS_BOTH') {
+      const [clinicResults, spaResults] = await Promise.all([
+        searchOfficialHssClinics(query, fetchImpl, now),
+        searchOfficialHssSpaBusinesses(query, fetchImpl, now),
+      ]);
+      const confirmed = [...clinicResults, ...spaResults]
+        .filter((item) => item.status === 'SAFE' || item.status === 'WARNING' || item.status === 'REVOKED');
+      if (confirmed.length > 0) return confirmed;
+      officialResults = [...clinicResults, ...spaResults];
+    } else {
+      officialResults = await searchOfficialFdaProducts(query, fetchImpl, now);
+    }
     if (officialResults.some((item) => item.status === 'SAFE' || item.status === 'WARNING' || item.status === 'REVOKED')) {
       return officialResults;
     }
@@ -658,8 +738,17 @@ export async function resolveMultiChannelSearch(
           max_results: 10,
         });
         if (!error && Array.isArray(data)) {
+          const matchCategories = new Set<string>();
+          if (options.category === 'ALL') matchCategories.add('ALL');
+          else if (options.category === 'HEALTH_SERVICES') {
+            matchCategories.add('HEALTH_SERVICES');
+            matchCategories.add('CLINICS');
+            matchCategories.add('MASSAGE_SPA');
+          } else {
+            matchCategories.add(options.category);
+          }
           const verified = mapTrustedSourceRows(data)
-            .filter((item) => options.category === 'ALL' || item.category === options.category);
+            .filter((item) => matchCategories.has('ALL') || matchCategories.has(item.category));
           if (verified.length > 0) return verified;
         }
       } catch {
@@ -669,5 +758,8 @@ export async function resolveMultiChannelSearch(
   }
 
   if (officialFallback.length > 0) return officialFallback;
-  return [unverifiedGuidance(query, options.category === 'HEALTH_SERVICES' ? 'HSS' : 'INTERNAL', now)];
+  const fallbackSource = options.category === 'CLINICS' ? 'HSS_CLINIC'
+    : options.category === 'MASSAGE_SPA' || options.category === 'HEALTH_SERVICES' ? 'HSS_SPA'
+    : 'INTERNAL';
+  return [unverifiedGuidance(query, fallbackSource, now)];
 }

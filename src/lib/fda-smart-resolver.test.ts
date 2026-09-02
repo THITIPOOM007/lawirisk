@@ -174,24 +174,41 @@ describe('FDA public search fallback', () => {
     );
 
     expect(result).toMatchObject({
-      category: 'HEALTH_SERVICES',
+      category: 'MASSAGE_SPA',
       status: 'SAFE',
       source: 'กรมสนับสนุนบริการสุขภาพ (สบส.)',
       metadata: { 'เลขที่ใบอนุญาต': '100200110-61' },
     });
   });
 
-  it('maps clinic names only from the HSS private-hospital public registry', async () => {
-    const html = `
-      <section><h4>ค้นพบทั้งหมด : 1 รายการ</h4>
-      <article><h5>แวคทูโฮมคลินิกเวชกรรม</h5>
-      <p>เลขที่ใบอนุญาต : 10101012369</p>
-      <p>ที่ตั้ง : 42 ชั้น 1 เพชรเกษม 80 แยก 2 บางแค กรุงเทพมหานคร 10160</p>
-      <p>เบอร์โทรศัพท์ : 02-000-0000</p></article></section>`;
+  it('maps clinic names from the new hosp.hss.moph.go.th registry', async () => {
+    const cardHtml = `
+      <div class="testimonial-card11-text1-12">ชื่อสถานพยาบาล :</div>
+      <div class="testimonial-card11-text1-13"> แวคทูโฮมคลินิกเวชกรรม</div>
+      <div class="testimonial-card11-text1-16">สถานที่ตั้ง :</div>
+      <div class="testimonial-card11-text1-17"> 42 ชั้น 1 เพชรเกษม 80 แยก 2 บางแค กรุงเทพมหานคร 10160</div>
+      <div class="testimonial-card11-text1-1">เลขที่ใบอนุญาตประกอบกิจการ :</div>
+      <div class="testimonial-card11-text1-11"> 10101012369</div>
+      <div class="testimonial-card11-text1-14">ใช้ได้ถึงวันที่ :</div>
+      <div class="testimonial-card11-text1-15"> 31 ธันวาคม 2577</div>
+    `;
+
     const fetchImpl = vi.fn(async (input: string | URL | Request) => {
-      expect(String(input)).toContain('privatehospital.hss.moph.go.th/Search_View.php');
-      expect(String(input)).toContain('s_data=MedicalName');
-      return new Response(html, { status: 200, headers: { 'Content-Type': 'text/html;charset=UTF-8' } });
+      const url = String(input);
+      if (url === 'https://hosp.hss.moph.go.th') {
+        return new Response('<input type="hidden" id="token" value="fake-token">', {
+          status: 200,
+          headers: { 'set-cookie': 'ci_session=fake-session-cookie; path=/' },
+        });
+      }
+      if (url === 'https://hosp.hss.moph.go.th/key-searchs') {
+        return new Response(JSON.stringify({
+          code: 200,
+          data: [cardHtml],
+          numRow: 'ค้นพบทั้งหมด 1 รายการ',
+        }), { status: 200 });
+      }
+      return new Response('Not found', { status: 404 });
     });
 
     const [result] = await searchOfficialHssClinics(
@@ -202,11 +219,13 @@ describe('FDA public search fallback', () => {
 
     expect(result).toMatchObject({
       title: 'แวคทูโฮมคลินิกเวชกรรม',
-      category: 'HEALTH_SERVICES',
+      category: 'CLINICS',
       status: 'WARNING',
       metadata: {
+        'ชื่อสถานพยาบาล': 'แวคทูโฮมคลินิกเวชกรรม',
         'เลขที่ใบอนุญาต': '10101012369',
-        'จำนวนผลจากต้นทาง': '1',
+        'ที่ตั้ง': '42 ชั้น 1 เพชรเกษม 80 แยก 2 บางแค กรุงเทพมหานคร 10160',
+        'ใช้ได้ถึง': '31 ธันวาคม 2577',
       },
     });
   });
