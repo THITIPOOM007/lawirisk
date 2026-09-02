@@ -64,6 +64,7 @@ describe('FDA public search fallback', () => {
         product_category_label: 'ประกาศเตือนภัย', snippet: 'รายละเอียดที่ตรวจสอบได้',
         source: 'หน่วยงานรัฐ', source_url: 'https://example.go.th/notices/1',
         published_date: '2569-08-01', status: 'WARNING',
+        metadata: { 'เลขที่ใบอนุญาต': '33101001165', ignored: { nested: true } },
       },
       {
         id: 'unsafe-1', title: 'ไม่ควรผ่าน', category: 'FRAUD_ALERTS',
@@ -73,7 +74,12 @@ describe('FDA public search fallback', () => {
     ]);
 
     expect(rows).toHaveLength(1);
-    expect(rows[0]).toMatchObject({ id: 'official-1', confidenceScore: 1 });
+    expect(rows[0]).toMatchObject({
+      id: 'official-1',
+      confidenceScore: 1,
+      metadata: { 'เลขที่ใบอนุญาต': '33101001165' },
+    });
+    expect(rows[0]?.metadata).not.toHaveProperty('ignored');
   });
 
   it('maps a live FDA product response to explicit registry fields', async () => {

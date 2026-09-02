@@ -36,6 +36,7 @@ type TrustedSourceRow = {
   source_url?: unknown;
   published_date?: unknown;
   status?: unknown;
+  metadata?: unknown;
 };
 
 type SearchFetch = (input: string | URL | Request, init?: RequestInit) => Promise<Response>;
@@ -141,6 +142,14 @@ function mapTrustedRow(row: TrustedSourceRow): SmartSearchResult | null {
   if (!id || !title || !snippet || !source || !sourceUrl || !categories.has(category) || !statuses.has(status)) {
     return null;
   }
+  const metadata = row.metadata && typeof row.metadata === 'object' && !Array.isArray(row.metadata)
+    ? Object.fromEntries(
+      Object.entries(row.metadata as Record<string, unknown>)
+        .slice(0, 20)
+        .map(([key, value]) => [key.slice(0, 100), text(value).slice(0, 500)])
+        .filter(([key, value]) => key.length > 0 && value.length > 0),
+    )
+    : undefined;
   return {
     id,
     title,
@@ -152,6 +161,7 @@ function mapTrustedRow(row: TrustedSourceRow): SmartSearchResult | null {
     publishedDate: text(row.published_date) || 'ไม่ระบุ',
     confidenceScore: 1,
     status,
+    ...(metadata && Object.keys(metadata).length > 0 ? { metadata } : {}),
   };
 }
 
@@ -671,6 +681,39 @@ function normalizeOptions(searchDbOrOptions: boolean | ResolveSearchOptions): Re
   };
 }
 
+async function searchTrustedRegistry(
+  query: string,
+  category: PublicSearchCategory,
+): Promise<SmartSearchResult[]> {
+  const url = process.env.NEXT_PUBLIC_SUPABASE_URL?.trim();
+  const anonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY?.trim();
+  if (!url || !anonKey) return [];
+
+  try {
+    const { createClient } = await import('@supabase/supabase-js');
+    const supabase = createClient(url, anonKey, { auth: { persistSession: false, autoRefreshToken: false } });
+    const { data, error } = await supabase.rpc('search_trusted_sources', {
+      search_query: query,
+      max_results: 10,
+    });
+    if (error || !Array.isArray(data)) return [];
+
+    const matchCategories = new Set<string>();
+    if (category === 'ALL') matchCategories.add('ALL');
+    else if (category === 'HEALTH_SERVICES') {
+      matchCategories.add('HEALTH_SERVICES');
+      matchCategories.add('CLINICS');
+      matchCategories.add('MASSAGE_SPA');
+    } else {
+      matchCategories.add(category);
+    }
+    return mapTrustedSourceRows(data)
+      .filter((item) => matchCategories.has('ALL') || matchCategories.has(item.category));
+  } catch {
+    return [];
+  }
+}
+
 export async function resolveMultiChannelSearch(
   rawQuery: string,
   searchDbOrOptions: boolean | ResolveSearchOptions = true,
@@ -681,6 +724,14 @@ export async function resolveMultiChannelSearch(
   const fetchImpl = options.fetchImpl || fetch;
   const officialSource = selectOfficialSource(query, options.category);
   let officialFallback: SmartSearchResult[] = [];
+
+  // HSS currently does not answer requests from common serverless/datacenter IPs.
+  // Prefer a dated, source-linked snapshot for known clinic records so public
+  // searches remain fast; uncached terms still continue to the live provider.
+  if (options.searchDb && options.category === 'CLINICS') {
+    const verifiedSnapshot = await searchTrustedRegistry(query, options.category);
+    if (verifiedSnapshot.length > 0) return verifiedSnapshot;
+  }
 
   if (options.searchOfficial && officialSource !== 'NONE') {
     let officialResults: SmartSearchResult[];
@@ -707,34 +758,8 @@ export async function resolveMultiChannelSearch(
   }
 
   if (options.searchDb) {
-    const url = process.env.NEXT_PUBLIC_SUPABASE_URL?.trim();
-    const anonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY?.trim();
-    if (url && anonKey) {
-      try {
-        const { createClient } = await import('@supabase/supabase-js');
-        const supabase = createClient(url, anonKey, { auth: { persistSession: false, autoRefreshToken: false } });
-        const { data, error } = await supabase.rpc('search_trusted_sources', {
-          search_query: query,
-          max_results: 10,
-        });
-        if (!error && Array.isArray(data)) {
-          const matchCategories = new Set<string>();
-          if (options.category === 'ALL') matchCategories.add('ALL');
-          else if (options.category === 'HEALTH_SERVICES') {
-            matchCategories.add('HEALTH_SERVICES');
-            matchCategories.add('CLINICS');
-            matchCategories.add('MASSAGE_SPA');
-          } else {
-            matchCategories.add(options.category);
-          }
-          const verified = mapTrustedSourceRows(data)
-            .filter((item) => matchCategories.has('ALL') || matchCategories.has(item.category));
-          if (verified.length > 0) return verified;
-        }
-      } catch {
-        // Preserve the explicit official-source state below.
-      }
-    }
+    const verified = await searchTrustedRegistry(query, options.category);
+    if (verified.length > 0) return verified;
   }
 
   if (officialFallback.length > 0) return officialFallback;
