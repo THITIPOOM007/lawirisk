@@ -221,7 +221,7 @@ export default function Navigation({ children }: NavigationProps) {
   };
 
   useEffect(() => {
-    if (!usesSupabase) return;
+    if (!usesSupabase || pathname.startsWith('/public')) return;
     const controller = new AbortController();
     fetch('/api/v1/me', { credentials: 'same-origin', signal: controller.signal })
       .then(async (response) => {
@@ -231,7 +231,7 @@ export default function Navigation({ children }: NavigationProps) {
       .then((body) => { if (body?.data) setServerIdentity({ name: body.data.name, role: body.data.role }); })
       .catch((caught: unknown) => { if (!(caught instanceof DOMException && caught.name === 'AbortError')) console.error('Identity load failed'); });
     return () => controller.abort();
-  }, [usesSupabase]);
+  }, [pathname, usesSupabase]);
 
   const userRole = usesSupabase ? serverIdentity?.role || 'VIEWER' : demoRole;
   const userName = usesSupabase ? serverIdentity?.name || 'กำลังโหลดข้อมูลผู้ใช้…' : demoName;

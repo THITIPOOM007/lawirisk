@@ -728,7 +728,7 @@ export async function resolveMultiChannelSearch(
   // HSS currently does not answer requests from common serverless/datacenter IPs.
   // Prefer a dated, source-linked snapshot for known clinic records so public
   // searches remain fast; uncached terms still continue to the live provider.
-  if (options.searchDb && options.category === 'CLINICS') {
+  if (options.searchDb && (options.category === 'CLINICS' || options.category === 'HEALTH_SERVICES')) {
     const verifiedSnapshot = await searchTrustedRegistry(query, options.category);
     if (verifiedSnapshot.length > 0) return verifiedSnapshot;
   }
