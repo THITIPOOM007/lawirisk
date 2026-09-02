@@ -589,7 +589,10 @@ export async function searchOfficialHssClinics(
       body: body.toString(),
       cache: 'no-store',
     });
-    if (!response.ok) return [clinicProviderState(query, 'UNAVAILABLE', now)];
+    if (!response.ok) {
+      console.warn(JSON.stringify({ event: 'HSS_CLINIC_REGISTRY_NON_SUCCESS', status: response.status }));
+      return [clinicProviderState(query, 'UNAVAILABLE', now)];
+    }
 
     const payload: unknown = await response.json();
     if (typeof payload !== 'object' || payload === null) {
@@ -608,7 +611,11 @@ export async function searchOfficialHssClinics(
 
     if (results.length > 0) return results;
     return [clinicProviderState(query, 'UNREGISTERED', now)];
-  } catch {
+  } catch (error) {
+    console.warn(JSON.stringify({
+      event: 'HSS_CLINIC_REGISTRY_REQUEST_FAILED',
+      error: error instanceof Error ? error.name : 'UnknownError',
+    }));
     return [clinicProviderState(query, 'UNAVAILABLE', now)];
   }
 }
