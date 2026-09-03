@@ -238,7 +238,7 @@ describe('FDA public search fallback', () => {
   });
 
   it('returns a related HSS public announcement as a review lead with its original citation', async () => {
-    const html = `<B style="font-size:18px;"><A href='fileupload_doc/2023-12-18-alert.png' target=_blank>เตือนภัยมิจฉาชีพ แอบอ้างกรม สบส.</a></B><br>กรมสนับสนุนบริการสุขภาพเตือนประชาชนอย่ากดลิงก์ที่น่าสงสัย <B>[ลงประกาศโดย : ประชาสัมพันธ์ วันที่ : 18 ธ.ค. 2566]</B>`;
+    const html = `<B style="font-size:18px;"><A href='fileupload_doc/2023-12-18-alert.png' target=_blank>เตือนภัยมิจฉาชีพ แอบอ้างกรม สบส.</a></B><br>กรมสนับสนุนบริการสุขภาพเตือนประชาชนอย่ากดลิงก์ที่น่าสงสัย <BR><p>&nbsp;</p><B>[ลงประกาศโดย : ประชาสัมพันธ์ &nbsp;&nbsp;วันที่ : 18 ธ.ค. 2566]</B>`;
     const fetchImpl = vi.fn(async () => new Response(html, { status: 200 }));
 
     const [result] = await searchOfficialHssPublicNews('มิจฉาชีพ', fetchImpl, () => new Date('2026-09-03T01:00:00.000Z'));

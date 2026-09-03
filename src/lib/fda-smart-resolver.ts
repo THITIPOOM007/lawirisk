@@ -965,7 +965,7 @@ export async function searchOfficialHssPublicNews(
 
     const html = await response.text();
     const entries = Array.from(html.matchAll(
-      /<B[^>]*>\s*<A\s+href=['"]([^'"]+)['"][^>]*>([\s\S]*?)<\/a>\s*<\/B><br>([\s\S]*?)<B>\s*\[ลงประกาศโดย\s*:\s*([^\]&]*?)\s*วันที่\s*:\s*([^\]]+)\]/gi,
+      /<B[^>]*>\s*<A\s+href=['"]([^'"]+)['"][^>]*>([\s\S]*?)<\/a>\s*<\/B><br>([\s\S]*?)<B>\s*\[ลงประกาศโดย\s*:\s*([\s\S]*?)\s*วันที่\s*:\s*([^\]]+)\]/gi,
     ));
     const inspectedAt = checkedDate(now);
     return entries.slice(0, 5).flatMap((entry, index) => {
