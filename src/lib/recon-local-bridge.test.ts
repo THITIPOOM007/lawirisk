@@ -5,8 +5,10 @@ import os from 'node:os';
 import path from 'node:path';
 import {
   LOCAL_BRIDGE_CLIENT_HEADER,
+  LOCAL_BRIDGE_CAPTURE_PROTOCOL,
   LOCAL_BRIDGE_HOST,
   LOCAL_BRIDGE_PORT,
+  LOCAL_BRIDGE_VERSION,
   createLocalBridgeServer,
   isAllowedReconOrigin,
   validateLocalSearch,
@@ -55,7 +57,12 @@ describe('local recon bridge boundary', () => {
     await withLocalBridge(async (baseUrl) => {
       const response = await fetch(`${baseUrl}/health`);
       expect(response.status).toBe(200);
-      await expect(response.json()).resolves.toEqual({ status: 'ready', transport: 'loopback-only' });
+      await expect(response.json()).resolves.toEqual({
+        status: 'ready',
+        transport: 'loopback-only',
+        version: LOCAL_BRIDGE_VERSION,
+        captureProtocol: LOCAL_BRIDGE_CAPTURE_PROTOCOL,
+      });
     });
   });
 

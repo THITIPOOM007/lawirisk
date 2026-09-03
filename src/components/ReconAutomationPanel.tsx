@@ -38,6 +38,10 @@ const statusLabel: Record<JobStatus, string> = {
 
 const runningStatuses = new Set<JobStatus>(['AUTHORIZING', 'LAUNCHING', 'SEARCHING', 'DOWNLOADING', 'IMPORTING', 'REGISTERING']);
 
+function needsCompanionUpdate(error?: string) {
+  return error?.includes('เป็นรุ่นเก่า') ?? false;
+}
+
 export function ReconAutomationPanel(props: {
   caseId: string;
   plan: ReconAutomationPlanItem[];
@@ -181,7 +185,7 @@ export function ReconAutomationPanel(props: {
               </div>
             </div>
 
-            {job.error && <div role="alert" className="mx-4 mb-4 flex items-start gap-2 rounded-xl border border-rose-300/15 bg-rose-300/[0.05] p-3 text-[10px] leading-5 text-rose-200"><AlertTriangle className="mt-0.5 h-3.5 w-3.5 shrink-0" />{job.error}</div>}
+            {job.error && <div role="alert" className="mx-4 mb-4 rounded-xl border border-rose-300/15 bg-rose-300/[0.05] p-3 text-[10px] leading-5 text-rose-200"><p className="flex items-start gap-2"><AlertTriangle className="mt-0.5 h-3.5 w-3.5 shrink-0" />{job.error}</p>{needsCompanionUpdate(job.error) && <Link href="/sources" className="mt-2 inline-flex rounded-lg border border-rose-200/20 bg-slate-950/30 px-2.5 py-1.5 font-bold text-rose-100 hover:bg-rose-300/10">อัปเดต Recon Companion</Link>}</div>}
 
             {job.result && (
               <div className="border-t border-white/[0.07] bg-slate-950/35 p-4">

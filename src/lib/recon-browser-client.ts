@@ -4,6 +4,14 @@ import type { ReconAutomationPlanItem } from './recon-automation';
 
 const LOCAL_BRIDGE = 'http://127.0.0.1:32147';
 const LOCAL_HEADERS = { 'X-LawiRisk-Recon-Client': 'lawirisk-web-1' };
+export const LOCAL_BRIDGE_CAPTURE_PROTOCOL = 2;
+
+type LocalBridgeHealth = {
+  status?: unknown;
+  transport?: unknown;
+  version?: unknown;
+  captureProtocol?: unknown;
+};
 
 export type LocalReconResult = {
   source: string;
@@ -40,6 +48,33 @@ function message(body: unknown, fallback: string) {
   return fallback;
 }
 
+/**
+ * An earlier Companion saved only the PDF. Keeping this contract explicit
+ * prevents the browser from starting a job that cannot provide screenshot
+ * evidence and would otherwise end as a misleading 404.
+ */
+export function validateLocalBridgeHealth(payload: unknown) {
+  const health = payload && typeof payload === 'object' ? payload as LocalBridgeHealth : undefined;
+  if (health?.status !== 'ready' || health.transport !== 'loopback-only') {
+    throw new Error('Recon Companion บนเครื่องนี้ตอบสถานะไม่ถูกต้อง กรุณาปิดและเปิด Companion ใหม่');
+  }
+  if (health.captureProtocol !== LOCAL_BRIDGE_CAPTURE_PROTOCOL) {
+    throw new Error('Recon Companion บนเครื่องนี้เป็นรุ่นเก่าที่ยังไม่เก็บภาพหน้าผลค้น กรุณาดาวน์โหลดและติดตั้ง Recon Companion รุ่นปัจจุบัน แล้วเริ่มค้นใหม่');
+  }
+  return { version: typeof health.version === 'string' ? health.version : undefined };
+}
+
+async function ensureCompatibleLocalBridge(signal?: AbortSignal) {
+  const response = await fetch(`${LOCAL_BRIDGE}/health`, {
+    headers: LOCAL_HEADERS,
+    cache: 'no-store',
+    signal,
+  }).catch(() => undefined);
+  if (!response) throw new Error('ไม่พบ Recon Companion บนเครื่องนี้ กรุณาติดตั้งหรือเปิด Local Bridge แล้วลองใหม่');
+  const body = await response.json().catch(() => null);
+  validateLocalBridgeHealth(body);
+}
+
 async function wait(delay: number, signal?: AbortSignal) {
   await new Promise<void>((resolve, reject) => {
     const timer = window.setTimeout(resolve, delay);
@@ -56,6 +91,7 @@ export async function executeLocalReconQuery(
   options: { signal?: AbortSignal; onState?: (state: string) => void } = {},
 ): Promise<CompletedLocalRecon> {
   options.onState?.('AUTHORIZING');
+  await ensureCompatibleLocalBridge(options.signal);
   const authorizationResponse = await fetch(`/api/v1/sources/${item.source}/companion`, {
     method: 'POST',
     credentials: 'same-origin',

@@ -22,6 +22,11 @@ import {
 export const LOCAL_BRIDGE_HOST = '127.0.0.1';
 export const LOCAL_BRIDGE_PORT = 32147;
 export const LOCAL_BRIDGE_CLIENT_HEADER = 'lawirisk-web-1';
+// Increment this whenever the companion-to-bridge capture contract changes.
+// The browser checks it before it creates a job, so an installed old companion
+// cannot produce a partial result which is later misreported as a source error.
+export const LOCAL_BRIDGE_CAPTURE_PROTOCOL = 2;
+export const LOCAL_BRIDGE_VERSION = '2026.09.03.2';
 export const LOCAL_SEARCH_JOB_TTL_MS = 2 * 60 * 1000;
 export const LOCAL_SEARCH_RESULT_TTL_MS = 15 * 60 * 1000;
 
@@ -250,7 +255,12 @@ export function createLocalBridgeServer(options = {}) {
     }
 
     if (request.method === 'GET' && request.url === '/health') {
-      sendJson(response, 200, { status: 'ready', transport: 'loopback-only' });
+      sendJson(response, 200, {
+        status: 'ready',
+        transport: 'loopback-only',
+        version: LOCAL_BRIDGE_VERSION,
+        captureProtocol: LOCAL_BRIDGE_CAPTURE_PROTOCOL,
+      });
       return;
     }
 

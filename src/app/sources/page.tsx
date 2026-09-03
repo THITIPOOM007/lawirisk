@@ -23,6 +23,9 @@ import type { Case } from '@/lib/demo-data';
 
 const LOCAL_RECON_BRIDGE_URL = 'http://127.0.0.1:32147/v1/command';
 const LOCAL_RECON_HEALTH_URL = 'http://127.0.0.1:32147/health';
+const LOCAL_RECON_CAPTURE_PROTOCOL = 2;
+
+type CompanionState = 'CHECKING' | 'READY' | 'MISSING' | 'OUTDATED';
 
 type LocalSearchRequest = {
   field: string;
@@ -38,6 +41,17 @@ type SearchDraft = {
   purpose: string;
   confirmed: boolean;
 };
+
+async function getLocalCompanionState(): Promise<Exclude<CompanionState, 'CHECKING'>> {
+  const response = await fetch(LOCAL_RECON_HEALTH_URL, {
+    cache: 'no-store',
+    signal: AbortSignal.timeout(3_500),
+  }).catch(() => undefined);
+  if (!response?.ok) return 'MISSING';
+  const health = await response.json().catch(() => null) as { status?: unknown; transport?: unknown; captureProtocol?: unknown } | null;
+  if (health?.status !== 'ready' || health.transport !== 'loopback-only') return 'MISSING';
+  return health.captureProtocol === LOCAL_RECON_CAPTURE_PROTOCOL ? 'READY' : 'OUTDATED';
+}
 
 async function invokeLocalCompanion(uri: string, search?: LocalSearchRequest): Promise<'LOCAL_BRIDGE' | 'WINDOWS_PROTOCOL'> {
   try {
@@ -96,7 +110,7 @@ export default function SourcesPage() {
   const [insecureAcknowledged, setInsecureAcknowledged] = useState(false);
   const [selectedServices, setSelectedServices] = useState<Partial<Record<ExternalSource['key'], ReconServiceKey>>>({});
   const [searchDrafts, setSearchDrafts] = useState<Partial<Record<ExternalSource['key'], SearchDraft>>>({});
-  const [companionState, setCompanionState] = useState<'CHECKING' | 'READY' | 'MISSING'>('CHECKING');
+  const [companionState, setCompanionState] = useState<CompanionState>('CHECKING');
 
   const checkCompanion = useCallback(async () => {
     setCompanionState('CHECKING');
@@ -104,11 +118,7 @@ export default function SourcesPage() {
       setCompanionState('MISSING');
       return;
     }
-    const response = await fetch(LOCAL_RECON_HEALTH_URL, {
-      cache: 'no-store',
-      signal: AbortSignal.timeout(3_500),
-    }).catch(() => undefined);
-    setCompanionState(response?.ok ? 'READY' : 'MISSING');
+    setCompanionState(await getLocalCompanionState());
   }, []);
 
   function updateSearchDraft(source: ExternalSource, patch: Partial<SearchDraft>) {
@@ -195,6 +205,9 @@ export default function SourcesPage() {
     setError('');
     setNotice('');
     try {
+      if (await getLocalCompanionState() === 'OUTDATED') {
+        throw new Error('Recon Companion บนเครื่องนี้เป็นรุ่นเก่าที่ยังไม่เก็บภาพหน้าผลค้น กรุณาดาวน์โหลดและติดตั้งรุ่นปัจจุบันก่อนเริ่มค้น');
+      }
       const response = await fetch(`/api/v1/sources/${source.key}/companion`, {
         method: 'POST',
         credentials: 'same-origin',
@@ -280,19 +293,19 @@ export default function SourcesPage() {
         </div>
       )}
 
-      <section className={`rounded-[26px] border p-5 sm:p-6 ${companionState === 'READY' ? 'border-emerald-300/20 bg-emerald-300/[0.055]' : companionState === 'MISSING' ? 'border-amber-300/20 bg-amber-300/[0.055]' : 'border-sky-300/15 bg-sky-300/[0.04]'}`} aria-label="ความพร้อม Recon Companion บนเครื่องนี้">
+      <section className={`rounded-[26px] border p-5 sm:p-6 ${companionState === 'READY' ? 'border-emerald-300/20 bg-emerald-300/[0.055]' : companionState === 'OUTDATED' ? 'border-rose-300/20 bg-rose-300/[0.055]' : companionState === 'MISSING' ? 'border-amber-300/20 bg-amber-300/[0.055]' : 'border-sky-300/15 bg-sky-300/[0.04]'}`} aria-label="ความพร้อม Recon Companion บนเครื่องนี้">
         <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
           <div className="flex items-start gap-3">
-            <span className="grid h-11 w-11 shrink-0 place-items-center rounded-2xl border border-white/[0.08] bg-slate-950/35"><MonitorCheck className={`h-5 w-5 ${companionState === 'READY' ? 'text-emerald-200' : companionState === 'MISSING' ? 'text-amber-200' : 'text-sky-200'}`} /></span>
-            <div><p className="font-mono text-[9px] font-bold uppercase tracking-[0.18em] text-slate-500">This device · Local-only</p><h2 className="mt-1 text-sm font-black text-white">{companionState === 'READY' ? 'Recon Companion พร้อมใช้งานบนเครื่องนี้' : companionState === 'MISSING' ? 'เครื่องนี้ยังไม่มี Recon Companion หรือ Local Bridge ไม่ได้ทำงาน' : 'กำลังตรวจ Recon Companion บนเครื่องนี้…'}</h2><p className="mt-1 max-w-3xl text-xs leading-6 text-slate-400">Companion ต้องติดตั้งแยกทุกเครื่อง เพราะบัญชีและ session ถูกเข้ารหัสด้วย Windows DPAPI และเก็บเฉพาะเครื่องนั้น ระบบเว็บจึงไม่สามารถนำการตั้งค่าจากคอมพิวเตอร์อีกเครื่องมาใช้โดยอัตโนมัติได้</p></div>
+            <span className="grid h-11 w-11 shrink-0 place-items-center rounded-2xl border border-white/[0.08] bg-slate-950/35"><MonitorCheck className={`h-5 w-5 ${companionState === 'READY' ? 'text-emerald-200' : companionState === 'OUTDATED' ? 'text-rose-200' : companionState === 'MISSING' ? 'text-amber-200' : 'text-sky-200'}`} /></span>
+            <div><p className="font-mono text-[9px] font-bold uppercase tracking-[0.18em] text-slate-500">This device · Local-only</p><h2 className="mt-1 text-sm font-black text-white">{companionState === 'READY' ? 'Recon Companion พร้อมใช้งานบนเครื่องนี้' : companionState === 'OUTDATED' ? 'Recon Companion รุ่นนี้ต้องอัปเดตก่อนเก็บหลักฐาน' : companionState === 'MISSING' ? 'เครื่องนี้ยังไม่มี Recon Companion หรือ Local Bridge ไม่ได้ทำงาน' : 'กำลังตรวจ Recon Companion บนเครื่องนี้…'}</h2><p className="mt-1 max-w-3xl text-xs leading-6 text-slate-400">Companion ต้องติดตั้งแยกทุกเครื่อง เพราะบัญชีและ session ถูกเข้ารหัสด้วย Windows DPAPI และเก็บเฉพาะเครื่องนั้น ระบบเว็บจึงไม่สามารถนำการตั้งค่าจากคอมพิวเตอร์อีกเครื่องมาใช้โดยอัตโนมัติได้</p></div>
           </div>
           <div className="flex shrink-0 flex-wrap gap-2">
             <button type="button" onClick={() => void checkCompanion()} disabled={companionState === 'CHECKING'} className="secondary-action inline-flex min-h-10 items-center justify-center gap-2 rounded-xl border border-white/[0.08] px-4 text-xs font-semibold disabled:opacity-50"><RefreshCw className={`h-4 w-4 ${companionState === 'CHECKING' ? 'animate-spin' : ''}`} />ตรวจอีกครั้ง</button>
             {companionState !== 'READY' && <a href="/recon/install.cmd" download="LAW-i-RISK-Recon-Setup.cmd" className="primary-action inline-flex min-h-10 items-center justify-center gap-2 rounded-xl px-4 text-xs font-bold"><Download className="h-4 w-4" />ดาวน์โหลดตัวติดตั้ง 1 คลิก</a>}
           </div>
         </div>
-        {companionState === 'MISSING' && (
-          <div className="mt-4 grid gap-2 rounded-2xl border border-amber-300/15 bg-slate-950/35 p-4 text-[10px] leading-5 text-amber-100/85 sm:grid-cols-3">
+        {(companionState === 'MISSING' || companionState === 'OUTDATED') && (
+          <div className={`mt-4 grid gap-2 rounded-2xl border bg-slate-950/35 p-4 text-[10px] leading-5 sm:grid-cols-3 ${companionState === 'OUTDATED' ? 'border-rose-300/15 text-rose-100/85' : 'border-amber-300/15 text-amber-100/85'}`}>
             <p><span className="mr-2 inline-grid h-5 w-5 place-items-center rounded-full bg-amber-300/15 font-mono font-black text-amber-200">1</span>ดาวน์โหลดไฟล์ <code>.cmd</code></p>
             <p><span className="mr-2 inline-grid h-5 w-5 place-items-center rounded-full bg-amber-300/15 font-mono font-black text-amber-200">2</span>ดับเบิลคลิกเพื่อติดตั้ง Chromium และ protocol สำหรับ Windows user นี้</p>
             <p><span className="mr-2 inline-grid h-5 w-5 place-items-center rounded-full bg-amber-300/15 font-mono font-black text-amber-200">3</span>กลับมาหน้านี้แล้วกด “ตรวจอีกครั้ง”</p>
