@@ -2,8 +2,8 @@
 
 import { useEffect, useRef, useState } from 'react';
 import Link from 'next/link';
-import { AlertTriangle, CheckCircle2, DatabaseZap, FileCheck2, Loader2, Orbit, ScanSearch, ShieldCheck, WifiOff } from 'lucide-react';
-import { importPdfIntoEvidenceVault } from '@/lib/evidence-browser-import';
+import { AlertTriangle, CheckCircle2, DatabaseZap, FileCheck2, ImageIcon, Loader2, Orbit, ScanSearch, ShieldCheck, WifiOff } from 'lucide-react';
+import { importCapturedEvidenceIntoVault } from '@/lib/evidence-browser-import';
 import { executeLocalReconQuery, markLocalReconImported, type LocalReconResult } from '@/lib/recon-browser-client';
 import type { ReconAutomationPlanItem, ReconBlockedAutomation } from '@/lib/recon-automation';
 
@@ -13,6 +13,8 @@ type DisplayJob = ReconAutomationPlanItem & {
   progress?: number;
   result?: LocalReconResult;
   evidenceId?: string;
+  previewEvidenceId?: string;
+  previewError?: string;
   error?: string;
 };
 
@@ -25,6 +27,7 @@ export type ReconExecutionOutcome = {
   status: 'COMPLETE' | 'FAILED';
   result?: LocalReconResult;
   evidenceId?: string;
+  previewEvidenceId?: string;
   error?: string;
 };
 
@@ -70,13 +73,25 @@ export function ReconAutomationPanel(props: {
             onState: (status) => update(item.id, { status: status as JobStatus }),
           });
           update(item.id, { status: 'IMPORTING', result: local.result, progress: 0 });
-          const evidence = await importPdfIntoEvidenceVault({
+          const evidence = await importCapturedEvidenceIntoVault({
             caseId,
             file: local.file,
             expectedSha256: local.result.pdfSha256,
             onProgress: (progress) => update(item.id, { progress }),
           });
           update(item.id, { status: 'REGISTERING', evidenceId: evidence.id, progress: 100 });
+          let previewEvidenceId: string | undefined;
+          let previewError: string | undefined;
+          try {
+            const previewEvidence = await importCapturedEvidenceIntoVault({
+              caseId,
+              file: local.screenshot,
+              expectedSha256: local.result.screenshotSha256,
+            });
+            previewEvidenceId = previewEvidence.id;
+          } catch (error) {
+            previewError = error instanceof Error ? error.message : 'นำเข้าภาพหน้าผลค้นไม่สำเร็จ';
+          }
           const captureResponse = await fetch('/api/v1/intelligence/recon/captures', {
             method: 'POST',
             credentials: 'same-origin',
@@ -84,10 +99,12 @@ export function ReconAutomationPanel(props: {
             body: JSON.stringify({
               case_id: caseId,
               evidence_id: evidence.id,
+              preview_evidence_id: previewEvidenceId,
               source: item.source,
               service: item.service,
               search_field: item.field,
               pdf_sha256: local.result.pdfSha256,
+              screenshot_sha256: previewEvidenceId ? local.result.screenshotSha256 : undefined,
               result_row_count: local.result.resultRowCount,
               captured_at: local.result.capturedAt,
               source_url: local.result.sourceUrl,
@@ -100,9 +117,9 @@ export function ReconAutomationPanel(props: {
           });
           const captureBody = await captureResponse.json().catch(() => null) as { error?: { message?: string } } | null;
           if (!captureResponse.ok) throw new Error(captureBody?.error?.message || 'บันทึกสายการครอบครองผลค้นไม่สำเร็จ');
-          await markLocalReconImported(local.jobId, evidence.id);
-          update(item.id, { status: 'COMPLETE', evidenceId: evidence.id, progress: 100 });
-            outcomes.push({ planId: item.id, sourceLabel: item.sourceLabel, serviceLabel: item.serviceLabel, fieldLabel: item.fieldLabel, displayValue: item.displayValue, status: 'COMPLETE', result: local.result, evidenceId: evidence.id });
+          await markLocalReconImported(local.jobId, [evidence.id, ...(previewEvidenceId ? [previewEvidenceId] : [])]);
+          update(item.id, { status: 'COMPLETE', evidenceId: evidence.id, previewEvidenceId, previewError, progress: 100 });
+            outcomes.push({ planId: item.id, sourceLabel: item.sourceLabel, serviceLabel: item.serviceLabel, fieldLabel: item.fieldLabel, displayValue: item.displayValue, status: 'COMPLETE', result: local.result, evidenceId: evidence.id, previewEvidenceId });
             window.dispatchEvent(new Event('ev-data-change'));
           }
           catch (error) {
@@ -133,12 +150,19 @@ export function ReconAutomationPanel(props: {
         <div>
           <p className="font-mono text-[9px] font-bold uppercase tracking-[0.2em] text-cyan-300/65">Automated source acquisition</p>
           <h3 className="mt-1 flex items-center gap-2 text-base font-black text-white"><Orbit className="h-5 w-5 text-cyan-300" />งานค้นอัตโนมัติจากระบบทางการ</h3>
-          <p className="mt-1 max-w-3xl text-[11px] leading-5 text-slate-400">แต่ละงานแสดงข้อมูลที่ใช้ค้น ช่องของระบบต้นทาง ผลที่ระบบแสดง และไฟล์หลักฐานที่นำกลับเข้าคลังโดยอัตโนมัติ</p>
+          <p className="mt-1 max-w-3xl text-[11px] leading-5 text-slate-400">ติดตามได้ทุกจังหวะ แม้งานจะทำผ่าน Worker หรือ Recon Companion แบบเบื้องหลัง โดยไม่ต้องเปิด PowerShell; เมื่อค้นระบบต้นทางสำเร็จจะเก็บทั้ง PDF และภาพหน้าผลค้นที่มี SHA-256</p>
         </div>
         <span className="rounded-full border border-cyan-300/15 bg-cyan-300/[0.06] px-3 py-1.5 font-mono text-[9px] font-bold text-cyan-200">{jobs.filter((job) => job.status === 'COMPLETE').length}/{jobs.length} CAPTURED</span>
       </div>
 
       <div className="relative mt-4 space-y-3" aria-live="polite">
+        <div className="grid gap-2 rounded-2xl border border-cyan-300/12 bg-cyan-300/[0.035] p-3 sm:grid-cols-4" aria-label="ลำดับการทำงานค้นข้อมูล">
+          {['วิเคราะห์ข้อมูล', 'เชื่อมต่อแหล่ง', 'เก็บ PDF และภาพ', 'ตรวจ hash/นำเข้า'].map((label, index) => {
+            const active = jobs.some((job) => runningStatuses.has(job.status));
+            const done = jobs.length > 0 && jobs.every((job) => job.status === 'COMPLETE' || job.status === 'FAILED');
+            return <div key={label} className={`flex items-center gap-2 rounded-xl px-2.5 py-2 text-[10px] ${active ? 'bg-cyan-300/10 text-cyan-100' : done ? 'text-emerald-200' : 'text-slate-500'}`}><span className={`grid h-6 w-6 place-items-center rounded-lg font-mono font-black ${active ? 'bg-cyan-300 text-slate-950 motion-safe:animate-pulse' : done ? 'bg-emerald-300/15' : 'bg-white/[0.04]'}`}>{String(index + 1).padStart(2, '0')}</span><span>{label}</span></div>;
+          })}
+        </div>
         {jobs.map((job, index) => (
           <article key={job.id} className={`overflow-hidden rounded-3xl border ${job.status === 'COMPLETE' ? 'border-emerald-300/20 bg-emerald-300/[0.04]' : job.status === 'FAILED' ? 'border-rose-300/20 bg-rose-300/[0.04]' : 'border-white/[0.07] bg-slate-900/55'}`}>
             <div className="grid gap-4 p-4 lg:grid-cols-[minmax(0,1fr)_auto] lg:items-start">
@@ -163,7 +187,8 @@ export function ReconAutomationPanel(props: {
               <div className="border-t border-white/[0.07] bg-slate-950/35 p-4">
                 <div className="flex flex-wrap items-center justify-between gap-2"><h5 className="flex items-center gap-2 text-xs font-black text-white"><DatabaseZap className="h-4 w-4 text-indigo-300" />ข้อมูลที่ระบบต้นทางแสดง</h5><span className="font-mono text-[9px] text-slate-500">{new Date(job.result.capturedAt).toLocaleString('th-TH')} · {job.result.searchStrategy}</span></div>
                 {job.result.resultSummaries.length > 0 ? <ol className="mt-3 grid gap-2 lg:grid-cols-2">{job.result.resultSummaries.map((summary, resultIndex) => <li key={`${job.id}:${resultIndex}`} className="rounded-xl border border-indigo-300/10 bg-indigo-300/[0.035] p-3 text-[10px] leading-5 text-slate-300"><span className="mr-2 font-mono font-black text-indigo-300">RESULT {String(resultIndex + 1).padStart(2, '0')}</span>{summary}</li>)}</ol> : <p className="mt-3 rounded-xl border border-dashed border-slate-700 p-3 text-[10px] leading-5 text-slate-400">ไม่พบแถวข้อมูลในหน้าผลค้น ระบบเก็บ PDF ของหน้าผลและเวลาไว้เพื่อให้ตรวจสอบย้อนหลังได้</p>}
-                <div className="mt-3 flex flex-wrap items-center gap-2 text-[9px] text-slate-500"><ShieldCheck className="h-3.5 w-3.5 text-emerald-300" /><span>PDF SHA-256 {job.result.pdfSha256}</span>{job.evidenceId && <><span>·</span><Link href="/evidence" className="inline-flex items-center gap-1 font-bold text-emerald-200 hover:text-emerald-100"><FileCheck2 className="h-3.5 w-3.5" />เปิดหลักฐานที่นำเข้าแล้ว</Link></>}</div>
+                <div className="mt-3 flex flex-wrap items-center gap-2 text-[9px] text-slate-500"><ShieldCheck className="h-3.5 w-3.5 text-emerald-300" /><span>PDF SHA-256 {job.result.pdfSha256}</span><span>·</span><ImageIcon className="h-3.5 w-3.5 text-cyan-300" /><span>ภาพ SHA-256 {job.result.screenshotSha256}</span>{job.evidenceId && <><span>·</span><Link href="/evidence" className="inline-flex items-center gap-1 font-bold text-emerald-200 hover:text-emerald-100"><FileCheck2 className="h-3.5 w-3.5" />เปิด PDF และภาพหลักฐาน</Link></>}</div>
+                {job.previewError && <p className="mt-2 text-[10px] text-amber-200">PDF ถูกเก็บแล้ว แต่ภาพหน้าผลค้นยังนำเข้าไม่สำเร็จ: {job.previewError}</p>}
               </div>
             )}
           </article>

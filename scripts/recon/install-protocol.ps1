@@ -57,7 +57,7 @@ for ($attempt = 0; $attempt -lt 20; $attempt += 1) {
   catch { }
 }
 if (-not $bridgeReady) {
-  throw 'ลงทะเบียน protocol แล้ว แต่ Local Bridge ไม่พร้อม กรุณาดู bridge.log ในโฟลเดอร์ติดตั้ง'
+  throw 'Protocol was registered, but Local Bridge did not become ready. Check bridge.log in the installation folder.'
 }
 
 Write-Host 'Installed lawirisk-recon:// for the current Windows user' -ForegroundColor Green

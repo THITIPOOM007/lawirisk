@@ -12,6 +12,9 @@ export type LocalReconResult = {
   pdfFilename: string;
   pdfSha256: string;
   pdfSize: number;
+  screenshotFilename: string;
+  screenshotSha256: string;
+  screenshotSize: number;
   resultRowCount: number;
   resultSummaries: string[];
   capturedAt: string;
@@ -25,6 +28,7 @@ export type CompletedLocalRecon = {
   jobId: string;
   result: LocalReconResult;
   file: File;
+  screenshot: File;
 };
 
 function message(body: unknown, fallback: string) {
@@ -107,17 +111,25 @@ export async function executeLocalReconQuery(
   });
   if (!resultResponse.ok) throw new Error('ดาวน์โหลด PDF ผลค้นจาก Recon Companion ไม่สำเร็จ');
   const blob = await resultResponse.blob();
+  const screenshotResponse = await fetch(`${LOCAL_BRIDGE}/v1/jobs/${jobId}/screenshot`, {
+    headers: LOCAL_HEADERS,
+    cache: 'no-store',
+    signal: options.signal,
+  });
+  if (!screenshotResponse.ok) throw new Error('ดาวน์โหลดภาพหน้าผลค้นจาก Recon Companion ไม่สำเร็จ');
+  const screenshotBlob = await screenshotResponse.blob();
   return {
     jobId,
     result,
     file: new File([blob], result.pdfFilename, { type: 'application/pdf', lastModified: Date.now() }),
+    screenshot: new File([screenshotBlob], result.screenshotFilename, { type: 'image/png', lastModified: Date.now() }),
   };
 }
 
-export async function markLocalReconImported(jobId: string, evidenceId: string) {
+export async function markLocalReconImported(jobId: string, evidenceIds: string[]) {
   await fetch(`${LOCAL_BRIDGE}/v1/jobs/${jobId}/imported`, {
     method: 'POST',
     headers: { ...LOCAL_HEADERS, 'Content-Type': 'application/json' },
-    body: JSON.stringify({ evidenceId }),
+    body: JSON.stringify({ evidenceIds }),
   }).catch(() => undefined);
 }

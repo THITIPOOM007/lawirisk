@@ -33,6 +33,20 @@ export default function EvidencePage() {
   const [cancellingEvidenceId, setCancellingEvidenceId] = useState('');
   const [errorMessage, setErrorMessage] = useState('');
   const [successMessage, setSuccessMessage] = useState('');
+  const [imagePreview, setImagePreview] = useState<{ filename: string; url: string } | null>(null);
+  const [previewError, setPreviewError] = useState('');
+
+  const openImagePreview = async (evidence: EvidenceFile) => {
+    setPreviewError('');
+    try {
+      const response = await fetch(`/api/v1/evidence/${encodeURIComponent(evidence.id)}/download`, { credentials: 'same-origin' });
+      const body = await response.json().catch(() => null) as { data?: { url?: string }; error?: { message?: string } } | null;
+      if (!response.ok || !body?.data?.url) throw new Error(body?.error?.message || 'เปิดภาพหลักฐานไม่สำเร็จ');
+      setImagePreview({ filename: evidence.filename, url: body.data.url });
+    } catch (error) {
+      setPreviewError(error instanceof Error ? error.message : 'เปิดภาพหลักฐานไม่สำเร็จ');
+    }
+  };
 
   useEffect(() => {
     const controller = new AbortController();
@@ -301,6 +315,7 @@ export default function EvidencePage() {
                 <span>{successMessage}</span>
               </div>
             )}
+            {previewError && <div role="alert" className="bg-rose-950/40 border border-rose-900/50 p-4 rounded-2xl text-xs text-rose-300">{previewError}</div>}
 
             <form onSubmit={handleUploadSubmit} className="space-y-4">
               <div>
@@ -416,6 +431,7 @@ export default function EvidencePage() {
                       <th className="pb-3 font-semibold">คดีเป้าหมาย</th>
                       <th className="pb-3 font-semibold">ขนาดไฟล์</th>
                       <th className="pb-3 font-semibold">SHA-256 Hash</th>
+                      <th className="pb-3 font-semibold">ภาพตัวอย่าง</th>
                       <th className="pb-3 font-semibold text-right">การประมวลผล</th>
                     </tr>
                   </thead>
@@ -435,6 +451,9 @@ export default function EvidencePage() {
                           </td>
                           <td className="py-4 font-mono text-slate-500">
                             {file.sha256.substring(0, 10)}...{file.sha256.substring(file.sha256.length - 6)}
+                          </td>
+                          <td className="py-4">
+                            {file.mime_type.startsWith('image/') ? <button type="button" onClick={() => void openImagePreview(file)} className="inline-flex min-h-8 items-center gap-1.5 rounded-lg border border-cyan-300/20 bg-cyan-300/[0.06] px-2.5 text-[10px] font-bold text-cyan-100 hover:bg-cyan-300/[0.12]"><Camera className="h-3.5 w-3.5" />ดูภาพ</button> : <span className="text-[10px] text-slate-600">PDF/เอกสาร</span>}
                           </td>
                           <td className="py-4 text-right">
                             <div className="flex flex-col items-end gap-2">
@@ -469,6 +488,8 @@ export default function EvidencePage() {
         </div>
 
       </div>
+
+      {imagePreview && <div role="dialog" aria-modal="true" aria-label={`ภาพหลักฐาน ${imagePreview.filename}`} className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/85 p-4 backdrop-blur-sm" onClick={() => setImagePreview(null)}><div className="max-h-[92vh] w-full max-w-6xl overflow-auto rounded-3xl border border-cyan-300/20 bg-slate-900 p-4 shadow-2xl" onClick={(event) => event.stopPropagation()}><div className="mb-3 flex items-center justify-between gap-3"><div><p className="text-xs font-bold text-white">ภาพหน้าผลค้น/ภาพหลักฐานต้นฉบับ</p><p className="mt-1 break-all font-mono text-[9px] text-slate-500">{imagePreview.filename}</p></div><button type="button" onClick={() => setImagePreview(null)} className="grid h-10 w-10 place-items-center rounded-xl border border-white/[0.1] text-slate-300 hover:bg-white/[0.08]" aria-label="ปิดภาพหลักฐาน"><X className="h-4 w-4" /></button></div><img src={imagePreview.url} alt={`ภาพหลักฐาน ${imagePreview.filename}`} className="mx-auto max-h-[78vh] rounded-xl border border-white/[0.08] bg-white object-contain" /></div></div>}
     </div>
   );
 }

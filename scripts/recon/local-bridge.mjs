@@ -76,13 +76,15 @@ function cleanResultSummaries(value) {
 async function validateCompletedResult(body, jobId, job, searchResultRoot = resultRoot) {
   if (!body || typeof body !== 'object' || Array.isArray(body)) throw new Error('INVALID_SEARCH_RESULT');
   const allowedKeys = new Set([
-    'pdfFilename', 'metadataFilename', 'pdfSha256', 'resultRowCount', 'resultSummaries',
+    'pdfFilename', 'metadataFilename', 'pdfSha256', 'screenshotFilename', 'screenshotSha256', 'resultRowCount', 'resultSummaries',
     'capturedAt', 'sourceUrl', 'adapterVersion', 'searchStrategy', 'searchAttemptCount',
   ]);
   if (Object.keys(body).some((key) => !allowedKeys.has(key))) throw new Error('INVALID_SEARCH_RESULT');
   const pdfFilename = safeResultFilename(body.pdfFilename, jobId, '.pdf');
   const metadataFilename = safeResultFilename(body.metadataFilename, jobId, '.json');
+  const screenshotFilename = safeResultFilename(body.screenshotFilename, jobId, '.png');
   if (typeof body.pdfSha256 !== 'string' || !/^[0-9a-f]{64}$/.test(body.pdfSha256)) throw new Error('INVALID_SEARCH_RESULT');
+  if (typeof body.screenshotSha256 !== 'string' || !/^[0-9a-f]{64}$/.test(body.screenshotSha256)) throw new Error('INVALID_SEARCH_RESULT');
   if (!Number.isInteger(body.resultRowCount) || body.resultRowCount < 0 || body.resultRowCount > 10_000) {
     throw new Error('INVALID_SEARCH_RESULT');
   }
@@ -100,15 +102,20 @@ async function validateCompletedResult(body, jobId, job, searchResultRoot = resu
     throw new Error('INVALID_SEARCH_RESULT_SOURCE');
   }
   const pdfPath = path.resolve(searchResultRoot, pdfFilename);
+  const screenshotPath = path.resolve(searchResultRoot, screenshotFilename);
   const metadataPath = path.resolve(searchResultRoot, metadataFilename);
   const rootPrefix = `${path.resolve(searchResultRoot)}${path.sep}`;
-  if (!pdfPath.startsWith(rootPrefix) || !metadataPath.startsWith(rootPrefix)) throw new Error('INVALID_SEARCH_RESULT');
-  const [pdfBytes, pdfInfo] = await Promise.all([readFile(pdfPath), stat(pdfPath)]);
+  if (!pdfPath.startsWith(rootPrefix) || !metadataPath.startsWith(rootPrefix) || !screenshotPath.startsWith(rootPrefix)) throw new Error('INVALID_SEARCH_RESULT');
+  const [pdfBytes, pdfInfo, screenshotBytes, screenshotInfo] = await Promise.all([readFile(pdfPath), stat(pdfPath), readFile(screenshotPath), stat(screenshotPath)]);
   if (pdfInfo.size < 5 || pdfInfo.size > 200 * 1024 * 1024 || pdfBytes.subarray(0, 5).toString('ascii') !== '%PDF-') {
     throw new Error('INVALID_SEARCH_RESULT');
   }
   const actualSha256 = createHash('sha256').update(pdfBytes).digest('hex');
   if (actualSha256 !== body.pdfSha256) throw new Error('INVALID_SEARCH_RESULT_HASH');
+  if (screenshotInfo.size < 8 || screenshotInfo.size > 20 * 1024 * 1024 || screenshotBytes.subarray(0, 8).toString('hex') !== '89504e470d0a1a0a') {
+    throw new Error('INVALID_SEARCH_RESULT');
+  }
+  if (createHash('sha256').update(screenshotBytes).digest('hex') !== body.screenshotSha256) throw new Error('INVALID_SEARCH_RESULT_HASH');
   return {
     source: job.context.source,
     service: job.context.service,
@@ -117,6 +124,9 @@ async function validateCompletedResult(body, jobId, job, searchResultRoot = resu
     metadataFilename,
     pdfSha256: body.pdfSha256,
     pdfSize: pdfInfo.size,
+    screenshotFilename,
+    screenshotSha256: body.screenshotSha256,
+    screenshotSize: screenshotInfo.size,
     resultRowCount: body.resultRowCount,
     resultSummaries: cleanResultSummaries(body.resultSummaries),
     capturedAt: cleanSearchText(body.capturedAt, 10, 40, 'INVALID_SEARCH_RESULT'),
@@ -125,6 +135,7 @@ async function validateCompletedResult(body, jobId, job, searchResultRoot = resu
     searchStrategy: cleanSearchText(body.searchStrategy, 1, 40, 'INVALID_SEARCH_RESULT'),
     searchAttemptCount: Number.isInteger(body.searchAttemptCount) ? body.searchAttemptCount : 1,
     pdfPath,
+    screenshotPath,
   };
 }
 
@@ -300,7 +311,7 @@ export function createLocalBridgeServer(options = {}) {
       return;
     }
 
-    const browserJobMatch = request.url?.match(/^\/v1\/jobs\/([0-9a-f-]{36})\/(status|result|imported)$/i);
+    const browserJobMatch = request.url?.match(/^\/v1\/jobs\/([0-9a-f-]{36})\/(status|result|screenshot|imported)$/i);
     if (browserJobMatch) {
       const [, jobId, operation] = browserJobMatch;
       pruneJobs();
@@ -342,10 +353,32 @@ export function createLocalBridgeServer(options = {}) {
         }
         return;
       }
+      if (operation === 'screenshot' && request.method === 'GET') {
+        if (job.state !== 'COMPLETE' || !job.result) {
+          sendJson(response, 409, { error: 'SEARCH_RESULT_NOT_READY' });
+          return;
+        }
+        try {
+          const screenshotBytes = await readFile(job.result.screenshotPath);
+          response.writeHead(200, {
+            'Content-Type': 'image/png',
+            'Content-Length': String(screenshotBytes.length),
+            'Content-Disposition': `attachment; filename="${job.result.screenshotFilename}"`,
+            'Cache-Control': 'no-store',
+            'X-Content-Type-Options': 'nosniff',
+          });
+          response.end(screenshotBytes);
+        }
+        catch {
+          sendJson(response, 410, { error: 'SEARCH_SCREENSHOT_UNAVAILABLE' });
+        }
+        return;
+      }
       if (operation === 'imported' && request.method === 'POST') {
         try {
           const body = await readJsonBody(request);
-          if (!body || typeof body.evidenceId !== 'string' || !/^[0-9a-f-]{36}$/i.test(body.evidenceId)) {
+          if (!body || !Array.isArray(body.evidenceIds) || body.evidenceIds.length < 1 || body.evidenceIds.length > 2
+            || body.evidenceIds.some((id) => typeof id !== 'string' || !/^[0-9a-f-]{36}$/i.test(id))) {
             throw new Error('INVALID_EVIDENCE_ID');
           }
           clearTimeout(job.timer);

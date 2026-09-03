@@ -11,10 +11,12 @@ import { createServer } from '@/lib/supabase-server';
 const captureSchema = z.object({
   case_id: z.string().uuid(),
   evidence_id: z.string().uuid(),
+  preview_evidence_id: z.string().uuid().optional(),
   source: z.enum(['FDA_PUBLIC', 'FDA_SKYNET', 'HSS_ESTA2']),
   service: z.string().trim().min(1).max(80),
   search_field: z.string().trim().min(1).max(80),
   pdf_sha256: z.string().regex(/^[0-9a-f]{64}$/),
+  screenshot_sha256: z.string().regex(/^[0-9a-f]{64}$/).optional(),
   result_row_count: z.number().int().min(0).max(10_000),
   captured_at: z.string().datetime(),
   source_url: z.string().url().max(300),
@@ -22,7 +24,11 @@ const captureSchema = z.object({
   search_strategy: z.string().trim().min(1).max(40),
   search_attempt_count: z.number().int().min(1).max(10),
   basis_status: z.enum(['CONFIRMED', 'SUGGESTED', 'UNCERTAIN']),
-}).strict();
+}).strict().superRefine((value, context) => {
+  if (Boolean(value.preview_evidence_id) !== Boolean(value.screenshot_sha256)) {
+    context.addIssue({ code: 'custom', message: 'ต้องส่งภาพตัวอย่างและ SHA-256 มาคู่กัน' });
+  }
+});
 
 export async function POST(request: NextRequest) {
   const traceId = requestId();
@@ -76,6 +82,17 @@ export async function POST(request: NextRequest) {
   if (evidenceResult.data.upload_state !== 'STORED' || evidenceResult.data.sha256 !== payload.pdf_sha256) {
     return apiError('CAPTURE_INTEGRITY_MISMATCH', 'ไฟล์ผลค้นยังจัดเก็บไม่สมบูรณ์หรือค่า SHA-256 ไม่ตรงกัน', 409, traceId);
   }
+  if (payload.preview_evidence_id && payload.screenshot_sha256) {
+    const previewResult = await supabase.from('evidence_files')
+      .select('id,case_id,sha256,mime_type,upload_state')
+      .eq('id', payload.preview_evidence_id)
+      .eq('case_id', payload.case_id)
+      .maybeSingle();
+    if (previewResult.error || !previewResult.data || previewResult.data.upload_state !== 'STORED'
+      || previewResult.data.mime_type !== 'image/png' || previewResult.data.sha256 !== payload.screenshot_sha256) {
+      return apiError('CAPTURE_PREVIEW_INTEGRITY_MISMATCH', 'ภาพหน้าผลค้นยังจัดเก็บไม่สมบูรณ์หรือค่า SHA-256 ไม่ตรงกัน', 409, traceId);
+    }
+  }
 
   const audit = await supabase.from('audit_logs').insert({
     profile_id: auth.identity.id,
@@ -83,10 +100,12 @@ export async function POST(request: NextRequest) {
     details: {
       case_id: payload.case_id,
       evidence_id: payload.evidence_id,
+      preview_evidence_id: payload.preview_evidence_id || null,
       source_key: payload.source,
       service: payload.service,
       search_field: payload.search_field,
       pdf_sha256: payload.pdf_sha256,
+      screenshot_sha256: payload.screenshot_sha256 || null,
       result_row_count: payload.result_row_count,
       captured_at: payload.captured_at,
       source_url: payload.source_url,

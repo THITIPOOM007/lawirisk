@@ -210,11 +210,15 @@ describe('local recon bridge boundary', () => {
         expect(consumed.status).toBe(200);
 
         const pdfFilename = `FDA_SKYNET-DBD-${jobId}.pdf`;
+        const screenshotFilename = `FDA_SKYNET-DBD-${jobId}.png`;
         const metadataFilename = `FDA_SKYNET-DBD-${jobId}.json`;
         const pdfBytes = Buffer.from('%PDF-1.4\n% trusted test result\n%%EOF', 'utf8');
+        const screenshotBytes = Buffer.from('89504e470d0a1a0a0000000d49484452000000010000000108060000001f15c489', 'hex');
         const pdfSha256 = createHash('sha256').update(pdfBytes).digest('hex');
+        const screenshotSha256 = createHash('sha256').update(screenshotBytes).digest('hex');
         await Promise.all([
           writeFile(path.join(resultRoot, pdfFilename), pdfBytes),
+          writeFile(path.join(resultRoot, screenshotFilename), screenshotBytes),
           writeFile(path.join(resultRoot, metadataFilename), '{}', 'utf8'),
         ]);
         const completed = await fetch(`${baseUrl}/v1/jobs/${jobId}/complete`, {
@@ -224,6 +228,8 @@ describe('local recon bridge boundary', () => {
             pdfFilename,
             metadataFilename,
             pdfSha256,
+            screenshotFilename,
+            screenshotSha256,
             resultRowCount: 1,
             resultSummaries: ['0100000000001 บริษัท ตัวอย่าง จำกัด'],
             capturedAt: '2026-08-29T03:00:00.000Z',
@@ -246,10 +252,14 @@ describe('local recon bridge boundary', () => {
         expect(result.status).toBe(200);
         expect(Buffer.from(await result.arrayBuffer())).toEqual(pdfBytes);
 
+        const screenshot = await fetch(`${baseUrl}/v1/jobs/${jobId}/screenshot`, { headers: trustedHeaders });
+        expect(screenshot.status).toBe(200);
+        expect(Buffer.from(await screenshot.arrayBuffer())).toEqual(screenshotBytes);
+
         const imported = await fetch(`${baseUrl}/v1/jobs/${jobId}/imported`, {
           method: 'POST',
           headers: { ...trustedHeaders, 'Content-Type': 'application/json' },
-          body: JSON.stringify({ evidenceId: '00000000-0000-4000-8000-000000000123' }),
+          body: JSON.stringify({ evidenceIds: ['00000000-0000-4000-8000-000000000123', '00000000-0000-4000-8000-000000000124'] }),
         });
         expect(imported.status).toBe(200);
         const gone = await fetch(`${baseUrl}/v1/jobs/${jobId}/status`, { headers: trustedHeaders });

@@ -25,9 +25,18 @@ export async function importPdfIntoEvidenceVault(input: {
   expectedSha256: string;
   onProgress?: (percentage: number) => void;
 }): Promise<ImportedEvidence> {
+  return importCapturedEvidenceIntoVault(input);
+}
+
+export async function importCapturedEvidenceIntoVault(input: {
+  caseId: string;
+  file: File;
+  expectedSha256: string;
+  onProgress?: (percentage: number) => void;
+}): Promise<ImportedEvidence> {
   const validation = await validateFileInBrowser(input.file, { onProgress: input.onProgress });
-  if (!validation.isValid || !validation.sha256) throw new Error(validation.error || 'ไฟล์ผลค้นไม่ผ่านการตรวจรูปแบบ PDF');
-  if (validation.sha256 !== input.expectedSha256) throw new Error('SHA-256 ของผลค้นไม่ตรงกับไฟล์ที่ Recon Companion ส่งกลับ');
+  if (!validation.isValid || !validation.sha256) throw new Error(validation.error || 'ไฟล์ผลค้นไม่ผ่านการตรวจรูปแบบ');
+  if (validation.sha256 !== input.expectedSha256) throw new Error('SHA-256 ของไฟล์ผลค้นไม่ตรงกับไฟล์ที่ Recon Companion ส่งกลับ');
 
   const reserveResponse = await fetch('/api/v1/evidence/uploads', {
     method: 'POST',
@@ -37,7 +46,7 @@ export async function importPdfIntoEvidenceVault(input: {
       case_id: input.caseId,
       filename: input.file.name,
       file_size: input.file.size,
-      mime_type: 'application/pdf',
+      mime_type: input.file.type,
       sha256: validation.sha256,
     }),
   });

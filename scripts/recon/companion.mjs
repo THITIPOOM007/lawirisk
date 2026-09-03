@@ -520,10 +520,13 @@ async function captureLocalSearchResult(page, request, search, searchResult) {
   const timestamp = new Date().toISOString().replace(/[:.]/g, '-');
   const baseName = `${request.source.key}-${request.service}-${timestamp}-${request.jobId}`;
   const pdfPath = path.join(resultDir, `${baseName}.pdf`);
+  const screenshotPath = path.join(resultDir, `${baseName}.png`);
   const metadataPath = path.join(resultDir, `${baseName}.json`);
   try {
     await page.pdf({ path: pdfPath, format: 'A4', printBackground: true });
-    const pdfBytes = await readFile(pdfPath);
+    // Capture the same rendered result page. This is original visual context, not an AI-generated illustration.
+    await page.screenshot({ path: screenshotPath, type: 'png', fullPage: true });
+    const [pdfBytes, screenshotBytes] = await Promise.all([readFile(pdfPath), readFile(screenshotPath)]);
     const metadata = {
       schemaVersion: 2,
       status: 'LOCAL_CAPTURE_PENDING_IMPORT',
@@ -543,6 +546,8 @@ async function captureLocalSearchResult(page, request, search, searchResult) {
       adapterVersion: request.source.adapterVersion,
       pdfFilename: path.basename(pdfPath),
       pdfSha256: createHash('sha256').update(pdfBytes).digest('hex'),
+      screenshotFilename: path.basename(screenshotPath),
+      screenshotSha256: createHash('sha256').update(screenshotBytes).digest('hex'),
       rawQueryStoredInMetadata: false,
       resultPdfMayContainQuery: true,
       importedToEvidenceVault: false,
@@ -555,6 +560,8 @@ async function captureLocalSearchResult(page, request, search, searchResult) {
       pdfFilename: metadata.pdfFilename,
       metadataFilename: path.basename(metadataPath),
       pdfSha256: metadata.pdfSha256,
+      screenshotFilename: metadata.screenshotFilename,
+      screenshotSha256: metadata.screenshotSha256,
       resultRowCount: metadata.resultRowCount,
       resultSummaries: searchResult.resultSummaries || [],
       capturedAt: metadata.capturedAt,
