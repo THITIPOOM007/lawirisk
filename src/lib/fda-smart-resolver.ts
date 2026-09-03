@@ -466,7 +466,7 @@ function parseHssActionPayload(raw: string) {
 }
 
 function findHssSpaActionId(script: string) {
-  const match = script.match(/createServerReference\("([a-f0-9]{40,64})",[\s\S]{0,300}?"searchSpaShopDrizzle"\)/i);
+  const match = script.match(/createServerReference\("([a-f0-9]{40,64})",[\s\S]{0,300}?"searchSpaShopDrizzle"/i);
   return match?.[1] || '';
 }
 
@@ -528,7 +528,7 @@ async function requestHssSpaSearch(
     },
     body: JSON.stringify([mode, query]),
     cache: 'no-store',
-  });
+  }, 25_000);
   return { response, body: await response.text() };
 }
 
