@@ -83,6 +83,7 @@ describe('Gemini public product scan', () => {
       { fileData: { fileUri: 'https://generativelanguage.googleapis.com/v1beta/files/product-view-2', mimeType: 'image/png' } },
     ]);
     expect(request.systemInstruction.parts[0].text).toContain('Never claim that a product is genuine');
+    expect(request.generationConfig.maxOutputTokens).toBe(4096);
     expect(fetchMock.mock.calls[6]?.[1]?.method).toBe('DELETE');
     expect(fetchMock.mock.calls[7]?.[1]?.method).toBe('DELETE');
   });

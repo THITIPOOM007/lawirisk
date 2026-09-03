@@ -12,6 +12,7 @@ import {
 } from '@/lib/providers/gemini-model-discovery';
 
 const DEFAULT_MODEL = 'gemini-3.5-flash';
+const MAX_OUTPUT_TOKENS = 4096;
 const MAX_PROVIDER_ELAPSED_MS = 45_000;
 const ATTEMPT_TIMEOUT_MS = 18_000;
 const TRANSIENT_STATUSES = new Set([408, 429, 500, 502, 503, 504]);
@@ -181,6 +182,7 @@ export async function analyzeProductImagesWithGemini(images: GeminiProductImageI
       ],
     }],
     generationConfig: {
+      maxOutputTokens: MAX_OUTPUT_TOKENS,
       responseMimeType: 'application/json',
       responseSchema: {
         type: 'OBJECT',

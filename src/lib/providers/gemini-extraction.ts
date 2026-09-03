@@ -12,6 +12,7 @@ import {
 
 const PROMPT_SCHEMA_VERSION = 'gemini-extraction-v1';
 const DEFAULT_MODEL = 'gemini-3.5-flash';
+const MAX_OUTPUT_TOKENS = 4096;
 
 const geminiEnvelopeSchema = z.object({
   candidates: z.array(z.object({
@@ -120,6 +121,7 @@ export async function extractEntitiesWithGemini(sourceText: string, base64Image?
       parts: parts,
     }],
     generationConfig: {
+      maxOutputTokens: MAX_OUTPUT_TOKENS,
       responseMimeType: 'application/json',
       responseSchema: {
         type: 'OBJECT',

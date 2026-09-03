@@ -60,6 +60,8 @@ describe('Gemini extraction resilience', () => {
 
     expect(result.model).toBe('gemini-3.5-flash');
     expect(result.candidates).toHaveLength(1);
+    const request = JSON.parse(String(fetchMock.mock.calls[1]?.[1]?.body));
+    expect(request.generationConfig.maxOutputTokens).toBe(4096);
     expect(fetchMock).toHaveBeenCalledTimes(3);
   });
 
