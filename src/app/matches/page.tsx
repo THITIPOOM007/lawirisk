@@ -16,10 +16,13 @@ import {
 import type { Case, MatchCandidate } from '@/lib/demo-data';
 
 type MatchSource = { evidence_id: string; page_number: number; source_text: string };
+type MatchEndpoint = { id: string; type: string; value: string };
 type MatchRecord = MatchCandidate & {
   matching_signals?: Record<string, unknown>;
   review_reason?: string | null;
   sources?: MatchSource[];
+  source_entity?: MatchEndpoint | null;
+  target_entity?: MatchEndpoint | null;
 };
 
 const typeLabels: Record<string, string> = {
@@ -153,7 +156,7 @@ export default function MatchesPage() {
             การวิเคราะห์และตรวจทานความเชื่อมโยงข้ามคดี
           </h1>
           <p className="max-w-2xl text-xs sm:text-sm text-slate-400">
-            รายการความเชื่อมโยงทุกรายการมีสถานะเป็นข้อเสนอแนะ จนกว่าเจ้าหน้าที่จะดำเนินการตรวจสอบความถูกต้องและลงนามรับรองร่วมกับพยานหลักฐานต้นฉบับ
+            ระบบสร้างผังความเชื่อมโยงอัตโนมัติจากสัญญาณและตำแหน่งหลักฐาน เพื่อให้สืบค้นได้ทันที การรับรองของเจ้าหน้าที่จำเป็นเฉพาะเมื่อต้องยกระดับเป็นข้อเท็จจริงทางการ
           </p>
         </div>
         <div className="flex flex-wrap items-center gap-3 self-start md:self-auto">
@@ -192,10 +195,10 @@ export default function MatchesPage() {
             }`}
           >
             {tab === 'ALL' && `ทั้งหมด (${matches.length})`}
-            {tab === 'PENDING' && `รอตรวจทาน (${matches.filter((m) => m.status === 'PENDING').length})`}
+            {tab === 'PENDING' && `ผังอัตโนมัติ (${matches.filter((m) => m.status === 'PENDING').length})`}
             {tab === 'VERIFIED' && `ยืนยันแล้ว (${matches.filter((m) => m.status === 'VERIFIED').length})`}
             {tab === 'EXACT' && 'Exact Match'}
-            {tab === 'FUZZY' && 'Fuzzy Similarity (Trigram/AI)'}
+            {tab === 'FUZZY' && 'Fuzzy Similarity (Trigram)'}
           </button>
         ))}
       </div>
@@ -240,6 +243,8 @@ export default function MatchesPage() {
             const pending = item.status === 'PENDING';
             const verified = item.status === 'VERIFIED';
             const isFuzzy = item.matching_signals && typeof item.matching_signals === 'object' && 'method' in item.matching_signals && item.matching_signals.method === 'TRIGRAM_FUZZY_SIMILARITY';
+            const sourceValue = item.source_entity?.value || item.entity_value;
+            const targetValue = item.target_entity?.value || 'รอโหลดข้อมูลปลายทาง';
 
             return (
               <article key={item.id} className="hud-panel rounded-[28px] p-6 sm:p-7 border border-white/[0.08] hover:border-indigo-400/30 transition-all duration-300 shadow-[0_15px_40px_rgba(0,0,0,0.3)]">
@@ -261,7 +266,7 @@ export default function MatchesPage() {
                         </span>
                       )}
                       <span className={`cyber-badge font-mono ${verified ? 'cyber-badge-teal' : pending ? 'cyber-badge-amber' : 'cyber-badge-rose'}`}>
-                        STATUS: {item.status}
+                        {verified ? 'รับรองทางการ' : pending ? 'ผังอัตโนมัติ · รอรับรอง' : `STATUS: ${item.status}`}
                       </span>
                     </div>
 
@@ -271,8 +276,18 @@ export default function MatchesPage() {
                         MATCHED ENTITY SIGNAL
                       </span>
                       <p className="break-words font-mono text-2xl font-black text-white tracking-wide text-teal-300 drop-shadow-[0_0_12px_rgba(45,212,191,0.3)]">
-                        {item.entity_value}
+                        {sourceValue}
                       </p>
+                    </div>
+
+                    <div className="rounded-2xl border border-indigo-400/25 bg-indigo-500/[0.06] p-4" aria-label="ผังความเชื่อมโยงที่ระบบสร้างอัตโนมัติ">
+                      <p className="text-[10px] font-mono uppercase tracking-widest text-indigo-300">AUTOMATIC EVIDENCE MAP</p>
+                      <div className="mt-3 flex flex-col items-stretch gap-2 sm:flex-row sm:items-center">
+                        <div className="min-w-0 flex-1 rounded-xl border border-teal-400/20 bg-slate-950/50 p-3 font-mono text-sm font-bold text-teal-200 break-words">{sourceValue}</div>
+                        <div className="text-center text-xl text-indigo-300" aria-hidden="true">→</div>
+                        <div className="min-w-0 flex-1 rounded-xl border border-indigo-400/25 bg-slate-950/50 p-3 font-mono text-sm font-bold text-indigo-200 break-words">{targetValue}</div>
+                      </div>
+                      <p className="mt-3 text-xs text-slate-400">{isFuzzy ? 'ระบบพบข้อความใกล้เคียง' : 'ระบบพบค่าที่ตรงกัน'} {`(${(item.confidence * 100).toFixed(0)}%)`} และผูกกับหลักฐาน {item.sources?.length || 0} รายการ การดูผังนี้ไม่ต้องรอการรับรอง</p>
                     </div>
 
                     {/* Dual Case Alignment Inspector */}
@@ -317,7 +332,7 @@ export default function MatchesPage() {
                       ) : (
                         <div className="flex items-center gap-2 rounded-xl border border-amber-500/20 bg-amber-500/5 p-3 text-xs text-amber-200">
                           <ShieldAlert className="h-4 w-4" />
-                          ยังไม่มี source reference จึงยืนยันไม่ได้
+                          คู่เก่านี้ยังไม่มีตำแหน่งหลักฐานที่ผูกไว้ จึงยังรับรองทางการไม่ได้ แต่ยังคงเป็นผังอัตโนมัติที่ใช้สืบค้นได้ กดประมวลผลอีกครั้งหลังอัปเดตข้อมูลเพื่อให้ระบบผูกหลักฐานให้
                         </div>
                       )}
                     </div>
@@ -332,7 +347,10 @@ export default function MatchesPage() {
 
                   {/* Review Action Panel */}
                   {pending ? (
-                    <div className="w-full space-y-3.5 xl:w-88 rounded-2xl border border-white/[0.08] bg-slate-900/50 p-5 self-start">
+                    <details className="w-full xl:w-88 rounded-2xl border border-white/[0.08] bg-slate-900/50 p-5 self-start">
+                      <summary className="cursor-pointer text-xs font-bold text-slate-200">รับรองหรือปฏิเสธผลอย่างเป็นทางการ</summary>
+                      <p className="mt-2 text-xs leading-relaxed text-slate-500">ไม่จำเป็นสำหรับการดูหรือใช้ผังอัตโนมัติ การรับรองจะบันทึกผู้ตรวจทานและเหตุผลใน Chain of Custody</p>
+                      <div className="mt-3.5 space-y-3.5">
                       <div className="flex items-center gap-2">
                         <Sparkles className="h-4 w-4 text-amber-300" />
                         <label htmlFor={`reason-${item.id}`} className="text-xs font-bold text-slate-200 uppercase tracking-wider">
@@ -372,7 +390,8 @@ export default function MatchesPage() {
                           ยืนยันเชื่อมโยง
                         </button>
                       </div>
-                    </div>
+                      </div>
+                    </details>
                   ) : (
                     <div className="w-full xl:w-72 rounded-2xl border border-white/[0.06] bg-slate-950/40 p-4 space-y-2 self-start">
                       <span className="text-[10px] font-mono uppercase text-slate-500 block">

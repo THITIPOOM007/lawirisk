@@ -58,6 +58,8 @@ const GROUP_META: Record<string, { label: string; color: string; short: string }
 const fallbackMeta = { label: 'ข้อมูลอื่น', color: '#e2e8f0', short: 'ข้อมูล' };
 const getMeta = (group: string) => GROUP_META[group] || fallbackMeta;
 const endpointId = (endpoint: string | UniverseNode) => typeof endpoint === 'string' ? endpoint : endpoint.id;
+const isAutomaticMapping = (link: UniverseLink) => link.label?.startsWith('mapping อัตโนมัติ') || false;
+const isVerifiedMapping = (link: UniverseLink) => link.label === 'รับรองความเชื่อมโยง' || link.label === 'ยืนยันความเชื่อมโยง';
 
 export default function EvidenceUniverseGraph({ data }: { data: UniverseGraphData }) {
   const fgRef = useRef<ForceGraphMethods<UniverseNode, UniverseLink> | undefined>(undefined);
@@ -261,13 +263,13 @@ export default function EvidenceUniverseGraph({ data }: { data: UniverseGraphDat
             onBackgroundClick={() => setSelectedId(null)}
             linkLabel={(link) => link.label || 'ความเชื่อมโยง'}
             linkVisibility={isLinkVisible}
-            linkColor={(link) => isLinkEmphasized(link) ? '#67e8f9' : '#334e63'}
-            linkWidth={(link) => isLinkEmphasized(link) ? 3.4 : link.label === 'ยืนยันความเชื่อมโยง' ? 1.8 : 0.8}
+            linkColor={(link) => isLinkEmphasized(link) ? '#67e8f9' : isVerifiedMapping(link) ? '#34d399' : isAutomaticMapping(link) ? '#818cf8' : '#334e63'}
+            linkWidth={(link) => isLinkEmphasized(link) ? 3.4 : isVerifiedMapping(link) ? 2.1 : isAutomaticMapping(link) ? 1.5 : 0.8}
             linkOpacity={0.78}
-            linkCurvature={(link) => link.label === 'ยืนยันความเชื่อมโยง' ? 0.18 : 0.06}
-            linkDirectionalArrowLength={(link) => isLinkEmphasized(link) ? 5 : link.label === 'ยืนยันความเชื่อมโยง' ? 3 : 0}
+            linkCurvature={(link) => isVerifiedMapping(link) || isAutomaticMapping(link) ? 0.18 : 0.06}
+            linkDirectionalArrowLength={(link) => isLinkEmphasized(link) ? 5 : isVerifiedMapping(link) || isAutomaticMapping(link) ? 3 : 0}
             linkDirectionalArrowColor={(link) => isLinkEmphasized(link) ? '#a5f3fc' : '#64748b'}
-            linkDirectionalParticles={(link) => !motionEnabled ? 0 : isLinkEmphasized(link) ? 6 : link.label === 'ยืนยันความเชื่อมโยง' ? 3 : 1}
+            linkDirectionalParticles={(link) => !motionEnabled ? 0 : isLinkEmphasized(link) ? 6 : isVerifiedMapping(link) || isAutomaticMapping(link) ? 3 : 1}
             linkDirectionalParticleSpeed={(link) => isLinkEmphasized(link) ? 0.014 : 0.006}
             linkDirectionalParticleWidth={(link) => isLinkEmphasized(link) ? 3.2 : 1.3}
             linkDirectionalParticleColor={(link) => isLinkEmphasized(link) ? '#ffffff' : '#38bdf8'}
