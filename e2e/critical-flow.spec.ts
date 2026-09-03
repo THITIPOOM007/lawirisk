@@ -410,6 +410,24 @@ test('queues multiple evidence files and reports browser validation per file', a
   await expect(page.getByText(/พร้อมอัปโหลด/)).toHaveCount(2);
 });
 
+test('opens an evidence image preview at the top of the viewport', async ({ page }) => {
+  await loginAsInvestigator(page);
+  await page.route('**/api/v1/evidence/ev-1/download', (route) => route.fulfill({
+    contentType: 'application/json',
+    body: JSON.stringify({ data: { url: 'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAusB9WlBtNEAAAAASUVORK5CYII=' } }),
+  }));
+  await page.goto('/evidence');
+  await page.getByRole('button', { name: 'ดูภาพ' }).first().click();
+
+  const dialog = page.getByRole('dialog', { name: 'ภาพหลักฐาน fb_ad_screenshot.png' });
+  await expect(dialog).toBeVisible();
+  const panelBounds = await page.getByTestId('evidence-image-preview-panel').boundingBox();
+  expect(panelBounds).not.toBeNull();
+  expect(panelBounds!.y).toBeLessThanOrEqual(24);
+  await dialog.getByRole('button', { name: 'ปิดภาพหลักฐาน' }).click();
+  await expect(dialog).toBeHidden();
+});
+
 test('runs demo OCR, keeps source trace, and reaches biometric review', async ({ page }) => {
   await page.context().addCookies([
     { name: 'mock-auth-logged-in', value: 'true', url: testBaseUrl },

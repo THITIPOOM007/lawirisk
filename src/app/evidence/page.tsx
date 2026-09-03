@@ -1,6 +1,7 @@
 'use client';
 
 import React, { useEffect, useState } from 'react';
+import { createPortal } from 'react-dom';
 import { FileText, Upload, Check, AlertCircle, FileCheck, Loader2, Database, RefreshCw, Camera, X } from 'lucide-react';
 import { getCases, getEvidence, saveEvidence, Case, EvidenceFile } from '@/lib/demo-data';
 import type { EvidenceUploadGrant } from '@/lib/evidence-resumable-upload';
@@ -489,7 +490,32 @@ export default function EvidencePage() {
 
       </div>
 
-      {imagePreview && <div role="dialog" aria-modal="true" aria-label={`ภาพหลักฐาน ${imagePreview.filename}`} className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/85 p-4 backdrop-blur-sm" onClick={() => setImagePreview(null)}><div className="max-h-[92vh] w-full max-w-6xl overflow-auto rounded-3xl border border-cyan-300/20 bg-slate-900 p-4 shadow-2xl" onClick={(event) => event.stopPropagation()}><div className="mb-3 flex items-center justify-between gap-3"><div><p className="text-xs font-bold text-white">ภาพหน้าผลค้น/ภาพหลักฐานต้นฉบับ</p><p className="mt-1 break-all font-mono text-[9px] text-slate-500">{imagePreview.filename}</p></div><button type="button" onClick={() => setImagePreview(null)} className="grid h-10 w-10 place-items-center rounded-xl border border-white/[0.1] text-slate-300 hover:bg-white/[0.08]" aria-label="ปิดภาพหลักฐาน"><X className="h-4 w-4" /></button></div><img src={imagePreview.url} alt={`ภาพหลักฐาน ${imagePreview.filename}`} className="mx-auto max-h-[78vh] rounded-xl border border-white/[0.08] bg-white object-contain" /></div></div>}
+      {imagePreview && typeof document !== 'undefined' && createPortal((
+        <div
+          role="dialog"
+          aria-modal="true"
+          aria-label={`ภาพหลักฐาน ${imagePreview.filename}`}
+          className="fixed inset-0 z-50 overflow-y-auto bg-slate-950/85 backdrop-blur-sm"
+          onClick={() => setImagePreview(null)}
+        >
+          <div
+            data-testid="evidence-image-preview-panel"
+            className="absolute left-1/2 top-4 max-h-[calc(100dvh-2rem)] w-[calc(100%-2rem)] max-w-6xl -translate-x-1/2 overflow-auto rounded-3xl border border-cyan-300/20 bg-slate-900 p-4 shadow-2xl sm:top-6 sm:max-h-[calc(100dvh-3rem)] sm:w-[calc(100%-3rem)]"
+            onClick={(event) => event.stopPropagation()}
+          >
+            <div className="mb-3 flex items-center justify-between gap-3">
+              <div>
+                <p className="text-xs font-bold text-white">ภาพหน้าผลค้น/ภาพหลักฐานต้นฉบับ</p>
+                <p className="mt-1 break-all font-mono text-[9px] text-slate-500">{imagePreview.filename}</p>
+              </div>
+              <button type="button" onClick={() => setImagePreview(null)} className="grid h-10 w-10 place-items-center rounded-xl border border-white/[0.1] text-slate-300 hover:bg-white/[0.08]" aria-label="ปิดภาพหลักฐาน">
+                <X className="h-4 w-4" />
+              </button>
+            </div>
+            <img src={imagePreview.url} alt={`ภาพหลักฐาน ${imagePreview.filename}`} className="mx-auto max-h-[78vh] rounded-xl border border-white/[0.08] bg-white object-contain" />
+          </div>
+        </div>
+      ), document.body)}
     </div>
   );
 }
