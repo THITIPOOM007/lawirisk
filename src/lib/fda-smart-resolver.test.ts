@@ -238,7 +238,7 @@ describe('FDA public search fallback', () => {
   });
 
   it('returns a related HSS public announcement as a review lead with its original citation', async () => {
-    const html = `<B style="font-size:18px;"><A href='fileupload_doc/2023-12-18-alert.png' target=_blank>เตือนภัยมิจฉาชีพ แอบอ้างกรม สบส.</a></B><br>กรมสนับสนุนบริการสุขภาพเตือนประชาชนอย่ากดลิงก์ที่น่าสงสัย <BR><p>&nbsp;</p><B>[ลงประกาศโดย : ประชาสัมพันธ์ &nbsp;&nbsp;วันที่ : 18 ธ.ค. 2566]</B>`;
+    const html = `<B style="font-size:18px;"><A href='fileupload_doc/2023-12-18-alert.png' target=_blank>เตือนภัยมิจฉาชีพ แอบอ้างกรม สบส.</a></B><br>กรมสนับสนุนบริการสุขภาพเตือนประชาชนอย่ากดลิงก์ที่น่าสงสัย <BR><p>&nbsp;</p><B>[ลงประกาศโดย : ประชาสัมพันธ์ &nbsp;&nbsp;วันที่ : 18 ธ.ค. 2566]</B><!--<B><A href='show_picture_all.php?linkID=1'>สำเนาข่าวที่ซ่อนอยู่</a></B><br>ไม่ควรอ่าน <B>[ลงประกาศโดย : ประชาสัมพันธ์ วันที่ : 18 ธ.ค. 2566]</B>-->`;
     const fetchImpl = vi.fn(async () => new Response(html, { status: 200 }));
 
     const [result] = await searchOfficialHssPublicNews('มิจฉาชีพ', fetchImpl, () => new Date('2026-09-03T01:00:00.000Z'));
@@ -250,6 +250,7 @@ describe('FDA public search fallback', () => {
       source: 'กรมสนับสนุนบริการสุขภาพ (สบส.) — ข่าวประชาสัมพันธ์',
     });
     expect(result.sourceUrl).toBe('https://hss.moph.go.th/fileupload_doc/2023-12-18-alert.png');
+    expect(await searchOfficialHssPublicNews('มิจฉาชีพ', fetchImpl)).toHaveLength(1);
   });
 
   it('filters the FDA public-news feed by query and preserves the FDA media citation', async () => {

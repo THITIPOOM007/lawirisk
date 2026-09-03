@@ -963,7 +963,7 @@ export async function searchOfficialHssPublicNews(
     });
     if (!response.ok) return [];
 
-    const html = await response.text();
+    const html = (await response.text()).replace(/<!--[\s\S]*?-->/g, '');
     const entries = Array.from(html.matchAll(
       /<B[^>]*>\s*<A\s+href=['"]([^'"]+)['"][^>]*>([\s\S]*?)<\/a>\s*<\/B><br>([\s\S]*?)<B>\s*\[ลงประกาศโดย\s*:\s*([\s\S]*?)\s*วันที่\s*:\s*([^\]]+)\]/gi,
     ));
