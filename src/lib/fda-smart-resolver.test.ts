@@ -1,5 +1,6 @@
 import { describe, expect, it, vi } from 'vitest';
 import {
+  buildOfficialHssClinicQueryVariants,
   buildOfficialFdaQueryVariants,
   mapTrustedSourceRows,
   resolveMultiChannelSearch,
@@ -14,6 +15,13 @@ import {
 vi.mock('server-only', () => ({}));
 
 describe('FDA public search fallback', () => {
+  it('builds a broader clinic-name fallback without generic service terms', () => {
+    expect(buildOfficialHssClinicQueryVariants(' มิราเคิล   คลินิก ')).toEqual([
+      'มิราเคิล คลินิก',
+      'มิราเคิล',
+    ]);
+  });
+
   it.each([
     ['2A972/29', ['2A 972/29', '2A972/29']],
     ['2A 972/29', ['2A 972/29', '2A972/29']],
@@ -351,6 +359,39 @@ describe('FDA public search fallback', () => {
       metadata: { 'ที่ตั้ง': '174 5 ด่านขุนทด นครราชสีมา 30210' },
     });
     expect(fetchImpl).toHaveBeenCalledTimes(2);
+  });
+
+  it('retries the HSS directory with a broader clinic-name variant before reporting no match', async () => {
+    const directoryHtml = `
+      ผลลัพธ์จากการค้าหา 'มิราเคิล' พบจำนวน : 1 แห่ง
+      <table>
+        <tr><td><img src="image/dot7.jpg"><B>่มิราเคิล รีเจนเนอเรทีฟ คลินิกเวชกรรม</B></td></tr>
+        <tr><td></td><td><B>ที่อยู่ :</B>2/42-43 สุขุมวิท 42 คลองเตย กรุงเทพมหานคร 10110 <br><B>เบอโทรศัพท์ :</B></td></tr>
+      </table>`;
+    const submittedQueries: string[] = [];
+    const fetchImpl = vi.fn(async (input: string | URL | Request, init?: RequestInit) => {
+      const url = String(input);
+      if (url === 'https://hosp.hss.moph.go.th/key-searchs') return new Response('Unavailable', { status: 503 });
+      const body = new URLSearchParams(String(init?.body));
+      const submittedQuery = body.get('q') || '';
+      submittedQueries.push(submittedQuery);
+      if (submittedQuery === 'มิราเคิล') return new Response(directoryHtml, { status: 200 });
+      return new Response("ผลลัพธ์จากการค้าหา 'มิราเคิล คลินิก' พบจำนวน : 0 แห่ง", { status: 200 });
+    });
+
+    const [result] = await searchOfficialHssClinics('มิราเคิล คลินิก', fetchImpl);
+
+    expect(submittedQueries).toEqual(['มิราเคิล คลินิก', 'มิราเคิล']);
+    expect(result).toMatchObject({
+      title: 'มิราเคิล รีเจนเนอเรทีฟ คลินิกเวชกรรม',
+      status: 'WARNING',
+      metadata: {
+        'คำค้นที่ผู้ใช้กรอก': 'มิราเคิล คลินิก',
+        'รูปแบบคำค้นที่ส่งให้ สบส.': 'มิราเคิล',
+        'ปรับคำค้นอัตโนมัติ': 'ใช่',
+      },
+    });
+    expect(fetchImpl).toHaveBeenCalledTimes(3);
   });
 
   it('reads the official NHSO provider directory by its public query URL and preserves the profile citation', async () => {

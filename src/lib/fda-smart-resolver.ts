@@ -251,6 +251,22 @@ function compactHtmlText(html: string, maxLength = 600) {
   return htmlToLines(html).join(' ').replace(/\s+/g, ' ').trim().slice(0, maxLength);
 }
 
+function cleanHssText(value: string) {
+  return value.replace(/^[\u0E31\u0E34-\u0E3A\u0E47-\u0E4E]+/, '').trim();
+}
+
+export function buildOfficialHssClinicQueryVariants(rawQuery: string): string[] {
+  const normalized = rawQuery.normalize('NFKC').replace(/\s+/g, ' ').trim();
+  if (!normalized) return [];
+
+  const withoutGenericTerms = normalized
+    .replace(/โรงพยาบาล|สถานพยาบาล|คลินิก(?:เวชกรรม|ทันตกรรม)?/g, ' ')
+    .replace(/\s+/g, ' ')
+    .trim();
+
+  return [...new Set([normalized, withoutGenericTerms].filter(Boolean))];
+}
+
 function unverifiedGuidance(
   query: string,
   source: 'FDA' | 'HSS' | 'HSS_CLINIC' | 'HSS_SPA' | 'INTERNAL' = 'FDA',
@@ -614,7 +630,7 @@ function parseHssClinicCard(cardHtml: string, index: number, query: string, now:
   for (let i = 0; i < lines.length; i += 1) {
     const line = lines[i];
     if (/ชื่อสถานพยาบาล\s*:/.test(line)) {
-      name = lines[i + 1]?.trim() || line.split(':').slice(1).join(':').trim();
+      name = cleanHssText(lines[i + 1]?.trim() || line.split(':').slice(1).join(':').trim());
     } else if (/เลขที่ใบอนุญาต(?:ประกอบกิจการ)?\s*:/.test(line)) {
       licenseNumber = lines[i + 1]?.trim() || line.split(':').slice(1).join(':').trim();
     } else if (/สถานที่ตั้ง\s*:/.test(line)) {
@@ -659,7 +675,7 @@ function plainHtmlFragment(value: string) {
 
 function parseHssClinicDirectory(html: string, now: () => Date): SmartSearchResult[] {
   const names = Array.from(html.matchAll(/dot7\.jpg[^>]*>[\s\S]*?<b>\s*([^<]+?)\s*<\/b>/gi))
-    .map((match) => plainHtmlFragment(match[1] || ''));
+    .map((match) => cleanHssText(plainHtmlFragment(match[1] || '')));
   const addresses = Array.from(html.matchAll(/<b>\s*ที่อยู่\s*:\s*<\/b>\s*([\s\S]*?)<br\s*\/?>\s*<b>\s*เบอ/gi))
     .map((match) => plainHtmlFragment(match[1] || ''));
   const inspectedAt = checkedDate(now);
@@ -903,10 +919,30 @@ export async function searchOfficialHssClinics(
 ): Promise<SmartSearchResult[]> {
   const modernResults = await searchModernHssClinics(query, fetchImpl, now);
   if (modernResults.some((item) => item.status === 'WARNING' || item.status === 'REVOKED')) return modernResults;
-  const directoryResults = await searchHssClinicDirectory(query, fetchImpl, now);
-  if (directoryResults.some((item) => item.status === 'WARNING')) return directoryResults;
-  if (directoryResults.some((item) => item.status === 'UNREGISTERED')
-    || modernResults.some((item) => item.status === 'UNREGISTERED')) {
+
+  const directoryAttempts: SmartSearchResult[][] = [];
+  for (const submittedQuery of buildOfficialHssClinicQueryVariants(query)) {
+    const directoryResults = await searchHssClinicDirectory(submittedQuery, fetchImpl, now);
+    directoryAttempts.push(directoryResults);
+    if (directoryResults.some((item) => item.status === 'WARNING')) {
+      return directoryResults.map((item) => ({
+        ...item,
+        metadata: {
+          ...item.metadata,
+          'คำค้นที่ผู้ใช้กรอก': query,
+          'รูปแบบคำค้นที่ส่งให้ สบส.': submittedQuery,
+          'ปรับคำค้นอัตโนมัติ': submittedQuery === query.trim() ? 'ไม่ใช่' : 'ใช่',
+        },
+      }));
+    }
+  }
+
+  const directoryResults = directoryAttempts.flat();
+  const modernExplicitlyNotFound = modernResults.length > 0
+    && modernResults.every((item) => item.status === 'UNREGISTERED');
+  const directoryExplicitlyNotFound = directoryResults.length > 0
+    && directoryResults.every((item) => item.status === 'UNREGISTERED');
+  if (modernExplicitlyNotFound && directoryExplicitlyNotFound) {
     return [clinicProviderState(query, 'UNREGISTERED', now)];
   }
   return [clinicProviderState(query, 'UNAVAILABLE', now)];
