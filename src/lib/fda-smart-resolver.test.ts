@@ -329,7 +329,7 @@ describe('FDA public search fallback', () => {
         'ใช้ได้ถึง': '31 ธันวาคม 2577',
       },
     });
-    expect(fetchImpl).toHaveBeenCalledOnce();
+    expect(fetchImpl).toHaveBeenCalledTimes(2);
   });
 
   it('uses the live HSS hospital directory when the modern clinic endpoint is blocked', async () => {
@@ -381,7 +381,7 @@ describe('FDA public search fallback', () => {
 
     const [result] = await searchOfficialHssClinics('มิราเคิล คลินิก', fetchImpl);
 
-    expect(submittedQueries).toEqual(['มิราเคิล คลินิก', 'มิราเคิล']);
+    expect(submittedQueries).toEqual(['มิราเคิล']);
     expect(result).toMatchObject({
       title: 'มิราเคิล รีเจนเนอเรทีฟ คลินิกเวชกรรม',
       status: 'WARNING',
@@ -392,6 +392,33 @@ describe('FDA public search fallback', () => {
       },
     });
     expect(fetchImpl).toHaveBeenCalledTimes(3);
+  });
+
+  it('retries transient HSS directory failures and returns the recovered result', async () => {
+    let directoryAttempts = 0;
+    const fetchImpl = vi.fn(async (input: string | URL | Request) => {
+      const url = String(input);
+      if (url === 'https://hosp.hss.moph.go.th/key-searchs') {
+        return new Response(JSON.stringify({ code: 404, message: 'Not Found' }), { status: 200 });
+      }
+      directoryAttempts += 1;
+      if (directoryAttempts < 3) return new Response('Temporary failure', { status: 503 });
+      return new Response(`
+        ผลลัพธ์จากการค้าหา 'สมบูรณ์' พบจำนวน : 1 แห่ง
+        <table>
+          <tr><td><img src="image/dot7.jpg"><B>สมบูรณ์โพลีคลินิก</B></td></tr>
+          <tr><td></td><td><B>ที่อยู่ :</B>121/1 ปากเกร็ด นนทบุรี 11120 <br><B>เบอโทรศัพท์ :</B></td></tr>
+        </table>`, { status: 200 });
+    });
+
+    const [result] = await searchOfficialHssClinics('สมบูรณ์ คลินิก', fetchImpl);
+
+    expect(directoryAttempts).toBe(3);
+    expect(result).toMatchObject({
+      title: 'สมบูรณ์โพลีคลินิก',
+      status: 'WARNING',
+      metadata: { 'รูปแบบคำค้นที่ส่งให้ สบส.': 'สมบูรณ์' },
+    });
   });
 
   it('reads the official NHSO provider directory by its public query URL and preserves the profile citation', async () => {
@@ -480,7 +507,7 @@ describe('FDA public search fallback', () => {
       category: 'CLINICS',
       metadata: { 'เลขที่ใบอนุญาต': '33101001165' },
     });
-    expect(fetchImpl).toHaveBeenCalledTimes(2);
+    expect(fetchImpl).toHaveBeenCalledTimes(3);
   });
 
   it('selects FDA for products and HSS for massage queries without cross-searching', async () => {

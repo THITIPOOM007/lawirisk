@@ -59,6 +59,7 @@ const HSS_CLINIC_SOURCE_URL = 'https://hosp.hss.moph.go.th';
 const HSS_CLINIC_DIRECTORY_ENDPOINT = 'https://privatehospital.hss.moph.go.th/view_hospital.php';
 const HSS_CLINIC_DIRECTORY_URL = 'https://privatehospital.hss.moph.go.th/s_view_hospital.php';
 const HSS_CLINIC_USER_AGENT = 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36';
+const HSS_CLINIC_TRANSIENT_STATUSES = new Set([408, 425, 429, 500, 502, 503, 504]);
 const HSS_PUBLIC_NEWS_SEARCH_URL = 'https://hss.moph.go.th/show_topic2.php';
 const ORYOR_NEWS_API_URL = 'https://api.oryor.com/media/newsUpdate?page=1&sort=last&limit=40';
 const ORYOR_NEWS_DIRECTORY_URL = 'https://oryor.com/media/newsUpdate';
@@ -332,6 +333,31 @@ async function fetchWithTimeout(
   } finally {
     clearTimeout(timeout);
   }
+}
+
+async function fetchHssClinicWithRetry(
+  fetchImpl: SearchFetch,
+  url: string,
+  init: RequestInit,
+  options: { attempts: number; timeoutMs: number },
+) {
+  let lastError: unknown;
+  let lastResponse: Response | null = null;
+  for (let attempt = 0; attempt < options.attempts; attempt += 1) {
+    try {
+      const response = await fetchWithTimeout(fetchImpl, url, init, options.timeoutMs);
+      lastResponse = response;
+      if (!HSS_CLINIC_TRANSIENT_STATUSES.has(response.status) || attempt === options.attempts - 1) {
+        return response;
+      }
+    } catch (error) {
+      lastError = error;
+      if (attempt === options.attempts - 1) throw error;
+    }
+    await new Promise((resolve) => setTimeout(resolve, 150 * (2 ** attempt)));
+  }
+  if (lastResponse) return lastResponse;
+  throw lastError instanceof Error ? lastError : new Error('HSS clinic registry request failed');
 }
 
 function mapFdaProductRow(rowValue: unknown, index: number, now: () => Date): SmartSearchResult | null {
@@ -710,7 +736,7 @@ async function searchHssClinicDirectory(
   now: () => Date,
 ): Promise<SmartSearchResult[]> {
   try {
-    const response = await fetchWithTimeout(fetchImpl, HSS_CLINIC_DIRECTORY_ENDPOINT, {
+    const response = await fetchHssClinicWithRetry(fetchImpl, HSS_CLINIC_DIRECTORY_ENDPOINT, {
       method: 'POST',
       headers: {
         Accept: 'text/html, */*; q=0.01',
@@ -721,7 +747,7 @@ async function searchHssClinicDirectory(
       },
       body: new URLSearchParams({ s_data: 'MedicalName', q: query, post: '', type: '' }).toString(),
       cache: 'no-store',
-    }, 8_000);
+    }, { attempts: 3, timeoutMs: 6_000 });
     if (!response.ok) return [clinicProviderState(query, 'UNAVAILABLE', now)];
 
     const html = await response.text();
@@ -751,7 +777,7 @@ async function searchModernHssClinics(
       token: '',
     });
 
-    const response = await fetchWithTimeout(fetchImpl, HSS_CLINIC_SEARCH_ENDPOINT, {
+    const response = await fetchHssClinicWithRetry(fetchImpl, HSS_CLINIC_SEARCH_ENDPOINT, {
       method: 'POST',
       headers: {
         Accept: 'application/json, text/javascript, */*; q=0.01',
@@ -763,7 +789,7 @@ async function searchModernHssClinics(
       },
       body: body.toString(),
       cache: 'no-store',
-    });
+    }, { attempts: 2, timeoutMs: 6_000 });
     if (!response.ok) {
       console.warn(JSON.stringify({ event: 'HSS_CLINIC_REGISTRY_NON_SUCCESS', status: response.status }));
       return [clinicProviderState(query, 'UNAVAILABLE', now)];
@@ -917,27 +943,26 @@ export async function searchOfficialHssClinics(
   fetchImpl: SearchFetch = fetch,
   now: () => Date = () => new Date(),
 ): Promise<SmartSearchResult[]> {
-  const modernResults = await searchModernHssClinics(query, fetchImpl, now);
+  const queryVariants = buildOfficialHssClinicQueryVariants(query);
+  const submittedDirectoryQuery = queryVariants.at(-1) || query.trim();
+  const [modernResults, directoryResults] = await Promise.all([
+    searchModernHssClinics(query, fetchImpl, now),
+    searchHssClinicDirectory(submittedDirectoryQuery, fetchImpl, now),
+  ]);
   if (modernResults.some((item) => item.status === 'WARNING' || item.status === 'REVOKED')) return modernResults;
 
-  const directoryAttempts: SmartSearchResult[][] = [];
-  for (const submittedQuery of buildOfficialHssClinicQueryVariants(query)) {
-    const directoryResults = await searchHssClinicDirectory(submittedQuery, fetchImpl, now);
-    directoryAttempts.push(directoryResults);
-    if (directoryResults.some((item) => item.status === 'WARNING')) {
-      return directoryResults.map((item) => ({
-        ...item,
-        metadata: {
-          ...item.metadata,
-          'คำค้นที่ผู้ใช้กรอก': query,
-          'รูปแบบคำค้นที่ส่งให้ สบส.': submittedQuery,
-          'ปรับคำค้นอัตโนมัติ': submittedQuery === query.trim() ? 'ไม่ใช่' : 'ใช่',
-        },
-      }));
-    }
+  if (directoryResults.some((item) => item.status === 'WARNING')) {
+    return directoryResults.map((item) => ({
+      ...item,
+      metadata: {
+        ...item.metadata,
+        'คำค้นที่ผู้ใช้กรอก': query,
+        'รูปแบบคำค้นที่ส่งให้ สบส.': submittedDirectoryQuery,
+        'ปรับคำค้นอัตโนมัติ': submittedDirectoryQuery === query.trim() ? 'ไม่ใช่' : 'ใช่',
+      },
+    }));
   }
 
-  const directoryResults = directoryAttempts.flat();
   const modernExplicitlyNotFound = modernResults.length > 0
     && modernResults.every((item) => item.status === 'UNREGISTERED');
   const directoryExplicitlyNotFound = directoryResults.length > 0
