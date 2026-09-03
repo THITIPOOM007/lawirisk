@@ -13,7 +13,7 @@ describe('case-scoped official source routing', () => {
     ['ร้านนวดเพื่อสุขภาพ', 'HEALTH_BUSINESS', 'spa-services.hss.moph.go.th'],
   ])('routes %s to the matching FDA category', (context, category, host) => {
     expect(classifyCaseSourceScope(context)).toBe(category);
-    expect(recommendCaseSources(context).every((item) => new URL(item.url).hostname === host)).toBe(true);
+    expect(recommendCaseSources(context).some((item) => new URL(item.url).hostname === host)).toBe(true);
   });
 
   it('routes a clinic case to HSS and never to the massage registry', () => {
@@ -31,7 +31,12 @@ describe('case-scoped official source routing', () => {
 
   it('includes all three staff URLs supplied for herbal-place checks', () => {
     const sources = recommendCaseSources('ตรวจสถานที่ผลิตสมุนไพร');
-    expect(sources).toHaveLength(3);
     expect(sources.map((item) => item.url)).toContain('https://meshlog.fda.moph.go.th/FDA_DRUG_HERB/LCN_STAFF/FRM_STAFF_LCN_SEARCH.aspx');
+  });
+
+  it('always includes official FDA and HSS public-warning channels for deep search', () => {
+    const urls = recommendCaseSources('ตรวจสอบผลิตภัณฑ์ต้องสงสัย').map((item) => item.url);
+    expect(urls).toContain('https://oryor.com/media/newsUpdate');
+    expect(urls).toContain('https://hss.moph.go.th/s_show_topic2.php?id_form=1');
   });
 });

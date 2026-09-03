@@ -13,7 +13,7 @@ import {
   INITIAL_MENTIONS,
   INITIAL_RELATIONSHIP_REFERENCES,
 } from '@/lib/demo-data';
-import { mapTrustedSourceRows } from '@/lib/fda-smart-resolver';
+import { mapTrustedSourceRows, searchOfficialHssPublicNews, searchOfficialOryorNews } from '@/lib/fda-smart-resolver';
 import { searchGroundedPublicWeb } from '@/lib/providers/gemini-grounded-search';
 import { consumeRateLimit } from '@/lib/rate-limit';
 import { buildReconAutomationPlan } from '@/lib/recon-automation';
@@ -263,10 +263,17 @@ export async function POST(request: NextRequest) {
   const registryTerms = [...new Set([...verifiedRegistryTerms, ...suggestedRegistryTerms])].slice(0, 8);
   const sourceRecommendations = recommendCaseSources(caseRoutingContext);
   const sourceCategory = classifyCaseSourceScope(caseRoutingContext);
-  const [registryResponses, groundedWeb] = await Promise.all([Promise.all(registryTerms.map(async (term) => {
-    const result = await supabase.rpc('search_trusted_sources', { search_query: term, max_results: 5 });
-    return { data: result.data, error: result.error };
-  })), searchGroundedPublicWeb(registryTerms, { label: sourceCategory, urls: sourceRecommendations.map((item) => item.url) })]);
+  const [registryResponses, groundedWeb, officialNewsResults] = await Promise.all([
+    Promise.all(registryTerms.map(async (term) => {
+      const result = await supabase.rpc('search_trusted_sources', { search_query: term, max_results: 5 });
+      return { data: result.data, error: result.error };
+    })),
+    searchGroundedPublicWeb(registryTerms, { label: sourceCategory, urls: sourceRecommendations.map((item) => item.url) }),
+    Promise.all(registryTerms.slice(0, 4).flatMap((term) => [
+      searchOfficialHssPublicNews(term),
+      searchOfficialOryorNews(term),
+    ])).then((groups) => groups.flat()),
+  ]);
   const registryUnavailable = registryResponses.some((result) => Boolean(result.error));
   const registryFindingsById = new Map<string, ReturnType<typeof mapTrustedSourceRows>[number]>();
   for (const response of registryResponses) {
@@ -298,7 +305,24 @@ export async function POST(request: NextRequest) {
       });
     }
   }
-  const groundedWebFindings = groundedWeb.findings.map((item) => ({
+  const publicWebFindingsBySource = new Map<string, { id: string; title: string; snippet: string; source: string; sourceUrl: string; publishedDate: string }>();
+  for (const item of officialNewsResults) {
+    publicWebFindingsBySource.set(`${item.sourceUrl}|${item.title}`, {
+      id: `official-news:${item.id}`,
+      title: item.title,
+      snippet: item.snippet,
+      source: item.source,
+      sourceUrl: item.sourceUrl,
+      publishedDate: item.publishedDate,
+    });
+  }
+  for (const item of groundedWeb.findings) {
+    publicWebFindingsBySource.set(`${item.sourceUrl}|${item.title}`, {
+      id: item.id, title: item.title, snippet: item.snippet, source: item.source,
+      sourceUrl: item.sourceUrl, publishedDate: item.publishedDate,
+    });
+  }
+  const groundedWebFindings = [...publicWebFindingsBySource.values()].map((item) => ({
     id: item.id, title: item.title, snippet: item.snippet, source: item.source,
     sourceUrl: item.sourceUrl, publishedDate: item.publishedDate,
   }));
@@ -313,8 +337,9 @@ export async function POST(request: NextRequest) {
     pendingReviewCount: suggestionsResult.count || 0,
     registryStatus: registryTerms.length === 0 ? 'NO_ELIGIBLE_TERMS' : registryUnavailable ? 'UNAVAILABLE' : 'SEARCHED',
     groundedWebFindings,
-    publicWebQueryCount: groundedWeb.queryCount,
-    publicWebStatus: groundedWeb.status,
+    publicWebQueryCount: groundedWeb.queryCount + Math.min(registryTerms.length, 4),
+    publicWebTokenUsage: groundedWeb.tokenUsage,
+    publicWebStatus: officialNewsResults.length > 0 ? 'SEARCHED' : groundedWeb.status,
     automationPlan: automation.plan,
     blockedAutomation: automation.blocked,
     sourceRecommendations,
@@ -340,6 +365,8 @@ export async function POST(request: NextRequest) {
       trusted_registry_findings: search.registryFindingCount,
       grounded_public_web_queries_performed: search.publicWebQueryCount,
       grounded_public_web_findings: search.publicWebFindingCount,
+      deterministic_official_news_findings: officialNewsResults.length,
+      grounded_public_web_token_usage: search.publicWebTokenUsage,
       local_automation_queries_planned: automation.plan.length,
       local_automation_queries_blocked: automation.blocked.length,
     },

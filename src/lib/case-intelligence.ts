@@ -75,6 +75,11 @@ export type CaseIntelligenceSearchResult = {
   registryFindingCount: number;
   publicWebFindingCount: number;
   publicWebQueryCount: number;
+  publicWebTokenUsage: {
+    prompt: number;
+    candidates: number;
+    total: number;
+  } | null;
   publicWebStatus: 'SEARCHED' | 'NOT_CONFIGURED' | 'UNAVAILABLE' | 'NO_TERMS' | 'DEMO';
   searchedRegistryTermCount: number;
   pendingReviewCount: number;
@@ -129,6 +134,7 @@ export function buildCaseIntelligenceSearchResult(input: {
   registryStatus: TrustedRegistrySearchStatus;
   groundedWebFindings?: GroundedWebFindingInput[];
   publicWebQueryCount?: number;
+  publicWebTokenUsage?: CaseIntelligenceSearchResult['publicWebTokenUsage'];
   publicWebStatus?: 'SEARCHED' | 'NOT_CONFIGURED' | 'UNAVAILABLE' | 'NO_TERMS' | 'DEMO';
   automationPlan?: ReconAutomationPlanItem[];
   blockedAutomation?: ReconBlockedAutomation[];
@@ -205,6 +211,7 @@ export function buildCaseIntelligenceSearchResult(input: {
     registryFindingCount,
     publicWebFindingCount,
     publicWebQueryCount: input.publicWebQueryCount || 0,
+    publicWebTokenUsage: input.publicWebTokenUsage || null,
     publicWebStatus: input.publicWebStatus || 'NO_TERMS',
     searchedRegistryTermCount: input.searchedRegistryTermCount,
     pendingReviewCount: input.pendingReviewCount,
@@ -212,7 +219,7 @@ export function buildCaseIntelligenceSearchResult(input: {
     automationPlan: input.automationPlan || [],
     blockedAutomation: input.blockedAutomation || [],
     sourceRecommendations: input.sourceRecommendations || [],
-    notice: 'รายการจากทะเบียนหมายถึงพบข้อความที่เกี่ยวข้อง ไม่ใช่การยืนยันว่าเป็นบุคคล/กิจการเดียวกันหรือเป็นการชี้ความผิด ต้องเปิดต้นทางและให้เจ้าหน้าที่ตรวจทานก่อนใช้ในสำนวน',
+    notice: 'รายการจากทะเบียนหมายถึงพบข้อความที่เกี่ยวข้อง ส่วนผลเว็บเป็นเพียง citation ที่ผ่านการกรองคำค้นและโดเมนที่อนุมัติแล้ว ไม่ใช่การยืนยันว่าเป็นบุคคล/กิจการเดียวกันหรือเป็นการชี้ความผิด ต้องเปิดต้นทางและให้เจ้าหน้าที่ตรวจทานก่อนใช้ในสำนวน',
   };
 }
 

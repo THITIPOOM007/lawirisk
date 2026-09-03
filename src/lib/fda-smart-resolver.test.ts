@@ -261,6 +261,13 @@ describe('FDA public search fallback', () => {
     expect(await searchOfficialHssPublicNews('มิจฉาชีพ', fetchImpl)).toHaveLength(1);
   });
 
+  it('rejects unrelated HSS announcements even if the upstream page ignores the query', async () => {
+    const html = `<B><A href='fileupload_doc/meeting.pdf'>กำหนดการประชุมประจำปี</a></B><br>เชิญบุคลากรเข้าร่วมประชุม <B>[ลงประกาศโดย : ประชาสัมพันธ์ วันที่ : 18 ธ.ค. 2566]</B>`;
+    const fetchImpl = vi.fn(async () => new Response(html, { status: 200 }));
+
+    expect(await searchOfficialHssPublicNews('มิราเคิล คลินิก', fetchImpl)).toEqual([]);
+  });
+
   it('filters the FDA public-news feed by query and preserves the FDA media citation', async () => {
     const fetchImpl = vi.fn(async () => new Response(JSON.stringify({ data: [{
       id: 81, _table_name: 'news', title: 'อย. เตือนภัยผลิตภัณฑ์สุขภาพ',

@@ -1028,10 +1028,13 @@ export async function searchOfficialHssPublicNews(
     const entries = Array.from(html.matchAll(
       /<B[^>]*>\s*<A\s+href=['"]([^'"]+)['"][^>]*>([\s\S]*?)<\/a>\s*<\/B><br>([\s\S]*?)<B>\s*\[ลงประกาศโดย\s*:\s*([\s\S]*?)\s*วันที่\s*:\s*([^\]]+)\]/gi,
     ));
+    const normalizedQuery = query.normalize('NFKC').toLocaleLowerCase('th-TH').replace(/\s+/g, ' ').trim();
     const inspectedAt = checkedDate(now);
     return entries.slice(0, 5).flatMap((entry, index) => {
       const title = compactHtmlText(entry[2], 240);
       const summary = compactHtmlText(entry[3], 650);
+      const searchable = `${title} ${summary}`.normalize('NFKC').toLocaleLowerCase('th-TH').replace(/\s+/g, ' ');
+      if (!normalizedQuery || !searchable.includes(normalizedQuery)) return [];
       const sourceUrl = safeHttpsUrl(new URL(entry[1], HSS_PUBLIC_NEWS_SEARCH_URL).toString(), new Set(['hss.moph.go.th']));
       if (!title || !sourceUrl) return [];
       return [{

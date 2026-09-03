@@ -27,6 +27,23 @@ const SOURCE_BY_CATEGORY: Partial<Record<CaseSourceCategory, CaseSourceRecommend
   ],
 };
 
+const OFFICIAL_NEWS_SOURCES: CaseSourceRecommendation[] = [
+  {
+    category: 'GENERAL',
+    label: 'ข่าวและประกาศเตือนภัยจาก อย.',
+    authority: 'สำนักงานคณะกรรมการอาหารและยา',
+    url: 'https://oryor.com/media/newsUpdate',
+    purpose: 'ตรวจข่าว ประกาศเตือนภัย เรียกคืน และประชาสัมพันธ์ที่เกี่ยวข้องกับผลิตภัณฑ์สุขภาพ',
+  },
+  {
+    category: 'GENERAL',
+    label: 'ข่าวประชาสัมพันธ์จาก สบส.',
+    authority: 'กรมสนับสนุนบริการสุขภาพ กระทรวงสาธารณสุข',
+    url: 'https://hss.moph.go.th/s_show_topic2.php?id_form=1',
+    purpose: 'ตรวจข่าวและประกาศเตือนภัยที่เกี่ยวข้องกับสถานพยาบาลและสถานประกอบการเพื่อสุขภาพ',
+  },
+];
+
 export function classifyCaseSourceScope(context: string): CaseSourceCategory {
   const value = context.toLocaleLowerCase('th-TH');
   if (/ร้านยา|ขายยา|เภสัช|สถานที่ด้านยา|ผลิตยา|ทะเบียนยา|\bdrug\b/.test(value)) return 'DRUG';
@@ -41,5 +58,9 @@ export function classifyCaseSourceScope(context: string): CaseSourceCategory {
 }
 
 export function recommendCaseSources(context: string): CaseSourceRecommendation[] {
-  return SOURCE_BY_CATEGORY[classifyCaseSourceScope(context)] || [];
+  const category = classifyCaseSourceScope(context);
+  const categorySources = SOURCE_BY_CATEGORY[category] || [];
+  return [...categorySources, ...OFFICIAL_NEWS_SOURCES].filter(
+    (item, index, all) => all.findIndex((candidate) => candidate.url === item.url) === index,
+  );
 }
