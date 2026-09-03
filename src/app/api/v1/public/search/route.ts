@@ -3,6 +3,43 @@ import { z } from 'zod';
 import { resolveMultiChannelSearch, searchOfficialHssPublicNews, searchOfficialOryorNews } from '@/lib/fda-smart-resolver';
 import { consumeRateLimit } from '@/lib/rate-limit';
 
+type EdgeCache = {
+  match(request: Request): Promise<Response | undefined>;
+  put(request: Request, response: Response): Promise<void>;
+};
+
+const FRESH_CACHE_SECONDS = 120;
+const STALE_CACHE_SECONDS = 900;
+
+function edgeCache(): EdgeCache | null {
+  const storage = (globalThis as typeof globalThis & { caches?: CacheStorage & { default?: EdgeCache } }).caches;
+  return storage?.default || null;
+}
+
+function cacheKey(request: NextRequest, tier: 'fresh' | 'stale') {
+  const url = new URL(request.url);
+  url.searchParams.set('__lawirisk_cache_tier', tier);
+  return new Request(url.toString(), { method: 'GET' });
+}
+
+function clientCacheResponse(cached: Response, state: 'HIT' | 'STALE') {
+  const response = new NextResponse(cached.body, { status: cached.status, headers: cached.headers });
+  response.headers.set('Cache-Control', 'public, max-age=0, no-cache');
+  response.headers.set('X-LawiRisk-Cache', state);
+  return response;
+}
+
+async function saveSuccessfulSearch(request: NextRequest, payload: unknown) {
+  const cache = edgeCache();
+  if (!cache) return;
+  const body = JSON.stringify(payload);
+  const headers = { 'Content-Type': 'application/json; charset=utf-8' };
+  await Promise.all([
+    cache.put(cacheKey(request, 'fresh'), new Response(body, { headers: { ...headers, 'Cache-Control': `public, max-age=${FRESH_CACHE_SECONDS}` } })),
+    cache.put(cacheKey(request, 'stale'), new Response(body, { headers: { ...headers, 'Cache-Control': `public, max-age=${STALE_CACHE_SECONDS}` } })),
+  ]);
+}
+
 const searchQuerySchema = z.object({
   q: z.string().trim().min(2).max(200),
   category: z.enum(['ALL', 'HEALTH_PRODUCTS', 'HEALTH_SERVICES', 'CLINICS', 'MASSAGE_SPA', 'FRAUD_ALERTS', 'COMPANIES', 'LICENSES']).default('ALL'),
@@ -41,6 +78,10 @@ export async function GET(request: NextRequest) {
     );
   }
 
+  const cache = edgeCache();
+  const cachedFresh = await cache?.match(cacheKey(request, 'fresh'));
+  if (cachedFresh) return clientCacheResponse(cachedFresh, 'HIT');
+
   const rawQuery = parsed.data.q.trim();
 
   const [registryResults, newsResults] = await Promise.all([
@@ -53,12 +94,12 @@ export async function GET(request: NextRequest) {
     ? newsResults
     : [...registryResults, ...newsResults];
   const results = combinedResults.filter((item) => matchesProvince(item, parsed.data.province || ''));
+  const hasConfirmedResult = results.some((item) => !['UNREGISTERED', 'UNAVAILABLE'].includes(item.status));
+  const hasUnavailableSource = results.some((item) => item.status === 'UNAVAILABLE');
 
   let aiSummary = '';
   if (results.length > 0) {
     const topItem = results[0];
-    const hasConfirmedResult = results.some((item) => !['UNREGISTERED', 'UNAVAILABLE'].includes(item.status));
-    const hasUnavailableSource = results.some((item) => item.status === 'UNAVAILABLE');
     const confirmedSources = Array.from(new Set(
       results
         .filter((item) => !['UNREGISTERED', 'UNAVAILABLE'].includes(item.status))
@@ -81,7 +122,12 @@ export async function GET(request: NextRequest) {
       : `ไม่พบข้อมูลที่ตรงกับ "${rawQuery}" ในแหล่งข้อมูลทางการที่เลือก กรุณาตรวจสอบการสะกดหรือรูปแบบเลขแล้วลองใหม่`;
   }
 
-  return NextResponse.json({
+  if (!hasConfirmedResult && hasUnavailableSource) {
+    const cachedStale = await cache?.match(cacheKey(request, 'stale'));
+    if (cachedStale) return clientCacheResponse(cachedStale, 'STALE');
+  }
+
+  const payload = {
     success: true,
     data: {
       query: parsed.data.q,
@@ -92,5 +138,8 @@ export async function GET(request: NextRequest) {
       citationCount: results.filter((item) => !['UNREGISTERED', 'UNAVAILABLE'].includes(item.status)).length,
       results,
     },
-  }, { headers: { 'Cache-Control': 'public, max-age=0, no-store' } });
+  };
+  if (hasConfirmedResult) await saveSuccessfulSearch(request, payload);
+
+  return NextResponse.json(payload, { headers: { 'Cache-Control': 'public, max-age=0, no-cache', 'X-LawiRisk-Cache': 'MISS' } });
 }
