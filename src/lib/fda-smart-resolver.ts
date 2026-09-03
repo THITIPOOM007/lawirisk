@@ -789,7 +789,7 @@ async function searchModernHssClinics(
       },
       body: body.toString(),
       cache: 'no-store',
-    }, { attempts: 2, timeoutMs: 6_000 });
+    }, { attempts: 2, timeoutMs: 2_000 });
     if (!response.ok) {
       console.warn(JSON.stringify({ event: 'HSS_CLINIC_REGISTRY_NON_SUCCESS', status: response.status }));
       return [clinicProviderState(query, 'UNAVAILABLE', now)];
