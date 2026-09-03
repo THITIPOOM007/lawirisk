@@ -117,6 +117,17 @@ describe('case intelligence workspace', () => {
 
     expect(search.summary).toContain('พบหลักฐานต้นฉบับที่ตรวจโครงสร้างแล้ว 1 ไฟล์');
     expect(search.evidenceInventory[0]).toMatchObject({ filename: 'complaint.pdf', safetyStatus: 'CLEAN' });
+    expect(search.readiness).toMatchObject({ kind: 'EXTRACTION_REQUIRED' });
+  });
+
+  it('never calls an evidence-only investigation complete before identifiers or source results exist', () => {
+    const search = buildCaseIntelligenceSearchResult({
+      evidenceInventory: [{ id: 'evidence-1', filename: 'complaint.pdf', sha256: 'e'.repeat(64), safetyStatus: 'NOT_SCANNED' }],
+      verifiedFacts: [], verifiedRelationships: [], trustedRegistryFindings: [],
+      searchedRegistryTermCount: 0, pendingReviewCount: 0, registryStatus: 'NO_ELIGIBLE_TERMS',
+    });
+    expect(search.readiness.kind).toBe('EXTRACTION_REQUIRED');
+    expect(search.readiness.label).not.toMatch(/complete|เสร็จสมบูรณ์/i);
   });
 
   it('keeps stored evidence usable without falsely labelling an unscanned file as clean', () => {

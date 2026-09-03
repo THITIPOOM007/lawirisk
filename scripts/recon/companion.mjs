@@ -16,6 +16,8 @@ import {
   parseReconUri,
   resolveFdaPublicSearchContract,
   resolveFdaSearchModel,
+  resolveFdaStaffSearchContract,
+  isFdaStaffSearchService,
   resolveEsta2SearchOption,
   resolveHssSearchFilter,
   safeCompanionMessage,
@@ -187,6 +189,15 @@ async function navigateToService(page, request) {
   const popupPromise = context.waitForEvent('page', { timeout: 8_000 }).catch(() => undefined);
 
   if (request.source.key === 'FDA_SKYNET') {
+    if (isFdaStaffSearchService(request.service)) {
+      const contract = resolveFdaStaffSearchContract(request.service, 'LICENSE_NUMBER');
+      await page.goto(contract.url, { waitUntil: 'domcontentloaded' }).catch(() => { throw new Error('FDA_STAFF_SERVICE_PAGE_FAILED'); });
+      const targetUrl = new URL(page.url());
+      if (targetUrl.protocol !== 'https:' || targetUrl.hostname !== contract.host || targetUrl.pathname !== contract.path) {
+        throw new Error('FDA_STAFF_SERVICE_PAGE_FAILED');
+      }
+      return page;
+    }
     const controlId = {
       DBD: '#ContentPlaceHolder1_54',
       DOPA: '#ContentPlaceHolder1_55',
@@ -358,6 +369,46 @@ async function runFdaLocalSearch(page, request, search) {
   };
 }
 
+async function runFdaStaffLocalSearch(page, request, search) {
+  if (!search || request.source.key !== 'FDA_SKYNET' || !isFdaStaffSearchService(request.service)) {
+    throw new Error('SEARCH_FIELD_NOT_ALLOWED');
+  }
+  const contract = resolveFdaStaffSearchContract(request.service, search.field);
+  const value = page.locator(contract.fields[search.field]);
+  const submit = page.locator(contract.submit);
+  if (!await value.isVisible().catch(() => false) || !await submit.isVisible().catch(() => false)) {
+    throw new Error('SEARCH_FORM_CHANGED');
+  }
+  const searchValue = search.value;
+  const querySha256 = createHash('sha256').update(searchValue, 'utf8').digest('hex');
+  await value.fill(searchValue);
+  search.value = '';
+  await submit.click();
+  await page.waitForLoadState('domcontentloaded', { timeout: 20_000 }).catch(() => undefined);
+  await page.waitForTimeout(1_500);
+  const currentUrl = new URL(page.url());
+  if (currentUrl.protocol !== 'https:' || currentUrl.hostname !== contract.host || currentUrl.pathname !== contract.path) {
+    throw new Error('FDA_STAFF_SOURCE_REDIRECTED');
+  }
+  const echoed = await value.evaluate((element) => element instanceof HTMLInputElement ? element.value : '');
+  if (echoed !== searchValue) throw new Error('SEARCH_REQUEST_NOT_RETAINED');
+  const resultRows = await page.locator(contract.results).evaluateAll((rows) => rows
+    .filter((row) => row.querySelectorAll('td').length > 1)
+    .map((row) => Array.from(row.querySelectorAll('td')).map((cell) => cell.textContent || '').join(' ').replace(/\s+/g, ' ').trim())
+    .filter((row) => row && !/No records to display|ไม่พบข้อมูล/i.test(row)));
+  const boundedRows = resultRows.filter((row) => isHssResultBoundToQuery([row], searchValue));
+  if (resultRows.length > 0 && boundedRows.length === 0) throw new Error('SEARCH_RESULT_NOT_BOUND_TO_QUERY');
+  return {
+    querySha256,
+    executedQuerySha256: querySha256,
+    searchStrategy: 'EXACT_STAFF_LOCATION',
+    attemptCount: 1,
+    attempts: [{ strategy: 'EXACT_STAFF_LOCATION', querySha256, resultRowCount: boundedRows.length }],
+    resultRowCount: boundedRows.length,
+    resultSummaries: summarizeResultRows(boundedRows),
+  };
+}
+
 async function runFdaPublicLocalSearch(page, request, search) {
   if (!search || request.source.key !== 'FDA_PUBLIC' || !request.service) {
     throw new Error('SEARCH_FIELD_NOT_ALLOWED');
@@ -507,7 +558,9 @@ async function runEsta2LocalSearch(page, request, search) {
 async function runLocalSearch(page, request, search) {
   if (!search) return undefined;
   if (request.source.key === 'FDA_PUBLIC') return runFdaPublicLocalSearch(page, request, search);
-  if (request.source.key === 'FDA_SKYNET') return runFdaLocalSearch(page, request, search);
+  if (request.source.key === 'FDA_SKYNET') return isFdaStaffSearchService(request.service)
+    ? runFdaStaffLocalSearch(page, request, search)
+    : runFdaLocalSearch(page, request, search);
   if (request.source.key === 'HSS_OSS') return runHssLocalSearch(page, request, search);
   if (request.source.key === 'HSS_ESTA2') return runEsta2LocalSearch(page, request, search);
   throw new Error('SEARCH_FIELD_NOT_ALLOWED');

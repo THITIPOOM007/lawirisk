@@ -26,7 +26,7 @@ type Suggestion = {
   created_at: string;
 };
 
-const entityTypes = ['PERSON', 'ORGANIZATION', 'PHONE', 'EMAIL', 'BANK_ACCOUNT', 'CITIZEN_ID', 'LOCATION'] as const;
+const entityTypes = ['PERSON', 'ORGANIZATION', 'PHONE', 'EMAIL', 'BANK_ACCOUNT', 'CITIZEN_ID', 'LOCATION', 'PRODUCT_NAME', 'REGISTRATION_NUMBER', 'LICENSE_NUMBER'] as const;
 
 export default function ReviewPage() {
   const [suggestions, setSuggestions] = useState<Suggestion[]>([]);

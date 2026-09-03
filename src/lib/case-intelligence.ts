@@ -61,6 +61,12 @@ export type IntelligenceFinding = {
 
 export type TrustedRegistrySearchStatus = 'SEARCHED' | 'NO_ELIGIBLE_TERMS' | 'UNAVAILABLE' | 'DEMO';
 
+export type IntelligenceReadiness = {
+  kind: 'EVIDENCE_REQUIRED' | 'EXTRACTION_REQUIRED' | 'REVIEW_REQUIRED' | 'READY_TO_CAPTURE' | 'SOURCE_UNAVAILABLE' | 'SEARCHED_NO_MATCH' | 'RESULTS_AVAILABLE';
+  label: string;
+  detail: string;
+};
+
 export type CaseIntelligenceSearchResult = {
   generatedAt: string;
   summary: string;
@@ -87,6 +93,7 @@ export type CaseIntelligenceSearchResult = {
   automationPlan: ReconAutomationPlanItem[];
   blockedAutomation: ReconBlockedAutomation[];
   sourceRecommendations: CaseSourceRecommendation[];
+  readiness: IntelligenceReadiness;
   notice: string;
 };
 
@@ -193,6 +200,52 @@ export function buildCaseIntelligenceSearchResult(input: {
   const registryFindingCount = trustedRegistryFindings.length;
   const publicWebFindingCount = groundedWebFindings.length;
 
+  const readiness: IntelligenceReadiness = (() => {
+    const planned = (input.automationPlan || []).length;
+    const sourceUnavailable = input.registryStatus === 'UNAVAILABLE' || input.publicWebStatus === 'UNAVAILABLE';
+    const queryCount = (input.searchedRegistryTermCount || 0) + (input.publicWebQueryCount || 0);
+    if (findings.length > 0) {
+      return {
+        kind: 'RESULTS_AVAILABLE', label: 'พบข้อมูลที่ตรวจย้อนกลับได้',
+        detail: `มีผลที่ผูกแหล่งอ้างอิงแล้ว ${findings.length} รายการ โปรดเปิดต้นทางและตรวจทานก่อนยืนยันในสำนวน`,
+      };
+    }
+    if (planned > 0) {
+      return {
+        kind: 'READY_TO_CAPTURE', label: 'พร้อมค้นเชิงลึกและเก็บหลักฐาน',
+        detail: `จัดคิวค้นในระบบทางการ ${planned} งานแล้ว การปิดงานจะเกิดขึ้นหลังเก็บ PDF ภาพหน้าผล และ SHA-256 ได้จริงเท่านั้น`,
+      };
+    }
+    if (input.pendingReviewCount > 0) {
+      return {
+        kind: 'REVIEW_REQUIRED', label: 'รอตรวจทานข้อมูลที่สกัดได้',
+        detail: `มีข้อเสนอ ${input.pendingReviewCount} รายการที่ยังไม่ใช่ข้อเท็จจริง ต้องตรวจข้อความต้นทางก่อนส่งค้นเชิงลึก`,
+      };
+    }
+    if (sourceUnavailable) {
+      return {
+        kind: 'SOURCE_UNAVAILABLE', label: 'แหล่งข้อมูลบางส่วนยังไม่พร้อม',
+        detail: 'ระบบไม่สรุปว่าไม่พบข้อมูล เพราะแหล่งที่อนุมัติอย่างน้อยหนึ่งแหล่งไม่ตอบกลับหรือไม่พร้อมใช้งาน',
+      };
+    }
+    if (queryCount > 0) {
+      return {
+        kind: 'SEARCHED_NO_MATCH', label: 'ค้นแล้ว แต่ยังไม่พบรายการที่อ้างอิงได้',
+        detail: 'ผลว่างไม่ได้ยืนยันว่าไม่มีทะเบียนหรือไม่มีใบอนุญาต ให้ตรวจคำค้นและภาพ/PDF ที่เก็บจากต้นทางก่อน',
+      };
+    }
+    if (input.evidenceInventory.length > 0) {
+      return {
+        kind: 'EXTRACTION_REQUIRED', label: 'ต้องสกัดตัวระบุจากหลักฐานก่อน',
+        detail: `พบหลักฐาน ${input.evidenceInventory.length} ไฟล์ แต่ยังไม่มีชื่อผลิตภัณฑ์ เลขทะเบียน เลขใบอนุญาต ชื่อกิจการ หรือรหัสอื่นที่มีแหล่งอ้างอิงสำหรับค้นต่อ`,
+      };
+    }
+    return {
+      kind: 'EVIDENCE_REQUIRED', label: 'ต้องมีหลักฐานต้นทางก่อนเริ่มค้น',
+      detail: 'ระบบไม่สร้างคำค้นจากชื่อคดีหรือข้อกล่าวหาเพียงอย่างเดียว เพื่อป้องกันการค้นผิดบุคคลหรือกิจการ',
+    };
+  })();
+
   let summary = `พบข้อมูลที่ตรวจย้อนกลับได้ ${findings.length} รายการ: จากหลักฐานในคดี ${verifiedFindingCount} รายการ ทะเบียนที่อนุมัติ ${registryFindingCount} รายการ และเว็บสาธารณะที่มี citation ${publicWebFindingCount} รายการ`;
   if (findings.length === 0 && input.pendingReviewCount > 0) {
     summary = `ยังไม่มีข้อค้นพบที่ยืนยันและอ้างอิงได้ ขณะนี้มีข้อเสนอรอตรวจทาน ${input.pendingReviewCount} รายการ`;
@@ -219,6 +272,7 @@ export function buildCaseIntelligenceSearchResult(input: {
     automationPlan: input.automationPlan || [],
     blockedAutomation: input.blockedAutomation || [],
     sourceRecommendations: input.sourceRecommendations || [],
+    readiness,
     notice: 'รายการจากทะเบียนหมายถึงพบข้อความที่เกี่ยวข้อง ส่วนผลเว็บเป็นเพียง citation ที่ผ่านการกรองคำค้นและโดเมนที่อนุมัติแล้ว ไม่ใช่การยืนยันว่าเป็นบุคคล/กิจการเดียวกันหรือเป็นการชี้ความผิด ต้องเปิดต้นทางและให้เจ้าหน้าที่ตรวจทานก่อนใช้ในสำนวน',
   };
 }

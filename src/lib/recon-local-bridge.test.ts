@@ -334,6 +334,18 @@ describe('local recon bridge boundary', () => {
         service: 'DBD',
         value: '0100000000001',
       });
+      const validFdaStaffDrug = validateLocalSearch(
+        { field: 'LICENSE_NUMBER', value: 'นย1 กท 1/2555', purpose: 'ตรวจสอบตามสำนวนทดสอบที่ได้รับมอบหมาย', confirmed: true },
+        {
+          action: 'launch',
+          source: { key: 'FDA_SKYNET' },
+          caseId: 'case-1',
+          service: 'FDA_STAFF_DRUG_LOCATION',
+        },
+      );
+      expect(validFdaStaffDrug).toMatchObject({
+        source: 'FDA_SKYNET', field: 'LICENSE_NUMBER', service: 'FDA_STAFF_DRUG_LOCATION', value: 'นย1 กท 1/2555',
+      });
       const validFdaPublic = validateLocalSearch(
         { field: 'FACILITY_TERM', value: 'ร้านยาทดสอบ', purpose: 'ตรวจสอบตามสำนวนทดสอบที่ได้รับมอบหมาย', confirmed: true },
         {

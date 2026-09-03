@@ -53,6 +53,9 @@ const GROUP_META: Record<string, { label: string; color: string; short: string }
   LOCATION: { label: 'สถานที่', color: '#34d399', short: 'สถานที่' },
   EMAIL: { label: 'อีเมล', color: '#f472b6', short: 'อีเมล' },
   CITIZEN_ID: { label: 'เลขประจำตัว', color: '#facc15', short: 'เลขประจำตัว' },
+  PRODUCT_NAME: { label: 'ชื่อผลิตภัณฑ์', color: '#fb923c', short: 'ผลิตภัณฑ์' },
+  REGISTRATION_NUMBER: { label: 'เลขทะเบียน/เลขสารบบ', color: '#c084fc', short: 'เลขทะเบียน' },
+  LICENSE_NUMBER: { label: 'เลขใบอนุญาต', color: '#22d3ee', short: 'ใบอนุญาต' },
 };
 
 const fallbackMeta = { label: 'ข้อมูลอื่น', color: '#e2e8f0', short: 'ข้อมูล' };

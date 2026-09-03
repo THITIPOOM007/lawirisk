@@ -19,8 +19,12 @@ export const RECON_SOURCES = Object.freeze({
     name: 'SKYNET / Privus อย.',
     startUrl: 'https://privus.fda.moph.go.th/FDA_LOGIN2/HOME/SET_STATE?STATE=3',
     secureTransport: true,
-    adapterVersion: 'egov-dbd-dopa-search-2026-08-28',
-    services: Object.freeze(['DBD', 'DOPA', 'FDA_PLACE_DRUG']),
+    adapterVersion: 'egov-and-fda-staff-search-2026-09-03.1',
+    services: Object.freeze([
+      'DBD', 'DOPA', 'FDA_PLACE_DRUG',
+      'FDA_STAFF_DRUG_LOCATION', 'FDA_STAFF_FOOD_LOCATION', 'FDA_STAFF_HAZARDOUS',
+      'FDA_STAFF_COSMETIC', 'FDA_STAFF_HERBAL_LOCATION', 'FDA_STAFF_MEDICAL_DEVICE',
+    ]),
   }),
   HSS_OSS: Object.freeze({
     key: 'HSS_OSS',
@@ -85,6 +89,31 @@ export function resolveFdaSearchModel(service, field) {
   const model = FDA_SEARCH_MODELS[service]?.[field];
   if (!model) throw new Error('SEARCH_FIELD_NOT_ALLOWED');
   return model;
+}
+
+// Captured from visible official staff forms on 2026-09-03. Only services
+// whose fields and result grid are verified are allowed to run automatically.
+export const FDA_STAFF_SEARCH_CONTRACTS = Object.freeze({
+  FDA_STAFF_DRUG_LOCATION: Object.freeze({
+    url: 'https://medicina.fda.moph.go.th/FDA_DRUG/LCN_STAFF/FRM_STAFF_LCN_SEARCH.aspx', host: 'medicina.fda.moph.go.th', path: '/FDA_DRUG/LCN_STAFF/FRM_STAFF_LCN_SEARCH.aspx',
+    fields: Object.freeze({ CITIZEN_ID: '#ContentPlaceHolder1_txt_CITIZEN_AUTHORIZE', LICENSE_NUMBER: '#ContentPlaceHolder1_txt_lcnno_no' }),
+    submit: '#ContentPlaceHolder1_btn_search', results: '#ContentPlaceHolder1_RadGrid1_ctl00 tr',
+  }),
+  FDA_STAFF_HERBAL_LOCATION: Object.freeze({
+    url: 'https://meshlog.fda.moph.go.th/FDA_DRUG_HERB/LCN_STAFF/FRM_STAFF_LCN_SEARCH.aspx', host: 'meshlog.fda.moph.go.th', path: '/FDA_DRUG_HERB/LCN_STAFF/FRM_STAFF_LCN_SEARCH.aspx',
+    fields: Object.freeze({ CITIZEN_ID: '#ContentPlaceHolder1_txt_CITIZEN_AUTHORIZE', LICENSE_NUMBER: '#ContentPlaceHolder1_txt_lcnno_no' }),
+    submit: '#ContentPlaceHolder1_btn_search', results: '#ContentPlaceHolder1_RadGrid1_ctl00 tr',
+  }),
+});
+
+export function resolveFdaStaffSearchContract(service, field) {
+  const contract = FDA_STAFF_SEARCH_CONTRACTS[service];
+  if (!contract || !contract.fields[field]) throw new Error('SEARCH_FIELD_NOT_ALLOWED');
+  return contract;
+}
+
+export function isFdaStaffSearchService(service) {
+  return Boolean(FDA_STAFF_SEARCH_CONTRACTS[service]);
 }
 
 export const HSS_SEARCH_FILTERS = Object.freeze({
@@ -271,6 +300,8 @@ export function safeCompanionMessage(error) {
     HSS_SERVICE_SWITCH_UNAVAILABLE: 'บัญชี HSS นี้ไม่แสดงเมนูเปลี่ยนไปยังบริการย่อยที่เลือก',
     HSS_SERVICE_SWITCH_FAILED: 'เปิดบริการย่อย HSS ที่เลือกไม่สำเร็จ โปรดตรวจสิทธิ์ของบัญชีในหน้าต่างต้นทาง',
     HSS_SERVICE_PAGE_FAILED: 'บริการย่อย HSS ไม่ยอมเปิดหน้ารายการที่กำหนด',
+    FDA_STAFF_SERVICE_PAGE_FAILED: 'หน้าเจ้าหน้าที่ อย. ที่เลือกไม่พร้อมใช้งานหรือสิทธิ์ของบัญชีไม่เพียงพอ',
+    FDA_STAFF_SOURCE_REDIRECTED: 'หน้าเจ้าหน้าที่ อย. เปลี่ยนเส้นทางออกจากแหล่งที่ตรวจยืนยัน ระบบจึงหยุดเพื่อป้องกันการค้นผิดแหล่ง',
     ESTA2_LOGIN_FAILED: 'เข้าสู่ ESTA2 ไม่สำเร็จ โปรดตรวจบัญชีหรือข้อความจากระบบต้นทาง',
     ESTA2_SERVICE_PAGE_FAILED: 'ESTA2 ไม่ยอมเปิดหน้าสถานประกอบการที่ได้รับอนุญาต',
     INSECURE_HTTP_ACK_REQUIRED: 'HSS ใช้ HTTP ต้องยืนยันความเสี่ยงจากหน้า LAW-i-RISK ก่อนทุกครั้ง',

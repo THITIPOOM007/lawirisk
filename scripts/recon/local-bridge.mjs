@@ -13,6 +13,8 @@ import {
   parseReconUri,
   resolveFdaPublicSearchContract,
   resolveFdaSearchModel,
+  resolveFdaStaffSearchContract,
+  isFdaStaffSearchService,
   resolveEsta2SearchOption,
   resolveHssSearchFilter,
 } from './companion-contract.mjs';
@@ -89,8 +91,13 @@ async function validateCompletedResult(body, jobId, job, searchResultRoot = resu
     throw new Error('INVALID_SEARCH_RESULT');
   }
   const sourceUrl = new URL(cleanSearchText(body.sourceUrl, 8, 300, 'INVALID_SEARCH_RESULT'));
+  const staffContract = job.context.source === 'FDA_SKYNET' && isFdaStaffSearchService(job.context.service)
+    ? resolveFdaStaffSearchContract(job.context.service, job.context.field)
+    : undefined;
   const allowedResultHost = job.context.source === 'FDA_PUBLIC'
     ? 'meshlog.fda.moph.go.th'
+    : staffContract
+    ? staffContract.host
     : job.context.source === 'FDA_SKYNET'
     ? 'help.fda.moph.go.th'
     : job.context.source === 'HSS_ESTA2'
@@ -98,7 +105,8 @@ async function validateCompletedResult(body, jobId, job, searchResultRoot = resu
       : 'oss.hss.moph.go.th';
   if (sourceUrl.hostname !== allowedResultHost || sourceUrl.username || sourceUrl.password
     || (job.context.source !== 'HSS_OSS' && sourceUrl.protocol !== 'https:')
-    || (job.context.source === 'HSS_OSS' && sourceUrl.protocol !== 'http:')) {
+    || (job.context.source === 'HSS_OSS' && sourceUrl.protocol !== 'http:')
+    || (staffContract && sourceUrl.pathname !== staffContract.path)) {
     throw new Error('INVALID_SEARCH_RESULT_SOURCE');
   }
   const pdfPath = path.resolve(searchResultRoot, pdfFilename);
@@ -186,11 +194,12 @@ export function validateLocalSearch(search, command) {
   }
   const field = cleanSearchText(search.field, 1, 50, 'INVALID_SEARCH_FIELD');
   if (command.source.key === 'FDA_PUBLIC') resolveFdaPublicSearchContract(command.service, field);
+  else if (command.source.key === 'FDA_SKYNET' && isFdaStaffSearchService(command.service)) resolveFdaStaffSearchContract(command.service, field);
   else if (command.source.key === 'FDA_SKYNET') resolveFdaSearchModel(command.service, field);
   else if (command.source.key === 'HSS_OSS') resolveHssSearchFilter(command.service, field);
   else resolveEsta2SearchOption(command.service, field);
   const value = cleanSearchText(search.value, 2, 200, 'INVALID_SEARCH_VALUE');
-  if (command.source.key === 'FDA_SKYNET' && !/^\d{13}$/.test(value)) {
+  if (command.source.key === 'FDA_SKYNET' && !isFdaStaffSearchService(command.service) && !/^\d{13}$/.test(value)) {
     throw new Error('INVALID_SEARCH_VALUE');
   }
   return {

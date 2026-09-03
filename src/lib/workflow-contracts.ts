@@ -2,6 +2,9 @@ import { z } from 'zod';
 
 export const entityTypeSchema = z.enum([
   'PERSON', 'ORGANIZATION', 'PHONE', 'EMAIL', 'BANK_ACCOUNT', 'CITIZEN_ID', 'LOCATION',
+  // Health-product identifiers are intentionally distinct from an organisation.
+  // This lets the recon planner choose the correct FDA registry without guessing.
+  'PRODUCT_NAME', 'REGISTRATION_NUMBER', 'LICENSE_NUMBER',
 ]);
 
 export const manualSuggestionSchema = z.object({

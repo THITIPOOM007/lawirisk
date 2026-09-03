@@ -17,10 +17,11 @@ export type ReconAutomationPlanItem = {
   sourceLabel: string;
   service: 'DBD' | 'DOPA' | 'HSS_HEALTH_BUSINESS_APPROVED'
     | 'FDA_DRUG_REGISTRY' | 'FDA_FOOD_REGISTRY' | 'FDA_HAZARDOUS_REGISTRY'
-    | 'FDA_COSMETIC_REGISTRY' | 'FDA_HERBAL_REGISTRY' | 'FDA_MEDICAL_DEVICE_REGISTRY';
+    | 'FDA_COSMETIC_REGISTRY' | 'FDA_HERBAL_REGISTRY' | 'FDA_MEDICAL_DEVICE_REGISTRY'
+    | 'FDA_STAFF_DRUG_LOCATION' | 'FDA_STAFF_HERBAL_LOCATION';
   serviceLabel: string;
   field: 'JURISTIC_ID' | 'CITIZEN_ID' | 'FACILITY_NAME' | 'APPLICANT_NAME' | 'APPLICANT_ID'
-    | 'FACILITY_TERM' | 'PRODUCT_TERM';
+    | 'FACILITY_TERM' | 'PRODUCT_TERM' | 'LICENSE_NUMBER';
   fieldLabel: string;
   value: string;
   displayValue: string;
@@ -93,6 +94,10 @@ export function buildReconAutomationPlan(input: {
   const healthBusiness = sourceCategory === 'HEALTH_BUSINESS';
   const healthcare = sourceCategory === 'HEALTHCARE';
   const fdaService = FDA_CATEGORY_SERVICE[sourceCategory];
+  const staffFdaLocationService = sourceCategory === 'DRUG' ? 'FDA_STAFF_DRUG_LOCATION'
+    : sourceCategory === 'HERBAL' ? 'FDA_STAFF_HERBAL_LOCATION' : undefined;
+  const staffFdaLocationLabel = sourceCategory === 'DRUG' ? 'สถานที่ด้านยา (Medicina)'
+    : sourceCategory === 'HERBAL' ? 'สถานที่ผลิตสมุนไพร (MeshLog)' : undefined;
   const plan: ReconAutomationPlanItem[] = [];
   const blocked: ReconBlockedAutomation[] = [];
   const seen = new Set<string>();
@@ -152,6 +157,12 @@ export function buildReconAutomationPlan(input: {
     if (candidate.type === 'CITIZEN_ID') {
       const id = digits(value);
       if (id.length !== 13) continue;
+      if (staffFdaLocationService && staffFdaLocationLabel) {
+        add(candidate, {
+          source: 'FDA_SKYNET', sourceLabel: 'เจ้าหน้าที่ อย. / Privus', service: staffFdaLocationService,
+          serviceLabel: staffFdaLocationLabel, field: 'CITIZEN_ID', fieldLabel: 'เลขนิติบุคคล/เลขบัตรผู้รับอนุญาต',
+        }, id);
+      }
       add(candidate, {
         source: 'FDA_SKYNET', sourceLabel: 'SKYNET / DOPA', service: 'DOPA', serviceLabel: 'ทะเบียนบุคคล',
         field: 'CITIZEN_ID', fieldLabel: 'เลขบัตรประชาชน 13 หลัก',
@@ -198,6 +209,12 @@ export function buildReconAutomationPlan(input: {
       continue;
     }
     if (fdaService && candidate.type === 'LICENSE_NUMBER' && value.length >= 2 && value.length <= 200) {
+      if (staffFdaLocationService && staffFdaLocationLabel) {
+        add(candidate, {
+          source: 'FDA_SKYNET', sourceLabel: 'เจ้าหน้าที่ อย. / Privus', service: staffFdaLocationService,
+          serviceLabel: staffFdaLocationLabel, field: 'LICENSE_NUMBER', fieldLabel: 'เลขใบอนุญาตสถานที่',
+        }, value);
+      }
       add(candidate, {
         source: 'FDA_PUBLIC', sourceLabel: 'ศูนย์ตรวจสอบการอนุญาต อย.', service: fdaService,
         serviceLabel: FDA_CATEGORY_LABEL[sourceCategory] || 'ทะเบียนสถานที่ผลิตภัณฑ์สุขภาพ',

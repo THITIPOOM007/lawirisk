@@ -67,6 +67,31 @@ describe('recon automation plan', () => {
     ]));
   });
 
+  it('uses the verified staff drug-location form before the public registry for a licence number', () => {
+    const result = buildReconAutomationPlan({
+      caseNumber: 'DRUG-STAFF-1',
+      caseContext: 'ตรวจสอบสถานที่ด้านยาและใบอนุญาตร้านขายยา',
+      candidates: [{ ...base, id: 'licence', type: 'LICENSE_NUMBER', value: '100200046-65', confidence: 0.95 }],
+    });
+    expect(result.plan).toEqual(expect.arrayContaining([
+      expect.objectContaining({
+        source: 'FDA_SKYNET', service: 'FDA_STAFF_DRUG_LOCATION', field: 'LICENSE_NUMBER', value: '100200046-65',
+      }),
+      expect.objectContaining({ source: 'FDA_PUBLIC', service: 'FDA_DRUG_REGISTRY', field: 'FACILITY_TERM' }),
+    ]));
+  });
+
+  it('uses the verified staff herbal-location form for an authorised-person identifier', () => {
+    const result = buildReconAutomationPlan({
+      caseNumber: 'HERB-STAFF-1',
+      caseContext: 'ตรวจสถานที่ผลิตผลิตภัณฑ์สมุนไพร',
+      candidates: [{ ...base, id: 'holder', type: 'CITIZEN_ID', value: '1234567890123', confidence: 0.95 }],
+    });
+    expect(result.plan).toEqual(expect.arrayContaining([
+      expect.objectContaining({ source: 'FDA_SKYNET', service: 'FDA_STAFF_HERBAL_LOCATION', field: 'CITIZEN_ID' }),
+    ]));
+  });
+
   it('classifies clinic entities for HSS OSS without silently sending credentials over HTTP', () => {
     const result = buildReconAutomationPlan({
       caseNumber: 'CLINIC-1',

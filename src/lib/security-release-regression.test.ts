@@ -46,7 +46,9 @@ describe('release security regressions', () => {
     expect(extraction).not.toContain('gemini-1.5');
     expect(extraction).not.toContain('errorText.slice');
     expect(workspace).toContain("extractionPreparationKey.current = ''");
-    expect(workspace).toContain('เปิด Manual fallback');
+    expect(workspace).toContain('ลองวิเคราะห์ใหม่');
+    expect(workspace).toContain('AI เปิดวิเคราะห์แล้ว แต่ยังไม่พบตัวระบุที่ใช้ค้นต่อได้');
+    expect(workspace).toContain("'NO_IDENTIFIER_FOUND'");
     expect(dossier).toContain("from('entity_mentions')");
     expect(model).toContain("status: 'LOCAL_AUTO_LOGIN'");
     expect(model).toContain("status: 'REVIEW_REQUIRED'");

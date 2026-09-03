@@ -28,6 +28,40 @@ const findingStyle: Record<IntelligenceFindingKind, string> = {
   GROUNDED_WEB: 'border-sky-500/25 bg-sky-500/[0.06]',
 };
 
+type ExtractionAttempt = {
+  evidenceId: string;
+  filename: string;
+  status: 'SUGGESTIONS_CREATED' | 'NO_IDENTIFIER_FOUND' | 'FAILED';
+  count?: number;
+  error?: string;
+};
+
+function readinessPresentation(search: CaseIntelligenceSearchResult, outcomes: ReconExecutionOutcome[], running: boolean) {
+  if (running) return {
+    label: 'กำลังค้นและเก็บหลักฐาน', detail: 'Recon Companion กำลังทำงานบนเครื่องเจ้าหน้าที่ การปิดงานจะเกิดขึ้นเมื่อเก็บ PDF ภาพหน้าผล และ SHA-256 ได้จริง',
+    className: 'border-cyan-300/20 bg-cyan-300/[0.08] text-cyan-100',
+  };
+  const complete = outcomes.filter((item) => item.status === 'COMPLETE').length;
+  const failed = outcomes.filter((item) => item.status === 'FAILED').length;
+  if (complete > 0 || failed > 0) return failed > 0 ? {
+    label: 'เก็บหลักฐานได้บางส่วน', detail: `สำเร็จ ${complete} งาน · ไม่สำเร็จ ${failed} งาน ผลที่สำเร็จมี PDF ภาพหน้าผล และ SHA-256; ระบบไม่ตีความงานที่ล้มเหลวว่า “ไม่พบ”`,
+    className: 'border-amber-300/20 bg-amber-300/[0.08] text-amber-100',
+  } : {
+    label: 'เก็บหลักฐานจากต้นทางแล้ว', detail: `นำเข้าผลค้น ${complete} งานพร้อม PDF ภาพหน้าผล และ SHA-256 แล้ว รอเจ้าหน้าที่เปิดตรวจและยืนยันความเกี่ยวข้อง`,
+    className: 'border-emerald-300/20 bg-emerald-300/[0.08] text-emerald-100',
+  };
+  const styles: Record<CaseIntelligenceSearchResult['readiness']['kind'], string> = {
+    EVIDENCE_REQUIRED: 'border-amber-300/20 bg-amber-300/[0.08] text-amber-100',
+    EXTRACTION_REQUIRED: 'border-amber-300/20 bg-amber-300/[0.08] text-amber-100',
+    REVIEW_REQUIRED: 'border-indigo-300/20 bg-indigo-300/[0.08] text-indigo-100',
+    READY_TO_CAPTURE: 'border-cyan-300/20 bg-cyan-300/[0.08] text-cyan-100',
+    SOURCE_UNAVAILABLE: 'border-rose-300/20 bg-rose-300/[0.08] text-rose-100',
+    SEARCHED_NO_MATCH: 'border-slate-300/20 bg-slate-300/[0.08] text-slate-100',
+    RESULTS_AVAILABLE: 'border-emerald-300/20 bg-emerald-300/[0.08] text-emerald-100',
+  };
+  return { label: search.readiness.label, detail: search.readiness.detail, className: styles[search.readiness.kind] };
+}
+
 export function CaseIntelligenceWorkspace({ caseId }: { caseId: string }) {
   const [report, setReport] = useState<CaseReconSummary | null>(null);
   const [search, setSearch] = useState<CaseIntelligenceSearchResult | null>(null);
@@ -41,6 +75,7 @@ export function CaseIntelligenceWorkspace({ caseId }: { caseId: string }) {
   const [extractionFallbackAvailable, setExtractionFallbackAvailable] = useState(false);
   const [automationRunning, setAutomationRunning] = useState(false);
   const [automationOutcomes, setAutomationOutcomes] = useState<ReconExecutionOutcome[]>([]);
+  const [extractionAttempts, setExtractionAttempts] = useState<ExtractionAttempt[]>([]);
   const [screeningRefreshId, setScreeningRefreshId] = useState(0);
   const extractionPreparationKey = useRef('');
   const handleAutomationFinished = useCallback((outcomes: ReconExecutionOutcome[]) => {
@@ -69,13 +104,17 @@ export function CaseIntelligenceWorkspace({ caseId }: { caseId: string }) {
     setExtractionFallbackAvailable(false);
     setAutomationNotice('กำลังรวบรวมข้อมูลที่ผูกกับหลักฐานและจัดแผนช่องค้นของแต่ละระบบ…');
     setAutomationOutcomes([]);
+    setExtractionAttempts([]);
     try {
       let preparationFailure = '';
       let data = await post<{ report: CaseReconSummary; search: CaseIntelligenceSearchResult }>('/api/v1/intelligence/recon');
       const evidencePreparationKey = data.search.evidenceInventory.map((item) => item.id).sort().join(':');
       if (data.search.automationPlan.length === 0 && data.search.evidenceInventory.length > 0 && extractionPreparationKey.current !== evidencePreparationKey) {
         setAutomationNotice('ยังไม่มีค่าที่ค้นได้ ระบบกำลังสกัดข้อมูลจากหลักฐานที่จัดเก็บและตรวจโครงสร้างแล้ว เพื่อสร้างข้อเสนอสำหรับค้นต่อ…');
-        const extractionResults = await Promise.allSettled(data.search.evidenceInventory.slice(0, 5).map(async (evidence) => {
+        const attempts: ExtractionAttempt[] = [];
+        // Run sequentially: the provider already retries transient failures and this
+        // avoids a burst of PDFs exhausting the per-user safety rate limit.
+        for (const evidence of data.search.evidenceInventory.slice(0, 5)) {
           const response = await fetch('/api/v1/ai/extract', {
             method: 'POST',
             credentials: 'same-origin',
@@ -87,20 +126,27 @@ export function CaseIntelligenceWorkspace({ caseId }: { caseId: string }) {
               source_location: { kind: 'AUTO_RECON_PREPARATION' },
             }),
           });
-          const body = await response.json().catch(() => null);
-          if (!response.ok) throw new Error(body?.error?.message || `สกัดข้อมูลจาก ${evidence.filename} ไม่สำเร็จ`);
-          return body;
-        }));
-        if (extractionResults.some((result) => result.status === 'fulfilled')) {
+          const body = await response.json().catch(() => null) as { data?: { count?: number }; error?: { message?: string } } | null;
+          if (!response.ok) {
+            attempts.push({ evidenceId: evidence.id, filename: evidence.filename, status: 'FAILED', error: body?.error?.message || `สกัดข้อมูลจาก ${evidence.filename} ไม่สำเร็จ` });
+            continue;
+          }
+          const count = Math.max(0, Number(body?.data?.count || 0));
+          attempts.push({ evidenceId: evidence.id, filename: evidence.filename, status: count > 0 ? 'SUGGESTIONS_CREATED' : 'NO_IDENTIFIER_FOUND', count });
+        }
+        setExtractionAttempts(attempts);
+        const proposalsCreated = attempts.filter((item) => item.status === 'SUGGESTIONS_CREATED').reduce((total, item) => total + (item.count || 0), 0);
+        if (proposalsCreated > 0) {
           extractionPreparationKey.current = evidencePreparationKey;
           data = await post<{ report: CaseReconSummary; search: CaseIntelligenceSearchResult }>('/api/v1/intelligence/recon');
         }
         else {
           extractionPreparationKey.current = '';
           setExtractionFallbackAvailable(true);
-          const firstFailure = extractionResults.find((result): result is PromiseRejectedResult => result.status === 'rejected');
-          const failureMessage = firstFailure?.reason instanceof Error ? firstFailure.reason.message : 'ยังสกัดข้อมูลสำหรับค้นอัตโนมัติไม่ได้';
-          preparationFailure = `${failureMessage} · กดค้นอีกครั้งเพื่อลองใหม่ หรือเปิดคิวตรวจทานเพื่อบันทึกข้อมูลจากหลักฐานด้วยตนเอง`;
+          const failed = attempts.filter((item) => item.status === 'FAILED');
+          preparationFailure = failed.length > 0
+            ? `${failed[0]?.error || 'ยังสกัดข้อมูลสำหรับค้นอัตโนมัติไม่ได้'} · ระบบไม่สรุปผลค้นจากไฟล์นี้ กรุณาลองใหม่หรือเปิดคิวตรวจทาน`
+            : 'AI ตรวจไฟล์แล้ว แต่ยังไม่พบตัวระบุที่ใช้ค้นต่อได้ (เช่น ชื่อผลิตภัณฑ์ เลขทะเบียน เลขใบอนุญาต ชื่อกิจการ หรือรหัส) · ระบบไม่สรุปว่า “ไม่พบข้อมูล” ให้เพิ่ม/ยืนยันคำจากหลักฐานแล้วค้นใหม่';
         }
       }
       setReport(data.report);
@@ -131,6 +177,11 @@ export function CaseIntelligenceWorkspace({ caseId }: { caseId: string }) {
     } finally {
       setLoading('');
     }
+  }
+
+  function retryExtraction() {
+    extractionPreparationKey.current = '';
+    void runRecon();
   }
 
   async function createDossier() {
@@ -164,6 +215,8 @@ export function CaseIntelligenceWorkspace({ caseId }: { caseId: string }) {
     URL.revokeObjectURL(url);
   }
 
+  const workspaceReadiness = search ? readinessPresentation(search, automationOutcomes, automationRunning) : null;
+
   return (
     <section className="relative isolate space-y-5 overflow-hidden rounded-[32px] border border-cyan-300/15 bg-[radial-gradient(circle_at_top_right,rgba(45,212,191,0.10),transparent_30%),radial-gradient(circle_at_bottom_left,rgba(99,102,241,0.12),transparent_34%),rgba(7,15,29,0.82)] p-5 shadow-[0_24px_80px_rgba(2,8,23,0.45)] backdrop-blur-xl sm:p-7">
       <div aria-hidden="true" className="pointer-events-none absolute inset-0 -z-10 opacity-[0.06]" style={{ backgroundImage: 'linear-gradient(rgba(94,234,212,.55) 1px, transparent 1px), linear-gradient(90deg, rgba(94,234,212,.55) 1px, transparent 1px)', backgroundSize: '36px 36px' }} />
@@ -194,7 +247,7 @@ export function CaseIntelligenceWorkspace({ caseId }: { caseId: string }) {
       </div>
 
       {error && <div role="alert" className="flex items-center gap-2 rounded-xl border border-rose-500/20 bg-rose-500/5 p-3 text-xs text-rose-300"><ShieldAlert className="h-4 w-4" />{error}</div>}
-      {automationNotice && <div role="status" aria-live="polite" className="rounded-xl border border-cyan-300/15 bg-cyan-300/[0.04] p-3 text-xs text-cyan-100"><div className="flex items-start gap-2">{loading === 'recon' && <Loader2 className="mt-0.5 h-4 w-4 shrink-0 animate-spin" />}<span>{automationNotice}</span></div>{extractionFallbackAvailable && <div className="mt-3 flex flex-wrap gap-2"><button type="button" onClick={runRecon} disabled={loading !== ''} className="inline-flex min-h-9 items-center rounded-xl bg-cyan-300 px-3 font-black text-slate-950 hover:bg-cyan-200 disabled:opacity-50"><RefreshCw className="mr-1.5 h-3.5 w-3.5" />ลองค้นใหม่</button><Link href="/review" className="inline-flex min-h-9 items-center rounded-xl border border-cyan-200/20 px-3 font-bold text-cyan-100 hover:bg-cyan-200/[0.08]">เปิด Manual fallback</Link></div>}</div>}
+      {automationNotice && <div role="status" aria-live="polite" className="rounded-xl border border-cyan-300/15 bg-cyan-300/[0.04] p-3 text-xs text-cyan-100"><div className="flex items-start gap-2">{loading === 'recon' && <Loader2 className="mt-0.5 h-4 w-4 shrink-0 animate-spin" />}<span>{automationNotice}</span></div>{extractionFallbackAvailable && <div className="mt-3 flex flex-wrap gap-2"><button type="button" onClick={retryExtraction} disabled={loading !== ''} className="inline-flex min-h-9 items-center rounded-xl bg-cyan-300 px-3 font-black text-slate-950 hover:bg-cyan-200 disabled:opacity-50"><RefreshCw className="mr-1.5 h-3.5 w-3.5" />ลองวิเคราะห์ใหม่</button><Link href="/review" className="inline-flex min-h-9 items-center rounded-xl border border-cyan-200/20 px-3 font-bold text-cyan-100 hover:bg-cyan-200/[0.08]">เปิดคิวตรวจทาน</Link></div>}</div>}
       {(loading === 'recon' || automationRunning) && <section className="relative overflow-hidden rounded-[28px] border border-cyan-300/20 bg-[radial-gradient(circle_at_15%_15%,rgba(34,211,238,0.14),transparent_38%),rgba(2,13,25,0.78)] p-5" role="status" aria-live="polite"><div aria-hidden="true" className="absolute -right-16 -top-16 h-48 w-48 rounded-full bg-cyan-300/15 blur-3xl motion-safe:animate-pulse" /><div className="relative flex items-center gap-4"><div className="grid h-12 w-12 place-items-center rounded-2xl border border-cyan-300/30 bg-cyan-300/10"><Radar className="h-6 w-6 motion-safe:animate-spin text-cyan-200" /></div><div><p className="font-mono text-[10px] font-bold tracking-[0.18em] text-cyan-200">LIVE ACQUISITION</p><h2 className="mt-1 text-base font-black text-white">ระบบกำลังค้นหา ตรวจแหล่งที่มา และเก็บพยานหลักฐาน</h2><p className="mt-1 text-xs leading-5 text-slate-400">{automationRunning ? 'Recon Companion ทำงานบนเครื่องอย่างปลอดภัย · กำลังรอ PDF และภาพหน้าผลค้นกลับเข้าคลังหลักฐาน' : 'กำลังวิเคราะห์หลักฐานในสำนวนและแหล่งข้อมูลที่อนุญาต · การไม่เปิด PowerShell เป็นพฤติกรรมปกติ'}</p></div></div><div className="relative mt-5 grid grid-cols-4 gap-2">{['วิเคราะห์', 'ค้นแหล่งข้อมูล', 'เก็บภาพ/PDF', 'ตรวจ hash'].map((label, index) => <div key={label} className="rounded-xl border border-white/[0.07] bg-slate-950/35 p-2 text-center"><span className={`mx-auto block h-1.5 rounded-full bg-gradient-to-r from-cyan-300 to-indigo-400 ${index < 3 ? 'motion-safe:animate-pulse' : ''}`} /><span className="mt-2 block text-[9px] text-slate-300">{label}</span></div>)}</div></section>}
 
       {!report && !error && (
@@ -213,9 +266,10 @@ export function CaseIntelligenceWorkspace({ caseId }: { caseId: string }) {
             <div aria-hidden="true" className="absolute right-0 top-0 h-32 w-32 rounded-full bg-cyan-300/10 blur-3xl" />
             <div className="relative grid gap-5 lg:grid-cols-[1fr_auto] lg:items-center">
               <div>
-                <div className="flex flex-wrap items-center gap-2"><span className="inline-flex items-center gap-1.5 rounded-full border border-emerald-300/20 bg-emerald-300/[0.08] px-2.5 py-1 font-mono text-[9px] font-bold uppercase tracking-[0.16em] text-emerald-200"><Activity className="h-3 w-3" /> Analysis complete</span><span className="font-mono text-[9px] text-slate-500">{new Date(search.generatedAt).toLocaleString('th-TH')}</span></div>
+                <div className="flex flex-wrap items-center gap-2"><span className={`inline-flex items-center gap-1.5 rounded-full border px-2.5 py-1 font-mono text-[9px] font-bold uppercase tracking-[0.16em] ${workspaceReadiness?.className || ''}`}><Activity className="h-3 w-3" /> {workspaceReadiness?.label}</span><span className="font-mono text-[9px] text-slate-500">{new Date(search.generatedAt).toLocaleString('th-TH')}</span></div>
                 <div className="mt-4 flex items-center gap-2 text-cyan-200"><Sparkles className="h-5 w-5" /><h3 className="text-lg font-black text-white">คำตอบจากการค้น</h3></div>
-                <p className="mt-2 max-w-3xl text-sm leading-7 text-slate-200">{search.summary}{automationOutcomes.length > 0 ? ` ระบบต้นทางที่ล็อกอินด้วยบัญชีเจ้าหน้าที่ส่งผลกลับมา ${automationOutcomes.filter((item) => item.status === 'COMPLETE').length} แหล่ง รวม ${automationOutcomes.reduce((sum, item) => sum + (item.result?.resultRowCount || 0), 0)} แถวข้อมูล` : ''}</p>
+                <p className="mt-2 max-w-3xl text-sm leading-7 text-slate-200">{workspaceReadiness?.detail}</p>
+                <p className="mt-2 max-w-3xl text-[11px] leading-5 text-slate-500">{search.summary}{automationOutcomes.length > 0 ? ` ระบบต้นทางที่ล็อกอินด้วยบัญชีเจ้าหน้าที่ส่งผลกลับมา ${automationOutcomes.filter((item) => item.status === 'COMPLETE').length} แหล่ง รวม ${automationOutcomes.reduce((sum, item) => sum + (item.result?.resultRowCount || 0), 0)} แถวข้อมูล` : ''}</p>
               </div>
               <div className="flex min-w-36 items-end gap-3 rounded-2xl border border-white/[0.07] bg-slate-950/35 px-4 py-3 lg:block lg:text-right"><p className="font-mono text-[9px] uppercase tracking-[0.18em] text-cyan-300/70">Signals found</p><p className="text-4xl font-black tracking-[-0.06em] text-white">{search.findings.length + automationOutcomes.reduce((sum, item) => sum + (item.result?.resultRowCount || 0), 0)}</p><p className="mb-1 text-[10px] text-slate-500 lg:mb-0">รายการอ้างอิงได้</p></div>
             </div>
@@ -244,6 +298,7 @@ export function CaseIntelligenceWorkspace({ caseId }: { caseId: string }) {
                   </article>
                 ))}
               </div>
+              {extractionAttempts.length > 0 && <div className="mt-4 rounded-2xl border border-cyan-300/15 bg-slate-950/35 p-4" aria-label="สถานะการสกัดข้อมูลจากหลักฐาน"><div className="flex items-center justify-between gap-3"><div><h4 className="text-xs font-black text-white">ผลการสกัดตัวระบุเพื่อค้นต่อ</h4><p className="mt-1 text-[10px] leading-5 text-slate-500">ทุกผลเป็นข้อเสนออ้างอิงไฟล์ต้นฉบับ ไม่ถูกยืนยันเป็นข้อเท็จจริงโดยอัตโนมัติ</p></div><span className="font-mono text-[9px] text-cyan-200">{extractionAttempts.length} FILES CHECKED</span></div><div className="mt-3 grid gap-2 lg:grid-cols-2">{extractionAttempts.map((attempt) => <div key={attempt.evidenceId} className={`rounded-xl border p-3 text-[10px] ${attempt.status === 'SUGGESTIONS_CREATED' ? 'border-emerald-300/15 bg-emerald-300/[0.04] text-emerald-100' : attempt.status === 'NO_IDENTIFIER_FOUND' ? 'border-amber-300/15 bg-amber-300/[0.04] text-amber-100' : 'border-rose-300/15 bg-rose-300/[0.04] text-rose-100'}`}><p className="font-bold">{attempt.filename}</p><p className="mt-1 leading-5">{attempt.status === 'SUGGESTIONS_CREATED' ? `สกัดข้อเสนอได้ ${attempt.count || 0} รายการ · ส่งเข้าคิวตรวจทานแล้ว` : attempt.status === 'NO_IDENTIFIER_FOUND' ? 'AI เปิดวิเคราะห์แล้ว แต่ยังไม่พบตัวระบุที่ใช้ค้นต่อได้' : `สกัดไม่สำเร็จ: ${attempt.error || 'ไม่ทราบสาเหตุ'}`}</p></div>)}</div></div>}
             </div>
           )}
 
