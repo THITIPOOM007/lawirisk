@@ -496,7 +496,7 @@ test('lets a citizen search, submit an anonymous complaint, and track it', async
 
   await page.getByLabel('คำค้นหาข้อมูลสาธารณะ').fill('2A36/61');
   await page.getByRole('button', { name: 'ค้นหาข้อมูล' }).click();
-  await expect(page.getByText(/ผลการค้นหาจากฐานข้อมูลทางการ/)).toBeVisible();
+  await expect(page.getByRole('heading', { name: /ผลจากทะเบียนและข่าวประชาสัมพันธ์ทางการ/ })).toBeVisible();
 
   await page.getByRole('tab', { name: 'แจ้งเรื่องร้องเรียน / เบาะแส' }).click();
   await page.getByPlaceholder(/ถูกเพจหลอกขายสินค้า/).fill('แจ้งเบาะแสทดสอบระบบสาธารณะ');
