@@ -5,6 +5,8 @@ import {
   resolveMultiChannelSearch,
   searchOfficialFdaProducts,
   searchOfficialHssClinics,
+  searchOfficialHssPublicNews,
+  searchOfficialOryorNews,
   searchOfficialHssSpaBusinesses,
   searchOfficialNhsoProviders,
 } from './fda-smart-resolver';
@@ -233,6 +235,37 @@ describe('FDA public search fallback', () => {
       title: 'รุ่งทิวา นวดเพื่อสุขภาพ',
       status: 'SAFE',
     });
+  });
+
+  it('returns a related HSS public announcement as a review lead with its original citation', async () => {
+    const html = `<B style="font-size:18px;"><A href='fileupload_doc/2023-12-18-alert.png' target=_blank>เตือนภัยมิจฉาชีพ แอบอ้างกรม สบส.</a></B><br>กรมสนับสนุนบริการสุขภาพเตือนประชาชนอย่ากดลิงก์ที่น่าสงสัย <B>[ลงประกาศโดย : ประชาสัมพันธ์ วันที่ : 18 ธ.ค. 2566]</B>`;
+    const fetchImpl = vi.fn(async () => new Response(html, { status: 200 }));
+
+    const [result] = await searchOfficialHssPublicNews('มิจฉาชีพ', fetchImpl, () => new Date('2026-09-03T01:00:00.000Z'));
+
+    expect(result).toMatchObject({
+      title: 'เตือนภัยมิจฉาชีพ แอบอ้างกรม สบส.',
+      category: 'FRAUD_ALERTS',
+      status: 'WARNING',
+      source: 'กรมสนับสนุนบริการสุขภาพ (สบส.) — ข่าวประชาสัมพันธ์',
+    });
+    expect(result.sourceUrl).toBe('https://hss.moph.go.th/fileupload_doc/2023-12-18-alert.png');
+  });
+
+  it('filters the FDA public-news feed by query and preserves the FDA media citation', async () => {
+    const fetchImpl = vi.fn(async () => new Response(JSON.stringify({ data: [{
+      id: 81, _table_name: 'news', title: 'อย. เตือนภัยผลิตภัณฑ์สุขภาพ',
+      shortDescription: 'ประชาชนควรตรวจสอบเลขทะเบียนก่อนซื้อ', publishDate: '3 ก.ย. 2569',
+    }] }), { status: 200 }));
+
+    const [result] = await searchOfficialOryorNews('ผลิตภัณฑ์', fetchImpl);
+
+    expect(result).toMatchObject({
+      title: 'อย. เตือนภัยผลิตภัณฑ์สุขภาพ',
+      category: 'FRAUD_ALERTS',
+      source: 'สำนักงานคณะกรรมการอาหารและยา (อย.) — ข่าวและประกาศ',
+    });
+    expect(result.sourceUrl).toBe('https://oryor.com/media/newsUpdate/news/81');
   });
 
   it('sends a direct public POST to the clinic registry and maps its records', async () => {

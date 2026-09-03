@@ -59,6 +59,9 @@ const HSS_CLINIC_SOURCE_URL = 'https://hosp.hss.moph.go.th';
 const HSS_CLINIC_DIRECTORY_ENDPOINT = 'https://privatehospital.hss.moph.go.th/view_hospital.php';
 const HSS_CLINIC_DIRECTORY_URL = 'https://privatehospital.hss.moph.go.th/s_view_hospital.php';
 const HSS_CLINIC_USER_AGENT = 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36';
+const HSS_PUBLIC_NEWS_SEARCH_URL = 'https://hss.moph.go.th/show_topic2.php';
+const ORYOR_NEWS_API_URL = 'https://api.oryor.com/media/newsUpdate?page=1&sort=last&limit=40';
+const ORYOR_NEWS_DIRECTORY_URL = 'https://oryor.com/media/newsUpdate';
 const NHSO_PROVIDER_SEARCH_URL = 'https://cpp.nhso.go.th/search/';
 const NHSO_PROVIDER_PROFILE_URL = 'https://cpp.nhso.go.th/profile/?hcode=';
 
@@ -242,6 +245,10 @@ function htmlToLines(html: string) {
     .split(/\r?\n/)
     .map((line) => line.replace(/\s+/g, ' ').trim())
     .filter(Boolean);
+}
+
+function compactHtmlText(html: string, maxLength = 600) {
+  return htmlToLines(html).join(' ').replace(/\s+/g, ' ').trim().slice(0, maxLength);
 }
 
 function unverifiedGuidance(
@@ -933,6 +940,114 @@ export async function searchOfficialHssSpaBusinesses(
     return [providerUnavailable(query, 'HSS_SPA', now)];
   } catch {
     return [providerUnavailable(query, 'HSS_SPA', now)];
+  }
+}
+
+/**
+ * Searches the public HSS press-release index. News is presented as a lead for
+ * citizen review, never as a finding about the searched business or product.
+ */
+export async function searchOfficialHssPublicNews(
+  query: string,
+  fetchImpl: SearchFetch = fetch,
+  now: () => Date = () => new Date(),
+): Promise<SmartSearchResult[]> {
+  try {
+    const searchUrl = new URL(HSS_PUBLIC_NEWS_SEARCH_URL);
+    searchUrl.searchParams.set('id_form', '1');
+    searchUrl.searchParams.set('search', query);
+    const response = await fetchWithTimeout(fetchImpl, searchUrl.toString(), {
+      method: 'GET',
+      headers: { Accept: 'text/html,application/xhtml+xml', 'User-Agent': HSS_CLINIC_USER_AGENT },
+      cache: 'no-store',
+    });
+    if (!response.ok) return [];
+
+    const html = await response.text();
+    const entries = Array.from(html.matchAll(
+      /<B[^>]*>\s*<A\s+href=['"]([^'"]+)['"][^>]*>([\s\S]*?)<\/a>\s*<\/B><br>([\s\S]*?)<B>\s*\[ลงประกาศโดย\s*:\s*([^\]&]*?)\s*วันที่\s*:\s*([^\]]+)\]/gi,
+    ));
+    const inspectedAt = checkedDate(now);
+    return entries.slice(0, 5).flatMap((entry, index) => {
+      const title = compactHtmlText(entry[2], 240);
+      const summary = compactHtmlText(entry[3], 650);
+      const sourceUrl = safeHttpsUrl(new URL(entry[1], HSS_PUBLIC_NEWS_SEARCH_URL).toString(), new Set(['hss.moph.go.th']));
+      if (!title || !sourceUrl) return [];
+      return [{
+        id: `hss-public-news-${encodeURIComponent(`${title}-${index}`).slice(0, 100)}`,
+        title,
+        category: 'FRAUD_ALERTS' as const,
+        productCategoryLabel: 'ข่าวประชาสัมพันธ์/ประกาศจากหน่วยงาน — ไม่ใช่ผลรับรอง',
+        snippet: summary || `พบข่าวประชาสัมพันธ์ที่เกี่ยวข้องกับ “${query}”`,
+        source: 'กรมสนับสนุนบริการสุขภาพ (สบส.) — ข่าวประชาสัมพันธ์',
+        sourceUrl,
+        publishedDate: compactHtmlText(entry[5], 80) || inspectedAt,
+        confidenceScore: 1,
+        status: /เตือนภัย|อันตราย|ห้าม|ผิดกฎหมาย|หลอกลวง|มิจฉาชีพ/i.test(`${title} ${summary}`) ? 'WARNING' : 'SAFE',
+        metadata: {
+          'ประเภทข้อมูล': 'ข่าวประชาสัมพันธ์จาก สบส.',
+          'ผู้เผยแพร่': compactHtmlText(entry[4], 120) || 'กรมสนับสนุนบริการสุขภาพ (สบส.)',
+          'คำค้น': query,
+          'ข้อควรทราบ': 'ข่าวที่เกี่ยวข้องไม่ใช่ข้อยืนยันว่ารายการหรือสถานที่ที่ค้นหากระทำผิด',
+          'ตรวจสอบเมื่อ': inspectedAt,
+        },
+      }];
+    });
+  } catch {
+    return [];
+  }
+}
+
+/** The FDA's public media API used by oryor.com; only current public entries are read. */
+export async function searchOfficialOryorNews(
+  query: string,
+  fetchImpl: SearchFetch = fetch,
+  now: () => Date = () => new Date(),
+): Promise<SmartSearchResult[]> {
+  try {
+    const response = await fetchWithTimeout(fetchImpl, ORYOR_NEWS_API_URL, {
+      method: 'GET',
+      headers: { Accept: 'application/json', 'X-Authorization': 'keeneye' },
+      cache: 'no-store',
+    });
+    if (!response.ok) return [];
+    const payload: unknown = await response.json();
+    const rows = payload && typeof payload === 'object' && !Array.isArray(payload)
+      && Array.isArray((payload as { data?: unknown }).data)
+      ? (payload as { data: Array<Record<string, unknown>> }).data
+      : [];
+    const normalizedQuery = query.toLocaleLowerCase('th');
+    const inspectedAt = checkedDate(now);
+    return rows.flatMap((row, index) => {
+      const title = compactHtmlText(text(row.title), 240);
+      const summary = compactHtmlText(text(row.shortDescription), 650);
+      if (!title || !`${title} ${summary}`.toLocaleLowerCase('th').includes(normalizedQuery)) return [];
+      const table = text(row._table_name);
+      const id = text(row.id);
+      const sourceUrl = table && id
+        ? safeHttpsUrl(`https://oryor.com/media/newsUpdate/${encodeURIComponent(table)}/${encodeURIComponent(id)}`, new Set(['oryor.com']))
+        : ORYOR_NEWS_DIRECTORY_URL;
+      return [{
+        id: `oryor-news-${encodeURIComponent(`${table}-${id || index}`).slice(0, 100)}`,
+        title,
+        category: 'FRAUD_ALERTS' as const,
+        productCategoryLabel: 'ข่าว/ประกาศจาก อย. — ไม่ใช่ผลรับรอง',
+        snippet: summary || `พบข่าวที่เกี่ยวข้องกับ “${query}”`,
+        source: 'สำนักงานคณะกรรมการอาหารและยา (อย.) — ข่าวและประกาศ',
+        sourceUrl,
+        publishedDate: text(row.publishDate) || inspectedAt,
+        confidenceScore: 1,
+        status: /เตือนภัย|อันตราย|ห้าม|เรียกคืน|ปลอม|หลอกลวง/i.test(`${title} ${summary}`) ? 'WARNING' as const : 'SAFE' as const,
+        metadata: {
+          'ประเภทข้อมูล': 'ข่าวหรือประกาศจาก อย.',
+          'คำค้น': query,
+          'ข้อควรทราบ': 'ข่าวที่เกี่ยวข้องไม่ใช่ข้อยืนยันว่ารายการหรือสถานที่ที่ค้นหากระทำผิด',
+          'ตรวจสอบเมื่อ': inspectedAt,
+        },
+      }];
+    }).slice(0, 5);
+  } catch {
+    return [];
   }
 }
 

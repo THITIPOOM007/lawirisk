@@ -1,12 +1,20 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { z } from 'zod';
-import { resolveMultiChannelSearch } from '@/lib/fda-smart-resolver';
+import { resolveMultiChannelSearch, searchOfficialHssPublicNews, searchOfficialOryorNews } from '@/lib/fda-smart-resolver';
 import { consumeRateLimit } from '@/lib/rate-limit';
 
 const searchQuerySchema = z.object({
   q: z.string().trim().min(2).max(200),
   category: z.enum(['ALL', 'HEALTH_PRODUCTS', 'HEALTH_SERVICES', 'CLINICS', 'MASSAGE_SPA', 'FRAUD_ALERTS', 'COMPANIES', 'LICENSES']).default('ALL'),
+  province: z.string().trim().min(2).max(100).optional().or(z.literal('')),
+  healthRegion: z.string().trim().max(100).optional().or(z.literal('')),
 });
+
+function matchesProvince(result: { snippet: string; metadata?: Record<string, string> }, province: string) {
+  if (!province) return true;
+  const searchable = [result.snippet, ...Object.values(result.metadata || {})].join(' ').replace(/\s+/g, ' ');
+  return searchable.includes(province);
+}
 
 export async function GET(request: NextRequest) {
   const clientAddress = request.headers.get('cf-connecting-ip')
@@ -22,8 +30,10 @@ export async function GET(request: NextRequest) {
   const { searchParams } = new URL(request.url);
   const q = searchParams.get('q') || '';
   const category = searchParams.get('category') || 'ALL';
+  const province = searchParams.get('province') || '';
+  const healthRegion = searchParams.get('healthRegion') || '';
 
-  const parsed = searchQuerySchema.safeParse({ q, category });
+  const parsed = searchQuerySchema.safeParse({ q, category, province, healthRegion });
   if (!parsed.success) {
     return NextResponse.json(
       { success: false, error: 'กรุณากรอกคำค้นหาอย่างน้อย 2 ตัวอักษร' },
@@ -33,7 +43,16 @@ export async function GET(request: NextRequest) {
 
   const rawQuery = parsed.data.q.trim();
 
-  const results = await resolveMultiChannelSearch(rawQuery, { category: parsed.data.category });
+  const [registryResults, newsResults] = await Promise.all([
+    parsed.data.category === 'FRAUD_ALERTS'
+      ? Promise.resolve([])
+      : resolveMultiChannelSearch(rawQuery, { category: parsed.data.category }),
+    Promise.all([searchOfficialHssPublicNews(rawQuery), searchOfficialOryorNews(rawQuery)]).then((results) => results.flat()),
+  ]);
+  const combinedResults = parsed.data.category === 'FRAUD_ALERTS'
+    ? newsResults
+    : [...registryResults, ...newsResults];
+  const results = combinedResults.filter((item) => matchesProvince(item, parsed.data.province || ''));
 
   let aiSummary = '';
   if (results.length > 0) {
@@ -57,7 +76,9 @@ export async function GET(request: NextRequest) {
       aiSummary = `พบ ${results.length} รายการที่แสดงตรงจาก ${topItem.source} สำหรับ "${rawQuery}" ตามคำตอบล่าสุดของต้นทาง โปรดเปิดข้อมูลต้นฉบับเพื่อตรวจรายละเอียดและสถานะใบอนุญาตล่าสุด`;
     }
   } else {
-    aiSummary = `ไม่พบข้อมูลที่ตรงกับ "${rawQuery}" ในแหล่งข้อมูลทางการที่เลือก กรุณาตรวจสอบการสะกดหรือรูปแบบเลขแล้วลองใหม่`;
+    aiSummary = parsed.data.province
+      ? `ไม่พบข้อมูลที่ตรงกับ "${rawQuery}" ในพื้นที่ ${parsed.data.province} จากแหล่งที่แสดงที่อยู่ได้ กรุณาลองค้นหาทั่วประเทศหรือปรับคำค้น`
+      : `ไม่พบข้อมูลที่ตรงกับ "${rawQuery}" ในแหล่งข้อมูลทางการที่เลือก กรุณาตรวจสอบการสะกดหรือรูปแบบเลขแล้วลองใหม่`;
   }
 
   return NextResponse.json({
@@ -65,6 +86,8 @@ export async function GET(request: NextRequest) {
     data: {
       query: parsed.data.q,
       category: parsed.data.category,
+      province: parsed.data.province || null,
+      healthRegion: parsed.data.healthRegion || null,
       aiSummary,
       citationCount: results.filter((item) => !['UNREGISTERED', 'UNAVAILABLE'].includes(item.status)).length,
       results,

@@ -56,6 +56,9 @@ interface TrackingResult {
 
 type SearchCategory = 'ALL' | 'HEALTH_PRODUCTS' | 'HEALTH_SERVICES' | 'CLINICS' | 'MASSAGE_SPA' | 'FRAUD_ALERTS' | 'COMPANIES' | 'LICENSES';
 
+const thaiProvinces = ['กรุงเทพมหานคร', 'กระบี่', 'กาญจนบุรี', 'กาฬสินธุ์', 'กำแพงเพชร', 'ขอนแก่น', 'จันทบุรี', 'ฉะเชิงเทรา', 'ชลบุรี', 'ชัยนาท', 'ชัยภูมิ', 'ชุมพร', 'เชียงราย', 'เชียงใหม่', 'ตรัง', 'ตราด', 'ตาก', 'นครนายก', 'นครปฐม', 'นครพนม', 'นครราชสีมา', 'นครศรีธรรมราช', 'นครสวรรค์', 'นนทบุรี', 'นราธิวาส', 'น่าน', 'บึงกาฬ', 'บุรีรัมย์', 'ปทุมธานี', 'ประจวบคีรีขันธ์', 'ปราจีนบุรี', 'ปัตตานี', 'พะเยา', 'พังงา', 'พัทลุง', 'พิจิตร', 'พิษณุโลก', 'ภูเก็ต', 'มหาสารคาม', 'มุกดาหาร', 'แม่ฮ่องสอน', 'ยโสธร', 'ยะลา', 'ร้อยเอ็ด', 'ระนอง', 'ระยอง', 'ราชบุรี', 'ลพบุรี', 'ลำปาง', 'ลำพูน', 'เลย', 'ศรีสะเกษ', 'สกลนคร', 'สงขลา', 'สตูล', 'สมุทรปราการ', 'สมุทรสงคราม', 'สมุทรสาคร', 'สระบุรี', 'สระแก้ว', 'สิงห์บุรี', 'สุพรรณบุรี', 'สุราษฎร์ธานี', 'สุรินทร์', 'สุโขทัย', 'หนองคาย', 'หนองบัวลำภู', 'อ่างทอง', 'อำนาจเจริญ', 'อุดรธานี', 'อุตรดิตถ์', 'อุทัยธานี', 'อุบลราชธานี'];
+const healthRegions = ['ทั่วประเทศ', 'ภาคเหนือ', 'ภาคตะวันออกเฉียงเหนือ', 'ภาคกลาง', 'ภาคตะวันออก', 'ภาคตะวันตก', 'ภาคใต้', 'กรุงเทพมหานครและปริมณฑล'];
+
 const publicServices = [
   {
     id: 'SEARCH' as const,
@@ -120,6 +123,8 @@ export default function PublicPortalPage() {
   // Search State
   const [searchQuery, setSearchQuery] = useState('');
   const [category, setCategory] = useState<SearchCategory>('ALL');
+  const [searchProvince, setSearchProvince] = useState('');
+  const [searchHealthRegion, setSearchHealthRegion] = useState('ทั่วประเทศ');
   const [isSearching, setIsSearching] = useState(false);
   const [searchError, setSearchError] = useState('');
   const [searchResults, setSearchResults] = useState<SearchResultItem[]>([]);
@@ -172,6 +177,8 @@ export default function PublicPortalPage() {
     setAiSummary('');
     try {
       const params = new URLSearchParams({ q: normalizedQuery, category });
+      if (searchProvince.trim()) params.set('province', searchProvince.trim());
+      if (searchHealthRegion !== 'ทั่วประเทศ') params.set('healthRegion', searchHealthRegion);
       const res = await fetch(`/api/v1/public/search?${params.toString()}`, { cache: 'no-store' });
       const body = await res.json();
       if (!res.ok) {
@@ -185,6 +192,27 @@ export default function PublicPortalPage() {
     } finally {
       setIsSearching(false);
     }
+  };
+
+  const prefillComplaintFromSearch = (item: SearchResultItem) => {
+    const metadata = item.metadata || {};
+    const businessResult = item.category === 'CLINICS' || item.category === 'MASSAGE_SPA';
+    const location = metadata['ที่ตั้ง'] || '';
+    const province = metadata['จังหวัด'] || searchProvince;
+    const registration = metadata['เลขที่ใบอนุญาต'] || metadata['เลขใบสำคัญ/ใบอนุญาต'] || '';
+    setComplaintCategory(businessResult ? 'ILLEGAL_CLINIC' : 'HEALTH_HAZARD');
+    setTopic(`ขอให้ตรวจสอบ: ${item.title}`);
+    setDescription(`ผู้แจ้งเลือกส่งต่อข้อมูลจากการค้นหาเพื่อขอให้เจ้าหน้าที่ตรวจสอบ\n\nรายการ: ${item.title}\nแหล่งข้อมูล: ${item.source}\nลิงก์ต้นฉบับ: ${item.sourceUrl}\nข้อมูลที่แสดง: ${item.snippet}\n\nข้อมูลนี้เป็นผลค้นหาหรือข่าวที่เกี่ยวข้อง ไม่ใช่ข้อสรุปว่ามีการกระทำผิด`);
+    if (businessResult) {
+      setBusinessName(item.title);
+      setBusinessAddress(location);
+    } else {
+      setProductName(item.title);
+    }
+    setRegistrationNumber(registration);
+    setRegion([province, searchHealthRegion !== 'ทั่วประเทศ' ? searchHealthRegion : ''].filter(Boolean).join(' · '));
+    setActiveTab('COMPLAINT');
+    window.setTimeout(() => document.getElementById('public-service-panel-complaint')?.scrollIntoView({ behavior: 'smooth', block: 'start' }), 0);
   };
 
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -499,7 +527,27 @@ export default function PublicPortalPage() {
                 </button>
               </div>
 
-              <div className="flex flex-wrap gap-2 text-[10px] text-slate-500"><span className="font-bold text-slate-400">ตัวอย่างคำค้น:</span><span className="rounded-full border border-white/[0.07] px-2.5 py-1">เลขสารบบอาหาร</span><span className="rounded-full border border-white/[0.07] px-2.5 py-1">ชื่อผลิตภัณฑ์</span><span className="rounded-full border border-white/[0.07] px-2.5 py-1">ชื่อคลินิกหรือสถานประกอบการ</span></div>
+              <div className="grid gap-3 border-t border-white/[0.07] pt-4 sm:grid-cols-2">
+                <label className="text-[11px] font-semibold text-slate-300">
+                  จังหวัดที่ต้องสงสัย <span className="font-normal text-slate-500">(กรองผลที่มีที่ตั้งระบุ)</span>
+                  <input
+                    list="thai-provinces"
+                    value={searchProvince}
+                    onChange={(event) => setSearchProvince(event.target.value)}
+                    placeholder="เช่น ศรีสะเกษ"
+                    className="mt-1.5 min-h-11 w-full rounded-xl border border-white/[0.1] bg-slate-950/80 px-3 text-xs text-white placeholder:text-slate-600 focus:border-cyan-300 focus:outline-none"
+                  />
+                  <datalist id="thai-provinces">{thaiProvinces.map((province) => <option key={province} value={province} />)}</datalist>
+                </label>
+                <label className="text-[11px] font-semibold text-slate-300">
+                  เขตภูมิภาค <span className="font-normal text-slate-500">(ส่งต่อพร้อมเรื่องร้องเรียน)</span>
+                  <select value={searchHealthRegion} onChange={(event) => setSearchHealthRegion(event.target.value)} className="mt-1.5 min-h-11 w-full rounded-xl border border-white/[0.1] bg-slate-950/80 px-3 text-xs text-white focus:border-cyan-300 focus:outline-none">
+                    {healthRegions.map((item) => <option key={item} value={item}>{item}</option>)}
+                  </select>
+                </label>
+              </div>
+
+              <div className="flex flex-wrap gap-2 text-[10px] text-slate-500"><span className="font-bold text-slate-400">ค้นควบคู่:</span><span className="rounded-full border border-white/[0.07] px-2.5 py-1">ทะเบียน อย. / สบส. / สปสช.</span><span className="rounded-full border border-white/[0.07] px-2.5 py-1">ข่าวประชาสัมพันธ์ สบส.</span><a className="rounded-full border border-white/[0.07] px-2.5 py-1 hover:border-cyan-300/40 hover:text-cyan-200" href="https://oryor.com/media/newsUpdate" target="_blank" rel="noopener noreferrer">ข่าว อย. ↗</a></div>
 
               {searchError && (
                 <div className="p-3 bg-rose-950/40 border border-rose-500/30 rounded-xl text-xs text-rose-300">
@@ -525,7 +573,7 @@ export default function PublicPortalPage() {
             {searchResults.length > 0 && (
               <div className="space-y-4">
                 <h3 className="text-xs font-bold text-slate-400 uppercase tracking-wider">
-                  ผลการค้นหาจากฐานข้อมูลทางการ ({searchResults.length} รายการ)
+                  ผลจากทะเบียนและข่าวประชาสัมพันธ์ทางการ ({searchResults.length} รายการ)
                 </h3>
                 {searchResults.map((item) => (
                   <div
@@ -585,14 +633,17 @@ export default function PublicPortalPage() {
                     {/* Source & Citation Footer */}
                     <div className="pt-2 flex items-center justify-between text-xs text-slate-400">
                       <span>แหล่งข้อมูลทางการ: <strong className="text-teal-300">{item.source}</strong></span>
-                      <a
-                        href={item.sourceUrl}
-                        target="_blank"
-                        rel="noopener noreferrer"
-                        className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl border border-teal-400/30 bg-teal-400/10 text-xs font-bold text-teal-200 hover:bg-teal-400/20 transition"
-                      >
-                        ตรวจสอบข้อมูลต้นฉบับ <ExternalLink className="w-3.5 h-3.5" />
-                      </a>
+                      <div className="flex flex-wrap justify-end gap-2">
+                        <button type="button" onClick={() => prefillComplaintFromSearch(item)} className="inline-flex min-h-9 items-center gap-1.5 rounded-xl border border-rose-300/30 bg-rose-300/[0.08] px-3 py-1.5 text-xs font-bold text-rose-100 hover:bg-rose-300/[0.16] transition">ส่งต่อแจ้งเบาะแส <Send className="h-3.5 w-3.5" /></button>
+                        <a
+                          href={item.sourceUrl}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="inline-flex min-h-9 items-center gap-1.5 px-3 py-1.5 rounded-xl border border-teal-400/30 bg-teal-400/10 text-xs font-bold text-teal-200 hover:bg-teal-400/20 transition"
+                        >
+                          ตรวจสอบข้อมูลต้นฉบับ <ExternalLink className="w-3.5 h-3.5" />
+                        </a>
+                      </div>
                     </div>
                   </div>
                 ))}
@@ -617,7 +668,15 @@ export default function PublicPortalPage() {
               setCategory('HEALTH_PRODUCTS');
               setActiveTab('SEARCH');
             }}
-            onComplaint={() => setActiveTab('COMPLAINT')}
+            onComplaint={(prefill) => {
+              setComplaintCategory('HEALTH_HAZARD');
+              setTopic(prefill.topic);
+              setDescription(prefill.description);
+              setProductName(prefill.productName);
+              setRegistrationNumber(prefill.registrationNumber);
+              setActiveTab('COMPLAINT');
+              window.setTimeout(() => document.getElementById('public-service-panel-complaint')?.scrollIntoView({ behavior: 'smooth', block: 'start' }), 0);
+            }}
           />
         )}
 

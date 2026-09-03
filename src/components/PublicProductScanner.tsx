@@ -66,7 +66,7 @@ export default function PublicProductScanner({
   onComplaint,
 }: {
   onSearch: (query: string) => void;
-  onComplaint: () => void;
+  onComplaint: (prefill: { topic: string; description: string; productName: string; registrationNumber: string }) => void;
 }) {
   const [imageFiles, setImageFiles] = useState<File[]>([]);
   const [isScanning, setIsScanning] = useState(false);
@@ -304,7 +304,16 @@ export default function PublicProductScanner({
 
                 <div className="flex flex-col gap-2 sm:flex-row">
                   {registryIdentifier && <button type="button" onClick={() => onSearch(registryIdentifier)} className="flex min-h-11 flex-1 items-center justify-center gap-2 rounded-xl bg-cyan-300 px-4 text-xs font-black text-slate-950"><Search className="h-4 w-4" />ค้นทะเบียนจากข้อมูลที่พบ</button>}
-                  <button type="button" onClick={onComplaint} className="flex min-h-11 flex-1 items-center justify-center gap-2 rounded-xl border border-white/10 bg-white/[0.04] px-4 text-xs font-black text-white"><ShieldAlert className="h-4 w-4 text-rose-200" />แจ้งเบาะแสพร้อมหลักฐาน</button>
+                  <button type="button" onClick={() => {
+                    const matched = scan.registryLookup?.results.find((item) => !['UNREGISTERED', 'UNAVAILABLE'].includes(item.status));
+                    const registrationNumber = matched?.metadata?.['เลขที่ใบอนุญาต'] || matched?.metadata?.['เลขใบสำคัญ/ใบอนุญาต'] || registryIdentifier;
+                    onComplaint({
+                      topic: `ขอให้ตรวจสอบผลิตภัณฑ์: ${matched?.title || scan.result.productName || 'ผลิตภัณฑ์จากภาพสแกน'}`,
+                      description: `ผู้แจ้งเลือกส่งต่อข้อมูลจากการสแกนภาพเพื่อขอให้เจ้าหน้าที่ตรวจสอบ\n\nผลิตภัณฑ์ที่อ่านได้: ${scan.result.productName || '-'}\nเลข/รหัสที่พบ: ${registrationNumber || '-'}${matched ? `\nผลทะเบียน: ${matched.title}\nแหล่งข้อมูล: ${matched.source}\nลิงก์ต้นฉบับ: ${matched.sourceUrl}` : ''}\n\nภาพที่ใช้สแกนไม่ได้ถูกแนบโดยอัตโนมัติ โปรดเลือกแนบหลักฐานอีกครั้งหากต้องการส่งภาพ`,
+                      productName: matched?.title || scan.result.productName || '',
+                      registrationNumber,
+                    });
+                  }} className="flex min-h-11 flex-1 items-center justify-center gap-2 rounded-xl border border-white/10 bg-white/[0.04] px-4 text-xs font-black text-white"><ShieldAlert className="h-4 w-4 text-rose-200" />แจ้งเบาะแสพร้อมหลักฐาน</button>
                 </div>
                 <p className="text-center font-mono text-[8px] text-slate-600">REQUEST {scan.requestId.slice(0, 8).toUpperCase()} · วิเคราะห์ร่วมกัน {scan.imageCount} ภาพ · ไม่จัดเก็บใน LAWiRISK</p>
               </div>
