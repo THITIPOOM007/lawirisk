@@ -220,6 +220,21 @@ describe('FDA public search fallback', () => {
     });
   });
 
+  it('retries a transient HSS SPA response before marking the source unavailable', async () => {
+    const rsc = '1:{"found":true,"query":{"mode":"name","text":"รุ่งทิวา"},"results":[{"shop":{"memberID":"100200046-65","shopType":"นวดเพื่อสุขภาพ","nameThai":"รุ่งทิวา นวดเพื่อสุขภาพ","status":7,"statusText":"ได้รับอนุญาต","addressText":"กรุงเทพมหานคร"}}]}';
+    const fetchImpl = vi.fn()
+      .mockResolvedValueOnce(new Response('Temporary upstream error', { status: 502 }))
+      .mockResolvedValueOnce(new Response(rsc, { status: 200 }));
+
+    const [result] = await searchOfficialHssSpaBusinesses('รุ่งทิวา', fetchImpl);
+
+    expect(fetchImpl).toHaveBeenCalledTimes(2);
+    expect(result).toMatchObject({
+      title: 'รุ่งทิวา นวดเพื่อสุขภาพ',
+      status: 'SAFE',
+    });
+  });
+
   it('sends a direct public POST to the clinic registry and maps its records', async () => {
     const cardHtml = `
       <div class="testimonial-card11-text1-12">ชื่อสถานพยาบาล :</div>

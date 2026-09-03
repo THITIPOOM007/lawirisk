@@ -53,6 +53,7 @@ const FDA_SEARCH_URL = 'https://porta.fda.moph.go.th/FDA_SEARCH_CENTER_BACKEND/S
 const FDA_SOURCE_URL = 'https://porta.fda.moph.go.th/fda_search_center_new/';
 const HSS_SPA_SEARCH_URL = 'https://spa-services.hss.moph.go.th/permit/spa/establishment';
 const HSS_SPA_ACTION_ID = '605fc3e19abd12c740a283c912d926bbba1de06a75';
+const HSS_SPA_MAX_ATTEMPTS = 3;
 const HSS_CLINIC_SEARCH_ENDPOINT = 'https://hosp.hss.moph.go.th/key-searchs';
 const HSS_CLINIC_SOURCE_URL = 'https://hosp.hss.moph.go.th';
 const HSS_CLINIC_DIRECTORY_ENDPOINT = 'https://privatehospital.hss.moph.go.th/view_hospital.php';
@@ -525,6 +526,7 @@ async function requestHssSpaSearch(
       'Next-Action': actionId,
       Origin: 'https://spa-services.hss.moph.go.th',
       Referer: HSS_SPA_SEARCH_URL,
+      'User-Agent': HSS_CLINIC_USER_AGENT,
     },
     body: JSON.stringify([mode, query]),
     cache: 'no-store',
@@ -910,21 +912,25 @@ export async function searchOfficialHssSpaBusinesses(
 ): Promise<SmartSearchResult[]> {
   const mode = /^\d{9}-\d{2}$/.test(query) ? 'license' : 'name';
   try {
-    let result = await requestHssSpaSearch(query, mode, HSS_SPA_ACTION_ID, fetchImpl);
-    if (result.response.status === 404 && /server action not found/i.test(result.body)) {
-      const currentActionId = await discoverHssSpaActionId(fetchImpl);
-      if (currentActionId && currentActionId !== HSS_SPA_ACTION_ID) {
-        result = await requestHssSpaSearch(query, mode, currentActionId, fetchImpl);
+    let actionId = HSS_SPA_ACTION_ID;
+    for (let attempt = 0; attempt < HSS_SPA_MAX_ATTEMPTS; attempt += 1) {
+      const result = await requestHssSpaSearch(query, mode, actionId, fetchImpl);
+      if (result.response.ok) {
+        const payload = parseHssActionPayload(result.body);
+        if (!payload) continue;
+        const results = (payload.results || [])
+          .slice(0, 10)
+          .map((row, index) => mapHssSpaResult(row, index, now))
+          .filter((row): row is SmartSearchResult => row !== null);
+        return payload.found && results.length > 0 ? results : [unverifiedGuidance(query, 'HSS_SPA', now)];
+      }
+
+      if (result.response.status === 404 && /server action not found/i.test(result.body)) {
+        const currentActionId = await discoverHssSpaActionId(fetchImpl);
+        if (currentActionId) actionId = currentActionId;
       }
     }
-    if (!result.response.ok) return [providerUnavailable(query, 'HSS_SPA', now)];
-    const payload = parseHssActionPayload(result.body);
-    if (!payload) return [providerUnavailable(query, 'HSS_SPA', now)];
-    const results = (payload.results || [])
-      .slice(0, 10)
-      .map((row, index) => mapHssSpaResult(row, index, now))
-      .filter((row): row is SmartSearchResult => row !== null);
-    return payload.found && results.length > 0 ? results : [unverifiedGuidance(query, 'HSS_SPA', now)];
+    return [providerUnavailable(query, 'HSS_SPA', now)];
   } catch {
     return [providerUnavailable(query, 'HSS_SPA', now)];
   }
