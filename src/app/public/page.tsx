@@ -460,7 +460,7 @@ export default function PublicPortalPage() {
             <form onSubmit={handleSearch} className="hud-panel space-y-5 rounded-[28px] border border-cyan-300/12 p-5 shadow-[0_20px_70px_rgba(0,0,0,0.22)] sm:p-8">
               <div className="flex items-start gap-3 border-b border-white/[0.07] pb-5">
                 <span className="grid h-11 w-11 shrink-0 place-items-center rounded-2xl border border-cyan-300/20 bg-cyan-300/[0.08] text-cyan-200"><Search className="h-5 w-5" /></span>
-                <div><p className="text-[9px] font-black uppercase tracking-[0.18em] text-cyan-300">Official registry search</p><h2 className="mt-1 text-lg font-black text-white sm:text-xl">ค้นข้อมูลจากทะเบียนทางการ</h2><p className="mt-1 text-[11px] leading-5 text-slate-500">กรอกอย่างใดอย่างหนึ่ง เช่น ชื่อผลิตภัณฑ์ เลข อย. ชื่อคลินิก ร้านนวด หรือสปา</p></div>
+                <div><p className="text-[9px] font-black uppercase tracking-[0.18em] text-cyan-300">Official registry search</p><h2 className="mt-1 text-lg font-black text-white sm:text-xl">ค้นข้อมูลจากทะเบียนทางการ</h2><p className="mt-1 text-[11px] leading-5 text-slate-500">ค้นจาก อย., สบส. และไดเรกทอรีหน่วยบริการ สปสช. โดยตรง เช่น ชื่อผลิตภัณฑ์ เลข อย. ชื่อคลินิก ร้านนวด หรือสปา</p></div>
               </div>
               <div className="flex flex-col sm:flex-row gap-3">
                 <div className="relative flex-1">
@@ -482,8 +482,8 @@ export default function PublicPortalPage() {
                 >
                   <option value="ALL">เลือกแหล่งให้อัตโนมัติ</option>
                   <option value="HEALTH_PRODUCTS">ผลิตภัณฑ์สุขภาพ — อย.</option>
-                  <option value="HEALTH_SERVICES">คลินิก / ร้านนวด / สปา — สบส. (ทั้งหมด)</option>
-                  <option value="CLINICS">คลินิก / สถานพยาบาล — สบส.</option>
+                  <option value="HEALTH_SERVICES">คลินิก / ร้านนวด / สปา — สบส. / สปสช. (ทั้งหมด)</option>
+                  <option value="CLINICS">คลินิก / สถานพยาบาล — สบส. + สปสช.</option>
                   <option value="MASSAGE_SPA">ร้านนวด / สปา — สบส.</option>
                   <option value="FRAUD_ALERTS">เตือนภัยออนไลน์ / บัญชีม้า</option>
                   <option value="COMPANIES">นิติบุคคล / บริษัท</option>

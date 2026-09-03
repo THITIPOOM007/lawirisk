@@ -6,6 +6,7 @@ import {
   searchOfficialFdaProducts,
   searchOfficialHssClinics,
   searchOfficialHssSpaBusinesses,
+  searchOfficialNhsoProviders,
 } from './fda-smart-resolver';
 
 vi.mock('server-only', () => ({}));
@@ -187,6 +188,38 @@ describe('FDA public search fallback', () => {
     });
   });
 
+  it('refreshes the public HSS server-action reference when the source deploys a new action', async () => {
+    const replacementAction = '1234567890abcdef1234567890abcdef12345678';
+    const rsc = '1:{"found":true,"query":{"mode":"name","text":"รุ่งทิวา"},"results":[{"shop":{"memberID":"100200046-65","shopType":"นวดเพื่อสุขภาพ","nameThai":"รุ่งทิวา นวดเพื่อสุขภาพ","status":7,"statusText":"ได้รับอนุญาต","addressText":"กรุงเทพมหานคร","provName":"กรุงเทพมหานคร","shopArea":"90"}}]}';
+    const submittedActions: string[] = [];
+    const fetchImpl = vi.fn(async (input: string | URL | Request, init?: RequestInit) => {
+      const url = String(input);
+      if (init?.method === 'POST') {
+        const action = String((init.headers as Record<string, string>)['Next-Action']);
+        submittedActions.push(action);
+        if (action !== replacementAction) return new Response('Server action not found.', { status: 404 });
+        return new Response(rsc, { status: 200 });
+      }
+      if (url === 'https://spa-services.hss.moph.go.th/permit/spa/establishment') {
+        return new Response('<script src="/_next/static/chunks/establishment.js"></script>', { status: 200 });
+      }
+      if (url === 'https://spa-services.hss.moph.go.th/_next/static/chunks/establishment.js') {
+        return new Response(`const action = createServerReference("${replacementAction}", callServer, undefined, findSourceMapURL, "searchSpaShopDrizzle");`, { status: 200 });
+      }
+      return new Response('Not found', { status: 404 });
+    });
+
+    const [result] = await searchOfficialHssSpaBusinesses('รุ่งทิวา', fetchImpl);
+
+    expect(submittedActions).toHaveLength(2);
+    expect(submittedActions[1]).toBe(replacementAction);
+    expect(result).toMatchObject({
+      title: 'รุ่งทิวา นวดเพื่อสุขภาพ',
+      status: 'SAFE',
+      metadata: { 'เลขที่ใบอนุญาต': '100200046-65' },
+    });
+  });
+
   it('sends a direct public POST to the clinic registry and maps its records', async () => {
     const cardHtml = `
       <div class="testimonial-card11-text1-12">ชื่อสถานพยาบาล :</div>
@@ -239,7 +272,7 @@ describe('FDA public search fallback', () => {
         'ใช้ได้ถึง': '31 ธันวาคม 2577',
       },
     });
-    expect(fetchImpl).toHaveBeenCalledTimes(2);
+    expect(fetchImpl).toHaveBeenCalledOnce();
   });
 
   it('uses the live HSS hospital directory when the modern clinic endpoint is blocked', async () => {
@@ -250,7 +283,9 @@ describe('FDA public search fallback', () => {
         <tr><td></td><td><B>ที่อยู่ :</B>174 5 ด่านขุนทด นครราชสีมา 30210 <br><B>เบอโทรศัพท์ :</B></td></tr>
       </table>`;
     const fetchImpl = vi.fn(async (input: string | URL | Request, init?: RequestInit) => {
-      expect(String(input)).toBe('https://privatehospital.hss.moph.go.th/view_hospital.php');
+      const url = String(input);
+      if (url === 'https://hosp.hss.moph.go.th/key-searchs') return new Response('Not found', { status: 404 });
+      expect(url).toBe('https://privatehospital.hss.moph.go.th/view_hospital.php');
       expect(init?.method).toBe('POST');
       expect(String(init?.body)).toContain('s_data=MedicalName');
       expect(String(init?.body)).toContain('q=%E0%B8%A2%E0%B8%B4%E0%B9%88%E0%B8%87%E0%B8%A3%E0%B8%B1%E0%B8%81');
@@ -266,7 +301,42 @@ describe('FDA public search fallback', () => {
       productCategoryLabel: 'ผลสดจากรายชื่อโรงพยาบาลและคลินิก สบส.',
       metadata: { 'ที่ตั้ง': '174 5 ด่านขุนทด นครราชสีมา 30210' },
     });
-    expect(fetchImpl).toHaveBeenCalledOnce();
+    expect(fetchImpl).toHaveBeenCalledTimes(2);
+  });
+
+  it('reads the official NHSO provider directory by its public query URL and preserves the profile citation', async () => {
+    const nhsoHtml = `
+      <div class="gt-result-search-tile">ผลลัพธ์การค้นหา <span> (พบทั้งหมด 1 ผลลัพธ์)</span></div>
+      <a href="/profile/?hcode=14683" style="display: inline-block;" class="gt-result-search-info-name">
+        (14683) รพ.กรุงสยามเซนต์คาร์ลอสโรงพยาบาลทั่วไปขนาดใหญ่
+      </a><span>เบอร์โทรศัพท์ : 029756700</span><span>ที่อยู่ : <b>เลขที่</b> 5/84 ถนนติวานนท์ จังหวัดปทุมธานี</span></div></td>`;
+    const fetchImpl = vi.fn(async (input: string | URL | Request, init?: RequestInit) => {
+      expect(String(input)).toBe('https://cpp.nhso.go.th/search/?q=%E0%B8%81%E0%B8%A3%E0%B8%B8%E0%B8%87%E0%B8%AA%E0%B8%A2%E0%B8%B2%E0%B8%A1');
+      expect(init?.method).toBe('GET');
+      return new Response(nhsoHtml, { status: 200 });
+    });
+
+    const [result] = await searchOfficialNhsoProviders('กรุงสยาม', fetchImpl, () => new Date('2026-09-03T01:00:00.000Z'));
+
+    expect(result).toMatchObject({
+      id: 'nhso-provider-14683',
+      title: 'รพ.กรุงสยามเซนต์คาร์ลอสโรงพยาบาลทั่วไปขนาดใหญ่',
+      category: 'CLINICS',
+      source: 'ไดเรกทอรีหน่วยบริการ สำนักงานหลักประกันสุขภาพแห่งชาติ (สปสช.)',
+      sourceUrl: 'https://cpp.nhso.go.th/profile/?hcode=14683',
+      status: 'WARNING',
+      metadata: {
+        'รหัสหน่วยบริการ สปสช.': '14683',
+        'เบอร์โทรศัพท์': '029756700',
+        'ผลลัพธ์ทั้งหมดจาก สปสช.': '1',
+      },
+    });
+    expect(result.snippet).toContain('เลขที่ 5/84 ถนนติวานนท์ จังหวัดปทุมธานี');
+  });
+
+  it('does not report an NHSO source-format failure as a not-found result', async () => {
+    const [result] = await searchOfficialNhsoProviders('โรงพยาบาลตัวอย่าง', async () => new Response('<html>changed</html>', { status: 200 }));
+    expect(result.status).toBe('UNAVAILABLE');
   });
 
   it('searches every official registry for an ambiguous text query in automatic mode', async () => {
@@ -295,7 +365,7 @@ describe('FDA public search fallback', () => {
       title: 'คลินิกเฉพาะทางด้านเวชกรรมกุมารเวชศาสตร์แพทย์ยิ่งรัก',
       category: 'CLINICS',
     });
-    expect(fetchImpl).toHaveBeenCalledTimes(3);
+    expect(fetchImpl).toHaveBeenCalledTimes(5);
   });
 
   it('keeps an explicit clinic search on the clinic registry for a short name', async () => {
@@ -305,8 +375,10 @@ describe('FDA public search fallback', () => {
       <span>เลขที่ใบอนุญาตประกอบกิจการ :</span><span>33101001165</span>
       <span>ใช้ได้ถึงวันที่ :</span><span>31 ธันวาคม 2574</span>`;
     const fetchImpl = vi.fn(async (input: string | URL | Request) => {
-      expect(String(input)).toBe('https://hosp.hss.moph.go.th/key-searchs');
-      return new Response(JSON.stringify({ code: 200, data: [cardHtml] }), { status: 200 });
+      const url = String(input);
+      if (url === 'https://hosp.hss.moph.go.th/key-searchs') return new Response(JSON.stringify({ code: 200, data: [cardHtml] }), { status: 200 });
+      if (url.startsWith('https://cpp.nhso.go.th/search/')) return new Response('พบทั้งหมด 0 ผลลัพธ์', { status: 200 });
+      return new Response('Not found', { status: 404 });
     });
 
     const [result] = await resolveMultiChannelSearch('ศรีไพร', {
